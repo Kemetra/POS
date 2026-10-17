@@ -1,0 +1,286 @@
+[
+  {
+    "name": "Offline",
+    "route": "/app/dashboard",
+    "reachedSignOut": true,
+    "stopInStatusBanner": false,
+    "printerStops": [],
+    "shiftClosedStops": [],
+    "tree": [
+      {
+        "id": "v5-offline-banner",
+        "text": "غير متصل — البيع محفوظ على هذا الجهاز وسيُرسَل عند عودة الاتصال.",
+        "role": "status",
+        "live": "polite",
+        "hidden": false,
+        "inAside": true
+      }
+    ],
+    "pass": true
+  },
+  {
+    "name": "Offline",
+    "route": "/app/cart",
+    "reachedSignOut": true,
+    "stopInStatusBanner": false,
+    "printerStops": [],
+    "shiftClosedStops": [],
+    "tree": [
+      {
+        "id": "v5-offline-banner",
+        "text": "غير متصل — البيع محفوظ على هذا الجهاز وسيُرسَل عند عودة الاتصال.",
+        "role": "status",
+        "live": "polite",
+        "hidden": false,
+        "inAside": true
+      }
+    ],
+    "pass": true
+  },
+  {
+    "name": "AttentionDeadLetter",
+    "route": "/app/dashboard",
+    "reachedSignOut": true,
+    "stopInStatusBanner": false,
+    "printerStops": [],
+    "shiftClosedStops": [],
+    "tree": [
+      {
+        "id": "v5-sync-attention-banner",
+        "text": "تعذّر إرسال 2 عمليات. راجع المدير.",
+        "role": "alert",
+        "live": "assertive",
+        "hidden": false,
+        "inAside": true
+      }
+    ],
+    "pass": true
+  },
+  {
+    "name": "AttentionDeadLetter",
+    "route": "/app/cart",
+    "reachedSignOut": true,
+    "stopInStatusBanner": false,
+    "printerStops": [],
+    "shiftClosedStops": [],
+    "tree": [
+      {
+        "id": "v5-sync-attention-banner",
+        "text": "تعذّر إرسال 2 عمليات. راجع المدير.",
+        "role": "alert",
+        "live": "assertive",
+        "hidden": false,
+        "inAside": true
+      }
+    ],
+    "pass": true
+  },
+  {
+    "name": "OfflineAttention",
+    "route": "/app/dashboard",
+    "reachedSignOut": true,
+    "stopInStatusBanner": false,
+    "printerStops": [],
+    "shiftClosedStops": [],
+    "tree": [
+      {
+        "id": "v5-sync-attention-banner",
+        "text": "تعذّر إرسال 1 عمليات. راجع المدير.",
+        "role": "alert",
+        "live": "assertive",
+        "hidden": false,
+        "inAside": true
+      },
+      {
+        "id": "v5-offline-banner",
+        "text": "غير متصل — البيع محفوظ على هذا الجهاز وسيُرسَل عند عودة الاتصال.",
+        "role": "status",
+        "live": "polite",
+        "hidden": false,
+        "inAside": true
+      }
+    ],
+    "pass": true
+  },
+  {
+    "name": "OfflineAttention",
+    "route": "/app/cart",
+    "reachedSignOut": true,
+    "stopInStatusBanner": false,
+    "printerStops": [],
+    "shiftClosedStops": [],
+    "tree": [
+      {
+        "id": "v5-sync-attention-banner",
+        "text": "تعذّر إرسال 1 عمليات. راجع المدير.",
+        "role": "alert",
+        "live": "assertive",
+        "hidden": false,
+        "inAside": true
+      },
+      {
+        "id": "v5-offline-banner",
+        "text": "غير متصل — البيع محفوظ على هذا الجهاز وسيُرسَل عند عودة الاتصال.",
+        "role": "status",
+        "live": "polite",
+        "hidden": false,
+        "inAside": true
+      }
+    ],
+    "pass": true
+  },
+  {
+    "name": "OfflineAttentionPrinter",
+    "route": "/app/dashboard",
+    "reachedSignOut": true,
+    "stopInStatusBanner": false,
+    "printerStops": [
+      "إعادة المحاولة",
+      "إيصال يدوي",
+      "إعادة المحاولة",
+      "إيصال يدوي"
+    ],
+    "shiftClosedStops": [],
+    "tree": [
+      {
+        "id": "v5-sync-attention-banner",
+        "text": "تعذّر إرسال 1 عمليات. راجع المدير.",
+        "role": "alert",
+        "live": "assertive",
+        "hidden": false,
+        "inAside": true
+      },
+      {
+        "id": "v5-offline-banner",
+        "text": "غير متصل — البيع محفوظ على هذا الجهاز وسيُرسَل عند عودة الاتصال.",
+        "role": "status",
+        "live": "polite",
+        "hidden": false,
+        "inAside": true
+      }
+    ],
+    "pass": true
+  },
+  {
+    "name": "OfflineAttentionPrinter",
+    "route": "/app/cart",
+    "reachedSignOut": true,
+    "stopInStatusBanner": false,
+    "printerStops": [
+      "إعادة المحاولة",
+      "إيصال يدوي"
+    ],
+    "shiftClosedStops": [],
+    "tree": [
+      {
+        "id": "v5-sync-attention-banner",
+        "text": "تعذّر إرسال 1 عمليات. راجع المدير.",
+        "role": "alert",
+        "live": "assertive",
+        "hidden": false,
+        "inAside": true
+      },
+      {
+        "id": "v5-offline-banner",
+        "text": "غير متصل — البيع محفوظ على هذا الجهاز وسيُرسَل عند عودة الاتصال.",
+        "role": "status",
+        "live": "polite",
+        "hidden": false,
+        "inAside": true
+      }
+    ],
+    "pass": true
+  },
+  {
+    "name": "ShiftClosed",
+    "route": "/app/dashboard",
+    "reachedSignOut": true,
+    "stopInStatusBanner": false,
+    "printerStops": [],
+    "shiftClosedStops": [
+      "إخفاء",
+      "إخفاء"
+    ],
+    "tree": [],
+    "pass": true
+  },
+  {
+    "name": "ShiftClosed",
+    "route": "/app/cart",
+    "reachedSignOut": true,
+    "stopInStatusBanner": false,
+    "printerStops": [],
+    "shiftClosedStops": [
+      "إخفاء"
+    ],
+    "tree": [],
+    "pass": true
+  },
+  {
+    "name": "FullStack",
+    "route": "/app/dashboard",
+    "reachedSignOut": true,
+    "stopInStatusBanner": false,
+    "printerStops": [
+      "إعادة المحاولة",
+      "إيصال يدوي",
+      "إعادة المحاولة",
+      "إيصال يدوي"
+    ],
+    "shiftClosedStops": [
+      "إخفاء",
+      "إخفاء"
+    ],
+    "tree": [
+      {
+        "id": "v5-sync-attention-banner",
+        "text": "تعذّر إرسال 1 عمليات. راجع المدير.",
+        "role": "alert",
+        "live": "assertive",
+        "hidden": false,
+        "inAside": true
+      },
+      {
+        "id": "v5-offline-banner",
+        "text": "غير متصل — البيع محفوظ على هذا الجهاز وسيُرسَل عند عودة الاتصال.",
+        "role": "status",
+        "live": "polite",
+        "hidden": false,
+        "inAside": true
+      }
+    ],
+    "pass": true
+  },
+  {
+    "name": "FullStack",
+    "route": "/app/cart",
+    "reachedSignOut": true,
+    "stopInStatusBanner": false,
+    "printerStops": [
+      "إعادة المحاولة",
+      "إيصال يدوي"
+    ],
+    "shiftClosedStops": [
+      "إخفاء"
+    ],
+    "tree": [
+      {
+        "id": "v5-sync-attention-banner",
+        "text": "تعذّر إرسال 1 عمليات. راجع المدير.",
+        "role": "alert",
+        "live": "assertive",
+        "hidden": false,
+        "inAside": true
+      },
+      {
+        "id": "v5-offline-banner",
+        "text": "غير متصل — البيع محفوظ على هذا الجهاز وسيُرسَل عند عودة الاتصال.",
+        "role": "status",
+        "live": "polite",
+        "hidden": false,
+        "inAside": true
+      }
+    ],
+    "pass": true
+  }
+]

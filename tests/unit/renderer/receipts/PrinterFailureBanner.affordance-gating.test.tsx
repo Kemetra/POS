@@ -308,7 +308,7 @@ describe('T262 — affordance gating', () => {
   // The shared mutation phase already distinguishes which action is running;
   // the polish pass makes that legible (DESIGN.md §5 + PRODUCT.md Principle 3:
   // the cashier must know the real state). The ACTIVE button gets aria-busy +
-  // the .btn__spinner; the other in-flight-disabled buttons do NOT (so the
+  // the spinner (`.v5-banner__spinner` since RT-605); the other in-flight-disabled buttons do NOT (so the
   // cashier can tell retry-in-flight from manual-override-in-flight).
   it('surfaces aria-busy + spinner on the ACTIVE button only, per action', async () => {
     let resolveManual: (r: {
@@ -352,9 +352,9 @@ describe('T262 — affordance gating', () => {
     // Manual override is in flight → ONLY the manual button is busy + spins;
     // Retry is disabled (shared lock) but NOT marked busy.
     await waitFor(() => expect(manual).toHaveAttribute('aria-busy', 'true'));
-    expect(manual.querySelector('.btn__spinner')).not.toBeNull();
+    expect(manual.querySelector('.v5-banner__spinner')).not.toBeNull();
     expect(retry).not.toHaveAttribute('aria-busy');
-    expect(retry.querySelector('.btn__spinner')).toBeNull();
+    expect(retry.querySelector('.v5-banner__spinner')).toBeNull();
 
     // Settle → busy state clears.
     resolveManual({
@@ -365,6 +365,6 @@ describe('T262 — affordance gating', () => {
       overridden_at: '2026-05-27T10:00:11.000Z',
     });
     await waitFor(() => expect(manual).not.toHaveAttribute('aria-busy'));
-    expect(manual.querySelector('.btn__spinner')).toBeNull();
+    expect(manual.querySelector('.v5-banner__spinner')).toBeNull();
   });
 });

@@ -1,0 +1,2690 @@
+[
+  {
+    "name": "Offline",
+    "state": "Offline",
+    "nav": "panel",
+    "width": 1024,
+    "mode": "light",
+    "file": "rt605-Offline-panel-1024x768.png",
+    "axe": [],
+    "banners": {
+      "attention": null,
+      "shiftClosed": null,
+      "offline": {
+        "text": "غير متصل — البيع محفوظ على هذا الجهاز وسيُرسَل عند عودة الاتصال.",
+        "role": "status",
+        "live": "polite",
+        "tone": "warning",
+        "inAside": true,
+        "onScreen": true
+      },
+      "printer": null
+    },
+    "order": [
+      "v5-offline-banner"
+    ],
+    "small": 0,
+    "mainVisible": 721,
+    "offlineTexts": 1,
+    "legacy007": false,
+    "legacyClasses": false,
+    "overflowX": false,
+    "errors": []
+  },
+  {
+    "name": "Offline",
+    "state": "Offline",
+    "nav": "panel",
+    "width": 1024,
+    "mode": "forced",
+    "file": "rt605-Offline-panel-1024x768-forced.png",
+    "axe": [],
+    "banners": {
+      "attention": null,
+      "shiftClosed": null,
+      "offline": {
+        "text": "غير متصل — البيع محفوظ على هذا الجهاز وسيُرسَل عند عودة الاتصال.",
+        "role": "status",
+        "live": "polite",
+        "tone": "warning",
+        "inAside": true,
+        "onScreen": true
+      },
+      "printer": null
+    },
+    "order": [
+      "v5-offline-banner"
+    ],
+    "small": 0,
+    "mainVisible": 721,
+    "offlineTexts": 1,
+    "legacy007": false,
+    "legacyClasses": false,
+    "overflowX": false,
+    "errors": []
+  },
+  {
+    "name": "Offline",
+    "state": "Offline",
+    "nav": "panel",
+    "width": 1280,
+    "mode": "light",
+    "file": "rt605-Offline-panel-1280x800.png",
+    "axe": [],
+    "banners": {
+      "attention": null,
+      "shiftClosed": null,
+      "offline": {
+        "text": "غير متصل — البيع محفوظ على هذا الجهاز وسيُرسَل عند عودة الاتصال.",
+        "role": "status",
+        "live": "polite",
+        "tone": "warning",
+        "inAside": true,
+        "onScreen": true
+      },
+      "printer": null
+    },
+    "order": [
+      "v5-offline-banner"
+    ],
+    "small": 0,
+    "mainVisible": 749,
+    "offlineTexts": 1,
+    "legacy007": false,
+    "legacyClasses": false,
+    "overflowX": false,
+    "errors": []
+  },
+  {
+    "name": "Offline",
+    "state": "Offline",
+    "nav": "panel",
+    "width": 1280,
+    "mode": "forced",
+    "file": "rt605-Offline-panel-1280x800-forced.png",
+    "axe": [],
+    "banners": {
+      "attention": null,
+      "shiftClosed": null,
+      "offline": {
+        "text": "غير متصل — البيع محفوظ على هذا الجهاز وسيُرسَل عند عودة الاتصال.",
+        "role": "status",
+        "live": "polite",
+        "tone": "warning",
+        "inAside": true,
+        "onScreen": true
+      },
+      "printer": null
+    },
+    "order": [
+      "v5-offline-banner"
+    ],
+    "small": 0,
+    "mainVisible": 749,
+    "offlineTexts": 1,
+    "legacy007": false,
+    "legacyClasses": false,
+    "overflowX": false,
+    "errors": []
+  },
+  {
+    "name": "Offline",
+    "state": "Offline",
+    "nav": "slim",
+    "width": 1024,
+    "mode": "light",
+    "file": "rt605-Offline-slim-1024x768.png",
+    "axe": [],
+    "banners": {
+      "attention": null,
+      "shiftClosed": null,
+      "offline": {
+        "text": "غير متصل — البيع محفوظ على هذا الجهاز وسيُرسَل عند عودة الاتصال.",
+        "role": "status",
+        "live": "polite",
+        "tone": "warning",
+        "inAside": true,
+        "onScreen": true
+      },
+      "printer": null
+    },
+    "order": [
+      "v5-offline-banner"
+    ],
+    "small": 0,
+    "mainVisible": 721,
+    "offlineTexts": 1,
+    "legacy007": false,
+    "legacyClasses": false,
+    "overflowX": false,
+    "errors": []
+  },
+  {
+    "name": "Offline",
+    "state": "Offline",
+    "nav": "slim",
+    "width": 1024,
+    "mode": "forced",
+    "file": "rt605-Offline-slim-1024x768-forced.png",
+    "axe": [],
+    "banners": {
+      "attention": null,
+      "shiftClosed": null,
+      "offline": {
+        "text": "غير متصل — البيع محفوظ على هذا الجهاز وسيُرسَل عند عودة الاتصال.",
+        "role": "status",
+        "live": "polite",
+        "tone": "warning",
+        "inAside": true,
+        "onScreen": true
+      },
+      "printer": null
+    },
+    "order": [
+      "v5-offline-banner"
+    ],
+    "small": 0,
+    "mainVisible": 721,
+    "offlineTexts": 1,
+    "legacy007": false,
+    "legacyClasses": false,
+    "overflowX": false,
+    "errors": []
+  },
+  {
+    "name": "Offline",
+    "state": "Offline",
+    "nav": "slim",
+    "width": 1280,
+    "mode": "light",
+    "file": "rt605-Offline-slim-1280x800.png",
+    "axe": [],
+    "banners": {
+      "attention": null,
+      "shiftClosed": null,
+      "offline": {
+        "text": "غير متصل — البيع محفوظ على هذا الجهاز وسيُرسَل عند عودة الاتصال.",
+        "role": "status",
+        "live": "polite",
+        "tone": "warning",
+        "inAside": true,
+        "onScreen": true
+      },
+      "printer": null
+    },
+    "order": [
+      "v5-offline-banner"
+    ],
+    "small": 0,
+    "mainVisible": 749,
+    "offlineTexts": 1,
+    "legacy007": false,
+    "legacyClasses": false,
+    "overflowX": false,
+    "errors": []
+  },
+  {
+    "name": "Offline",
+    "state": "Offline",
+    "nav": "slim",
+    "width": 1280,
+    "mode": "forced",
+    "file": "rt605-Offline-slim-1280x800-forced.png",
+    "axe": [],
+    "banners": {
+      "attention": null,
+      "shiftClosed": null,
+      "offline": {
+        "text": "غير متصل — البيع محفوظ على هذا الجهاز وسيُرسَل عند عودة الاتصال.",
+        "role": "status",
+        "live": "polite",
+        "tone": "warning",
+        "inAside": true,
+        "onScreen": true
+      },
+      "printer": null
+    },
+    "order": [
+      "v5-offline-banner"
+    ],
+    "small": 0,
+    "mainVisible": 749,
+    "offlineTexts": 1,
+    "legacy007": false,
+    "legacyClasses": false,
+    "overflowX": false,
+    "errors": []
+  },
+  {
+    "name": "Degraded",
+    "state": "Degraded",
+    "nav": "panel",
+    "width": 1024,
+    "mode": "light",
+    "file": "rt605-Degraded-panel-1024x768.png",
+    "axe": [],
+    "banners": {
+      "attention": null,
+      "shiftClosed": null,
+      "offline": {
+        "text": "غير متصل — البيع محفوظ على هذا الجهاز وسيُرسَل عند عودة الاتصال.",
+        "role": "status",
+        "live": "polite",
+        "tone": "warning",
+        "inAside": true,
+        "onScreen": true
+      },
+      "printer": null
+    },
+    "order": [
+      "v5-offline-banner"
+    ],
+    "small": 0,
+    "mainVisible": 721,
+    "offlineTexts": 1,
+    "legacy007": false,
+    "legacyClasses": false,
+    "overflowX": false,
+    "errors": []
+  },
+  {
+    "name": "Degraded",
+    "state": "Degraded",
+    "nav": "panel",
+    "width": 1024,
+    "mode": "forced",
+    "file": "rt605-Degraded-panel-1024x768-forced.png",
+    "axe": [],
+    "banners": {
+      "attention": null,
+      "shiftClosed": null,
+      "offline": {
+        "text": "غير متصل — البيع محفوظ على هذا الجهاز وسيُرسَل عند عودة الاتصال.",
+        "role": "status",
+        "live": "polite",
+        "tone": "warning",
+        "inAside": true,
+        "onScreen": true
+      },
+      "printer": null
+    },
+    "order": [
+      "v5-offline-banner"
+    ],
+    "small": 0,
+    "mainVisible": 721,
+    "offlineTexts": 1,
+    "legacy007": false,
+    "legacyClasses": false,
+    "overflowX": false,
+    "errors": []
+  },
+  {
+    "name": "Degraded",
+    "state": "Degraded",
+    "nav": "panel",
+    "width": 1280,
+    "mode": "light",
+    "file": "rt605-Degraded-panel-1280x800.png",
+    "axe": [],
+    "banners": {
+      "attention": null,
+      "shiftClosed": null,
+      "offline": {
+        "text": "غير متصل — البيع محفوظ على هذا الجهاز وسيُرسَل عند عودة الاتصال.",
+        "role": "status",
+        "live": "polite",
+        "tone": "warning",
+        "inAside": true,
+        "onScreen": true
+      },
+      "printer": null
+    },
+    "order": [
+      "v5-offline-banner"
+    ],
+    "small": 0,
+    "mainVisible": 749,
+    "offlineTexts": 1,
+    "legacy007": false,
+    "legacyClasses": false,
+    "overflowX": false,
+    "errors": []
+  },
+  {
+    "name": "Degraded",
+    "state": "Degraded",
+    "nav": "panel",
+    "width": 1280,
+    "mode": "forced",
+    "file": "rt605-Degraded-panel-1280x800-forced.png",
+    "axe": [],
+    "banners": {
+      "attention": null,
+      "shiftClosed": null,
+      "offline": {
+        "text": "غير متصل — البيع محفوظ على هذا الجهاز وسيُرسَل عند عودة الاتصال.",
+        "role": "status",
+        "live": "polite",
+        "tone": "warning",
+        "inAside": true,
+        "onScreen": true
+      },
+      "printer": null
+    },
+    "order": [
+      "v5-offline-banner"
+    ],
+    "small": 0,
+    "mainVisible": 749,
+    "offlineTexts": 1,
+    "legacy007": false,
+    "legacyClasses": false,
+    "overflowX": false,
+    "errors": []
+  },
+  {
+    "name": "Degraded",
+    "state": "Degraded",
+    "nav": "slim",
+    "width": 1024,
+    "mode": "light",
+    "file": "rt605-Degraded-slim-1024x768.png",
+    "axe": [],
+    "banners": {
+      "attention": null,
+      "shiftClosed": null,
+      "offline": {
+        "text": "غير متصل — البيع محفوظ على هذا الجهاز وسيُرسَل عند عودة الاتصال.",
+        "role": "status",
+        "live": "polite",
+        "tone": "warning",
+        "inAside": true,
+        "onScreen": true
+      },
+      "printer": null
+    },
+    "order": [
+      "v5-offline-banner"
+    ],
+    "small": 0,
+    "mainVisible": 721,
+    "offlineTexts": 1,
+    "legacy007": false,
+    "legacyClasses": false,
+    "overflowX": false,
+    "errors": []
+  },
+  {
+    "name": "Degraded",
+    "state": "Degraded",
+    "nav": "slim",
+    "width": 1024,
+    "mode": "forced",
+    "file": "rt605-Degraded-slim-1024x768-forced.png",
+    "axe": [],
+    "banners": {
+      "attention": null,
+      "shiftClosed": null,
+      "offline": {
+        "text": "غير متصل — البيع محفوظ على هذا الجهاز وسيُرسَل عند عودة الاتصال.",
+        "role": "status",
+        "live": "polite",
+        "tone": "warning",
+        "inAside": true,
+        "onScreen": true
+      },
+      "printer": null
+    },
+    "order": [
+      "v5-offline-banner"
+    ],
+    "small": 0,
+    "mainVisible": 721,
+    "offlineTexts": 1,
+    "legacy007": false,
+    "legacyClasses": false,
+    "overflowX": false,
+    "errors": []
+  },
+  {
+    "name": "Degraded",
+    "state": "Degraded",
+    "nav": "slim",
+    "width": 1280,
+    "mode": "light",
+    "file": "rt605-Degraded-slim-1280x800.png",
+    "axe": [],
+    "banners": {
+      "attention": null,
+      "shiftClosed": null,
+      "offline": {
+        "text": "غير متصل — البيع محفوظ على هذا الجهاز وسيُرسَل عند عودة الاتصال.",
+        "role": "status",
+        "live": "polite",
+        "tone": "warning",
+        "inAside": true,
+        "onScreen": true
+      },
+      "printer": null
+    },
+    "order": [
+      "v5-offline-banner"
+    ],
+    "small": 0,
+    "mainVisible": 749,
+    "offlineTexts": 1,
+    "legacy007": false,
+    "legacyClasses": false,
+    "overflowX": false,
+    "errors": []
+  },
+  {
+    "name": "Degraded",
+    "state": "Degraded",
+    "nav": "slim",
+    "width": 1280,
+    "mode": "forced",
+    "file": "rt605-Degraded-slim-1280x800-forced.png",
+    "axe": [],
+    "banners": {
+      "attention": null,
+      "shiftClosed": null,
+      "offline": {
+        "text": "غير متصل — البيع محفوظ على هذا الجهاز وسيُرسَل عند عودة الاتصال.",
+        "role": "status",
+        "live": "polite",
+        "tone": "warning",
+        "inAside": true,
+        "onScreen": true
+      },
+      "printer": null
+    },
+    "order": [
+      "v5-offline-banner"
+    ],
+    "small": 0,
+    "mainVisible": 749,
+    "offlineTexts": 1,
+    "legacy007": false,
+    "legacyClasses": false,
+    "overflowX": false,
+    "errors": []
+  },
+  {
+    "name": "AttentionDeadLetter",
+    "state": "Attention",
+    "nav": "panel",
+    "width": 1024,
+    "mode": "light",
+    "file": "rt605-AttentionDeadLetter-panel-1024x768.png",
+    "axe": [],
+    "banners": {
+      "attention": {
+        "text": "تعذّر إرسال 2 عمليات. راجع المدير.",
+        "role": "alert",
+        "live": "assertive",
+        "tone": "danger",
+        "inAside": true,
+        "onScreen": true
+      },
+      "shiftClosed": null,
+      "offline": null,
+      "printer": null
+    },
+    "order": [
+      "v5-sync-attention-banner"
+    ],
+    "small": 0,
+    "mainVisible": 721,
+    "offlineTexts": 0,
+    "legacy007": false,
+    "legacyClasses": false,
+    "overflowX": false,
+    "errors": []
+  },
+  {
+    "name": "AttentionDeadLetter",
+    "state": "Attention",
+    "nav": "panel",
+    "width": 1024,
+    "mode": "forced",
+    "file": "rt605-AttentionDeadLetter-panel-1024x768-forced.png",
+    "axe": [],
+    "banners": {
+      "attention": {
+        "text": "تعذّر إرسال 2 عمليات. راجع المدير.",
+        "role": "alert",
+        "live": "assertive",
+        "tone": "danger",
+        "inAside": true,
+        "onScreen": true
+      },
+      "shiftClosed": null,
+      "offline": null,
+      "printer": null
+    },
+    "order": [
+      "v5-sync-attention-banner"
+    ],
+    "small": 0,
+    "mainVisible": 721,
+    "offlineTexts": 0,
+    "legacy007": false,
+    "legacyClasses": false,
+    "overflowX": false,
+    "errors": []
+  },
+  {
+    "name": "AttentionDeadLetter",
+    "state": "Attention",
+    "nav": "panel",
+    "width": 1280,
+    "mode": "light",
+    "file": "rt605-AttentionDeadLetter-panel-1280x800.png",
+    "axe": [],
+    "banners": {
+      "attention": {
+        "text": "تعذّر إرسال 2 عمليات. راجع المدير.",
+        "role": "alert",
+        "live": "assertive",
+        "tone": "danger",
+        "inAside": true,
+        "onScreen": true
+      },
+      "shiftClosed": null,
+      "offline": null,
+      "printer": null
+    },
+    "order": [
+      "v5-sync-attention-banner"
+    ],
+    "small": 0,
+    "mainVisible": 749,
+    "offlineTexts": 0,
+    "legacy007": false,
+    "legacyClasses": false,
+    "overflowX": false,
+    "errors": []
+  },
+  {
+    "name": "AttentionDeadLetter",
+    "state": "Attention",
+    "nav": "panel",
+    "width": 1280,
+    "mode": "forced",
+    "file": "rt605-AttentionDeadLetter-panel-1280x800-forced.png",
+    "axe": [],
+    "banners": {
+      "attention": {
+        "text": "تعذّر إرسال 2 عمليات. راجع المدير.",
+        "role": "alert",
+        "live": "assertive",
+        "tone": "danger",
+        "inAside": true,
+        "onScreen": true
+      },
+      "shiftClosed": null,
+      "offline": null,
+      "printer": null
+    },
+    "order": [
+      "v5-sync-attention-banner"
+    ],
+    "small": 0,
+    "mainVisible": 749,
+    "offlineTexts": 0,
+    "legacy007": false,
+    "legacyClasses": false,
+    "overflowX": false,
+    "errors": []
+  },
+  {
+    "name": "AttentionDeadLetter",
+    "state": "Attention",
+    "nav": "slim",
+    "width": 1024,
+    "mode": "light",
+    "file": "rt605-AttentionDeadLetter-slim-1024x768.png",
+    "axe": [],
+    "banners": {
+      "attention": {
+        "text": "تعذّر إرسال 2 عمليات. راجع المدير.",
+        "role": "alert",
+        "live": "assertive",
+        "tone": "danger",
+        "inAside": true,
+        "onScreen": true
+      },
+      "shiftClosed": null,
+      "offline": null,
+      "printer": null
+    },
+    "order": [
+      "v5-sync-attention-banner"
+    ],
+    "small": 0,
+    "mainVisible": 721,
+    "offlineTexts": 0,
+    "legacy007": false,
+    "legacyClasses": false,
+    "overflowX": false,
+    "errors": []
+  },
+  {
+    "name": "AttentionDeadLetter",
+    "state": "Attention",
+    "nav": "slim",
+    "width": 1024,
+    "mode": "forced",
+    "file": "rt605-AttentionDeadLetter-slim-1024x768-forced.png",
+    "axe": [],
+    "banners": {
+      "attention": {
+        "text": "تعذّر إرسال 2 عمليات. راجع المدير.",
+        "role": "alert",
+        "live": "assertive",
+        "tone": "danger",
+        "inAside": true,
+        "onScreen": true
+      },
+      "shiftClosed": null,
+      "offline": null,
+      "printer": null
+    },
+    "order": [
+      "v5-sync-attention-banner"
+    ],
+    "small": 0,
+    "mainVisible": 721,
+    "offlineTexts": 0,
+    "legacy007": false,
+    "legacyClasses": false,
+    "overflowX": false,
+    "errors": []
+  },
+  {
+    "name": "AttentionDeadLetter",
+    "state": "Attention",
+    "nav": "slim",
+    "width": 1280,
+    "mode": "light",
+    "file": "rt605-AttentionDeadLetter-slim-1280x800.png",
+    "axe": [],
+    "banners": {
+      "attention": {
+        "text": "تعذّر إرسال 2 عمليات. راجع المدير.",
+        "role": "alert",
+        "live": "assertive",
+        "tone": "danger",
+        "inAside": true,
+        "onScreen": true
+      },
+      "shiftClosed": null,
+      "offline": null,
+      "printer": null
+    },
+    "order": [
+      "v5-sync-attention-banner"
+    ],
+    "small": 0,
+    "mainVisible": 749,
+    "offlineTexts": 0,
+    "legacy007": false,
+    "legacyClasses": false,
+    "overflowX": false,
+    "errors": []
+  },
+  {
+    "name": "AttentionDeadLetter",
+    "state": "Attention",
+    "nav": "slim",
+    "width": 1280,
+    "mode": "forced",
+    "file": "rt605-AttentionDeadLetter-slim-1280x800-forced.png",
+    "axe": [],
+    "banners": {
+      "attention": {
+        "text": "تعذّر إرسال 2 عمليات. راجع المدير.",
+        "role": "alert",
+        "live": "assertive",
+        "tone": "danger",
+        "inAside": true,
+        "onScreen": true
+      },
+      "shiftClosed": null,
+      "offline": null,
+      "printer": null
+    },
+    "order": [
+      "v5-sync-attention-banner"
+    ],
+    "small": 0,
+    "mainVisible": 749,
+    "offlineTexts": 0,
+    "legacy007": false,
+    "legacyClasses": false,
+    "overflowX": false,
+    "errors": []
+  },
+  {
+    "name": "Attention24h",
+    "state": "Attention24h",
+    "nav": "panel",
+    "width": 1024,
+    "mode": "light",
+    "file": "rt605-Attention24h-panel-1024x768.png",
+    "axe": [],
+    "banners": {
+      "attention": {
+        "text": "تعذّر إرسال 2 عمليات. راجع المدير.",
+        "role": "alert",
+        "live": "assertive",
+        "tone": "danger",
+        "inAside": true,
+        "onScreen": true
+      },
+      "shiftClosed": null,
+      "offline": null,
+      "printer": null
+    },
+    "order": [
+      "v5-sync-attention-banner"
+    ],
+    "small": 0,
+    "mainVisible": 721,
+    "offlineTexts": 0,
+    "legacy007": false,
+    "legacyClasses": false,
+    "overflowX": false,
+    "errors": []
+  },
+  {
+    "name": "Attention24h",
+    "state": "Attention24h",
+    "nav": "panel",
+    "width": 1024,
+    "mode": "forced",
+    "file": "rt605-Attention24h-panel-1024x768-forced.png",
+    "axe": [],
+    "banners": {
+      "attention": {
+        "text": "تعذّر إرسال 2 عمليات. راجع المدير.",
+        "role": "alert",
+        "live": "assertive",
+        "tone": "danger",
+        "inAside": true,
+        "onScreen": true
+      },
+      "shiftClosed": null,
+      "offline": null,
+      "printer": null
+    },
+    "order": [
+      "v5-sync-attention-banner"
+    ],
+    "small": 0,
+    "mainVisible": 721,
+    "offlineTexts": 0,
+    "legacy007": false,
+    "legacyClasses": false,
+    "overflowX": false,
+    "errors": []
+  },
+  {
+    "name": "Attention24h",
+    "state": "Attention24h",
+    "nav": "panel",
+    "width": 1280,
+    "mode": "light",
+    "file": "rt605-Attention24h-panel-1280x800.png",
+    "axe": [],
+    "banners": {
+      "attention": {
+        "text": "تعذّر إرسال 2 عمليات. راجع المدير.",
+        "role": "alert",
+        "live": "assertive",
+        "tone": "danger",
+        "inAside": true,
+        "onScreen": true
+      },
+      "shiftClosed": null,
+      "offline": null,
+      "printer": null
+    },
+    "order": [
+      "v5-sync-attention-banner"
+    ],
+    "small": 0,
+    "mainVisible": 749,
+    "offlineTexts": 0,
+    "legacy007": false,
+    "legacyClasses": false,
+    "overflowX": false,
+    "errors": []
+  },
+  {
+    "name": "Attention24h",
+    "state": "Attention24h",
+    "nav": "panel",
+    "width": 1280,
+    "mode": "forced",
+    "file": "rt605-Attention24h-panel-1280x800-forced.png",
+    "axe": [],
+    "banners": {
+      "attention": {
+        "text": "تعذّر إرسال 2 عمليات. راجع المدير.",
+        "role": "alert",
+        "live": "assertive",
+        "tone": "danger",
+        "inAside": true,
+        "onScreen": true
+      },
+      "shiftClosed": null,
+      "offline": null,
+      "printer": null
+    },
+    "order": [
+      "v5-sync-attention-banner"
+    ],
+    "small": 0,
+    "mainVisible": 749,
+    "offlineTexts": 0,
+    "legacy007": false,
+    "legacyClasses": false,
+    "overflowX": false,
+    "errors": []
+  },
+  {
+    "name": "Attention24h",
+    "state": "Attention24h",
+    "nav": "slim",
+    "width": 1024,
+    "mode": "light",
+    "file": "rt605-Attention24h-slim-1024x768.png",
+    "axe": [],
+    "banners": {
+      "attention": {
+        "text": "تعذّر إرسال 2 عمليات. راجع المدير.",
+        "role": "alert",
+        "live": "assertive",
+        "tone": "danger",
+        "inAside": true,
+        "onScreen": true
+      },
+      "shiftClosed": null,
+      "offline": null,
+      "printer": null
+    },
+    "order": [
+      "v5-sync-attention-banner"
+    ],
+    "small": 0,
+    "mainVisible": 721,
+    "offlineTexts": 0,
+    "legacy007": false,
+    "legacyClasses": false,
+    "overflowX": false,
+    "errors": []
+  },
+  {
+    "name": "Attention24h",
+    "state": "Attention24h",
+    "nav": "slim",
+    "width": 1024,
+    "mode": "forced",
+    "file": "rt605-Attention24h-slim-1024x768-forced.png",
+    "axe": [],
+    "banners": {
+      "attention": {
+        "text": "تعذّر إرسال 2 عمليات. راجع المدير.",
+        "role": "alert",
+        "live": "assertive",
+        "tone": "danger",
+        "inAside": true,
+        "onScreen": true
+      },
+      "shiftClosed": null,
+      "offline": null,
+      "printer": null
+    },
+    "order": [
+      "v5-sync-attention-banner"
+    ],
+    "small": 0,
+    "mainVisible": 721,
+    "offlineTexts": 0,
+    "legacy007": false,
+    "legacyClasses": false,
+    "overflowX": false,
+    "errors": []
+  },
+  {
+    "name": "Attention24h",
+    "state": "Attention24h",
+    "nav": "slim",
+    "width": 1280,
+    "mode": "light",
+    "file": "rt605-Attention24h-slim-1280x800.png",
+    "axe": [],
+    "banners": {
+      "attention": {
+        "text": "تعذّر إرسال 2 عمليات. راجع المدير.",
+        "role": "alert",
+        "live": "assertive",
+        "tone": "danger",
+        "inAside": true,
+        "onScreen": true
+      },
+      "shiftClosed": null,
+      "offline": null,
+      "printer": null
+    },
+    "order": [
+      "v5-sync-attention-banner"
+    ],
+    "small": 0,
+    "mainVisible": 749,
+    "offlineTexts": 0,
+    "legacy007": false,
+    "legacyClasses": false,
+    "overflowX": false,
+    "errors": []
+  },
+  {
+    "name": "Attention24h",
+    "state": "Attention24h",
+    "nav": "slim",
+    "width": 1280,
+    "mode": "forced",
+    "file": "rt605-Attention24h-slim-1280x800-forced.png",
+    "axe": [],
+    "banners": {
+      "attention": {
+        "text": "تعذّر إرسال 2 عمليات. راجع المدير.",
+        "role": "alert",
+        "live": "assertive",
+        "tone": "danger",
+        "inAside": true,
+        "onScreen": true
+      },
+      "shiftClosed": null,
+      "offline": null,
+      "printer": null
+    },
+    "order": [
+      "v5-sync-attention-banner"
+    ],
+    "small": 0,
+    "mainVisible": 749,
+    "offlineTexts": 0,
+    "legacy007": false,
+    "legacyClasses": false,
+    "overflowX": false,
+    "errors": []
+  },
+  {
+    "name": "OfflineAttention",
+    "state": "OfflineAttention",
+    "nav": "panel",
+    "width": 1024,
+    "mode": "light",
+    "file": "rt605-OfflineAttention-panel-1024x768.png",
+    "axe": [],
+    "banners": {
+      "attention": {
+        "text": "تعذّر إرسال 1 عمليات. راجع المدير.",
+        "role": "alert",
+        "live": "assertive",
+        "tone": "danger",
+        "inAside": true,
+        "onScreen": true
+      },
+      "shiftClosed": null,
+      "offline": {
+        "text": "غير متصل — البيع محفوظ على هذا الجهاز وسيُرسَل عند عودة الاتصال.",
+        "role": "status",
+        "live": "polite",
+        "tone": "warning",
+        "inAside": true,
+        "onScreen": true
+      },
+      "printer": null
+    },
+    "order": [
+      "v5-sync-attention-banner",
+      "v5-offline-banner"
+    ],
+    "small": 0,
+    "mainVisible": 674,
+    "offlineTexts": 1,
+    "legacy007": false,
+    "legacyClasses": false,
+    "overflowX": false,
+    "errors": []
+  },
+  {
+    "name": "OfflineAttention",
+    "state": "OfflineAttention",
+    "nav": "panel",
+    "width": 1024,
+    "mode": "forced",
+    "file": "rt605-OfflineAttention-panel-1024x768-forced.png",
+    "axe": [],
+    "banners": {
+      "attention": {
+        "text": "تعذّر إرسال 1 عمليات. راجع المدير.",
+        "role": "alert",
+        "live": "assertive",
+        "tone": "danger",
+        "inAside": true,
+        "onScreen": true
+      },
+      "shiftClosed": null,
+      "offline": {
+        "text": "غير متصل — البيع محفوظ على هذا الجهاز وسيُرسَل عند عودة الاتصال.",
+        "role": "status",
+        "live": "polite",
+        "tone": "warning",
+        "inAside": true,
+        "onScreen": true
+      },
+      "printer": null
+    },
+    "order": [
+      "v5-sync-attention-banner",
+      "v5-offline-banner"
+    ],
+    "small": 0,
+    "mainVisible": 674,
+    "offlineTexts": 1,
+    "legacy007": false,
+    "legacyClasses": false,
+    "overflowX": false,
+    "errors": []
+  },
+  {
+    "name": "OfflineAttention",
+    "state": "OfflineAttention",
+    "nav": "panel",
+    "width": 1280,
+    "mode": "light",
+    "file": "rt605-OfflineAttention-panel-1280x800.png",
+    "axe": [],
+    "banners": {
+      "attention": {
+        "text": "تعذّر إرسال 1 عمليات. راجع المدير.",
+        "role": "alert",
+        "live": "assertive",
+        "tone": "danger",
+        "inAside": true,
+        "onScreen": true
+      },
+      "shiftClosed": null,
+      "offline": {
+        "text": "غير متصل — البيع محفوظ على هذا الجهاز وسيُرسَل عند عودة الاتصال.",
+        "role": "status",
+        "live": "polite",
+        "tone": "warning",
+        "inAside": true,
+        "onScreen": true
+      },
+      "printer": null
+    },
+    "order": [
+      "v5-sync-attention-banner",
+      "v5-offline-banner"
+    ],
+    "small": 0,
+    "mainVisible": 702,
+    "offlineTexts": 1,
+    "legacy007": false,
+    "legacyClasses": false,
+    "overflowX": false,
+    "errors": []
+  },
+  {
+    "name": "OfflineAttention",
+    "state": "OfflineAttention",
+    "nav": "panel",
+    "width": 1280,
+    "mode": "forced",
+    "file": "rt605-OfflineAttention-panel-1280x800-forced.png",
+    "axe": [],
+    "banners": {
+      "attention": {
+        "text": "تعذّر إرسال 1 عمليات. راجع المدير.",
+        "role": "alert",
+        "live": "assertive",
+        "tone": "danger",
+        "inAside": true,
+        "onScreen": true
+      },
+      "shiftClosed": null,
+      "offline": {
+        "text": "غير متصل — البيع محفوظ على هذا الجهاز وسيُرسَل عند عودة الاتصال.",
+        "role": "status",
+        "live": "polite",
+        "tone": "warning",
+        "inAside": true,
+        "onScreen": true
+      },
+      "printer": null
+    },
+    "order": [
+      "v5-sync-attention-banner",
+      "v5-offline-banner"
+    ],
+    "small": 0,
+    "mainVisible": 702,
+    "offlineTexts": 1,
+    "legacy007": false,
+    "legacyClasses": false,
+    "overflowX": false,
+    "errors": []
+  },
+  {
+    "name": "OfflineAttention",
+    "state": "OfflineAttention",
+    "nav": "slim",
+    "width": 1024,
+    "mode": "light",
+    "file": "rt605-OfflineAttention-slim-1024x768.png",
+    "axe": [],
+    "banners": {
+      "attention": {
+        "text": "تعذّر إرسال 1 عمليات. راجع المدير.",
+        "role": "alert",
+        "live": "assertive",
+        "tone": "danger",
+        "inAside": true,
+        "onScreen": true
+      },
+      "shiftClosed": null,
+      "offline": {
+        "text": "غير متصل — البيع محفوظ على هذا الجهاز وسيُرسَل عند عودة الاتصال.",
+        "role": "status",
+        "live": "polite",
+        "tone": "warning",
+        "inAside": true,
+        "onScreen": true
+      },
+      "printer": null
+    },
+    "order": [
+      "v5-sync-attention-banner",
+      "v5-offline-banner"
+    ],
+    "small": 0,
+    "mainVisible": 674,
+    "offlineTexts": 1,
+    "legacy007": false,
+    "legacyClasses": false,
+    "overflowX": false,
+    "errors": []
+  },
+  {
+    "name": "OfflineAttention",
+    "state": "OfflineAttention",
+    "nav": "slim",
+    "width": 1024,
+    "mode": "forced",
+    "file": "rt605-OfflineAttention-slim-1024x768-forced.png",
+    "axe": [],
+    "banners": {
+      "attention": {
+        "text": "تعذّر إرسال 1 عمليات. راجع المدير.",
+        "role": "alert",
+        "live": "assertive",
+        "tone": "danger",
+        "inAside": true,
+        "onScreen": true
+      },
+      "shiftClosed": null,
+      "offline": {
+        "text": "غير متصل — البيع محفوظ على هذا الجهاز وسيُرسَل عند عودة الاتصال.",
+        "role": "status",
+        "live": "polite",
+        "tone": "warning",
+        "inAside": true,
+        "onScreen": true
+      },
+      "printer": null
+    },
+    "order": [
+      "v5-sync-attention-banner",
+      "v5-offline-banner"
+    ],
+    "small": 0,
+    "mainVisible": 674,
+    "offlineTexts": 1,
+    "legacy007": false,
+    "legacyClasses": false,
+    "overflowX": false,
+    "errors": []
+  },
+  {
+    "name": "OfflineAttention",
+    "state": "OfflineAttention",
+    "nav": "slim",
+    "width": 1280,
+    "mode": "light",
+    "file": "rt605-OfflineAttention-slim-1280x800.png",
+    "axe": [],
+    "banners": {
+      "attention": {
+        "text": "تعذّر إرسال 1 عمليات. راجع المدير.",
+        "role": "alert",
+        "live": "assertive",
+        "tone": "danger",
+        "inAside": true,
+        "onScreen": true
+      },
+      "shiftClosed": null,
+      "offline": {
+        "text": "غير متصل — البيع محفوظ على هذا الجهاز وسيُرسَل عند عودة الاتصال.",
+        "role": "status",
+        "live": "polite",
+        "tone": "warning",
+        "inAside": true,
+        "onScreen": true
+      },
+      "printer": null
+    },
+    "order": [
+      "v5-sync-attention-banner",
+      "v5-offline-banner"
+    ],
+    "small": 0,
+    "mainVisible": 702,
+    "offlineTexts": 1,
+    "legacy007": false,
+    "legacyClasses": false,
+    "overflowX": false,
+    "errors": []
+  },
+  {
+    "name": "OfflineAttention",
+    "state": "OfflineAttention",
+    "nav": "slim",
+    "width": 1280,
+    "mode": "forced",
+    "file": "rt605-OfflineAttention-slim-1280x800-forced.png",
+    "axe": [],
+    "banners": {
+      "attention": {
+        "text": "تعذّر إرسال 1 عمليات. راجع المدير.",
+        "role": "alert",
+        "live": "assertive",
+        "tone": "danger",
+        "inAside": true,
+        "onScreen": true
+      },
+      "shiftClosed": null,
+      "offline": {
+        "text": "غير متصل — البيع محفوظ على هذا الجهاز وسيُرسَل عند عودة الاتصال.",
+        "role": "status",
+        "live": "polite",
+        "tone": "warning",
+        "inAside": true,
+        "onScreen": true
+      },
+      "printer": null
+    },
+    "order": [
+      "v5-sync-attention-banner",
+      "v5-offline-banner"
+    ],
+    "small": 0,
+    "mainVisible": 702,
+    "offlineTexts": 1,
+    "legacy007": false,
+    "legacyClasses": false,
+    "overflowX": false,
+    "errors": []
+  },
+  {
+    "name": "OfflineAttentionPrinter",
+    "state": "OfflineAttention",
+    "nav": "panel",
+    "width": 1024,
+    "mode": "light",
+    "file": "rt605-OfflineAttentionPrinter-panel-1024x768.png",
+    "axe": [],
+    "banners": {
+      "attention": {
+        "text": "تعذّر إرسال 1 عمليات. راجع المدير.",
+        "role": "alert",
+        "live": "assertive",
+        "tone": "danger",
+        "inAside": true,
+        "onScreen": true
+      },
+      "shiftClosed": null,
+      "offline": {
+        "text": "غير متصل — البيع محفوظ على هذا الجهاز وسيُرسَل عند عودة الاتصال.",
+        "role": "status",
+        "live": "polite",
+        "tone": "warning",
+        "inAside": true,
+        "onScreen": true
+      },
+      "printer": {
+        "text": "فشل طباعة الإيصال · جرّب مرة أخرى أو حوّل للوضع اليدويإعادة المحاولةنسخةإيصال يدوي",
+        "role": "status",
+        "live": "polite",
+        "tone": "warning",
+        "inAside": true,
+        "onScreen": true
+      }
+    },
+    "order": [
+      "v5-sync-attention-banner",
+      "v5-offline-banner",
+      "printer-failure-banner"
+    ],
+    "small": 0,
+    "mainVisible": 604,
+    "offlineTexts": 1,
+    "legacy007": false,
+    "legacyClasses": false,
+    "overflowX": false,
+    "errors": []
+  },
+  {
+    "name": "OfflineAttentionPrinter",
+    "state": "OfflineAttention",
+    "nav": "panel",
+    "width": 1024,
+    "mode": "forced",
+    "file": "rt605-OfflineAttentionPrinter-panel-1024x768-forced.png",
+    "axe": [],
+    "banners": {
+      "attention": {
+        "text": "تعذّر إرسال 1 عمليات. راجع المدير.",
+        "role": "alert",
+        "live": "assertive",
+        "tone": "danger",
+        "inAside": true,
+        "onScreen": true
+      },
+      "shiftClosed": null,
+      "offline": {
+        "text": "غير متصل — البيع محفوظ على هذا الجهاز وسيُرسَل عند عودة الاتصال.",
+        "role": "status",
+        "live": "polite",
+        "tone": "warning",
+        "inAside": true,
+        "onScreen": true
+      },
+      "printer": {
+        "text": "فشل طباعة الإيصال · جرّب مرة أخرى أو حوّل للوضع اليدويإعادة المحاولةنسخةإيصال يدوي",
+        "role": "status",
+        "live": "polite",
+        "tone": "warning",
+        "inAside": true,
+        "onScreen": true
+      }
+    },
+    "order": [
+      "v5-sync-attention-banner",
+      "v5-offline-banner",
+      "printer-failure-banner"
+    ],
+    "small": 0,
+    "mainVisible": 604,
+    "offlineTexts": 1,
+    "legacy007": false,
+    "legacyClasses": false,
+    "overflowX": false,
+    "errors": []
+  },
+  {
+    "name": "OfflineAttentionPrinter",
+    "state": "OfflineAttention",
+    "nav": "panel",
+    "width": 1280,
+    "mode": "light",
+    "file": "rt605-OfflineAttentionPrinter-panel-1280x800.png",
+    "axe": [],
+    "banners": {
+      "attention": {
+        "text": "تعذّر إرسال 1 عمليات. راجع المدير.",
+        "role": "alert",
+        "live": "assertive",
+        "tone": "danger",
+        "inAside": true,
+        "onScreen": true
+      },
+      "shiftClosed": null,
+      "offline": {
+        "text": "غير متصل — البيع محفوظ على هذا الجهاز وسيُرسَل عند عودة الاتصال.",
+        "role": "status",
+        "live": "polite",
+        "tone": "warning",
+        "inAside": true,
+        "onScreen": true
+      },
+      "printer": {
+        "text": "فشل طباعة الإيصال · جرّب مرة أخرى أو حوّل للوضع اليدويإعادة المحاولةنسخةإيصال يدوي",
+        "role": "status",
+        "live": "polite",
+        "tone": "warning",
+        "inAside": true,
+        "onScreen": true
+      }
+    },
+    "order": [
+      "v5-sync-attention-banner",
+      "v5-offline-banner",
+      "printer-failure-banner"
+    ],
+    "small": 0,
+    "mainVisible": 632,
+    "offlineTexts": 1,
+    "legacy007": false,
+    "legacyClasses": false,
+    "overflowX": false,
+    "errors": []
+  },
+  {
+    "name": "OfflineAttentionPrinter",
+    "state": "OfflineAttention",
+    "nav": "panel",
+    "width": 1280,
+    "mode": "forced",
+    "file": "rt605-OfflineAttentionPrinter-panel-1280x800-forced.png",
+    "axe": [],
+    "banners": {
+      "attention": {
+        "text": "تعذّر إرسال 1 عمليات. راجع المدير.",
+        "role": "alert",
+        "live": "assertive",
+        "tone": "danger",
+        "inAside": true,
+        "onScreen": true
+      },
+      "shiftClosed": null,
+      "offline": {
+        "text": "غير متصل — البيع محفوظ على هذا الجهاز وسيُرسَل عند عودة الاتصال.",
+        "role": "status",
+        "live": "polite",
+        "tone": "warning",
+        "inAside": true,
+        "onScreen": true
+      },
+      "printer": {
+        "text": "فشل طباعة الإيصال · جرّب مرة أخرى أو حوّل للوضع اليدويإعادة المحاولةنسخةإيصال يدوي",
+        "role": "status",
+        "live": "polite",
+        "tone": "warning",
+        "inAside": true,
+        "onScreen": true
+      }
+    },
+    "order": [
+      "v5-sync-attention-banner",
+      "v5-offline-banner",
+      "printer-failure-banner"
+    ],
+    "small": 0,
+    "mainVisible": 632,
+    "offlineTexts": 1,
+    "legacy007": false,
+    "legacyClasses": false,
+    "overflowX": false,
+    "errors": []
+  },
+  {
+    "name": "OfflineAttentionPrinter",
+    "state": "OfflineAttention",
+    "nav": "slim",
+    "width": 1024,
+    "mode": "light",
+    "file": "rt605-OfflineAttentionPrinter-slim-1024x768.png",
+    "axe": [],
+    "banners": {
+      "attention": {
+        "text": "تعذّر إرسال 1 عمليات. راجع المدير.",
+        "role": "alert",
+        "live": "assertive",
+        "tone": "danger",
+        "inAside": true,
+        "onScreen": true
+      },
+      "shiftClosed": null,
+      "offline": {
+        "text": "غير متصل — البيع محفوظ على هذا الجهاز وسيُرسَل عند عودة الاتصال.",
+        "role": "status",
+        "live": "polite",
+        "tone": "warning",
+        "inAside": true,
+        "onScreen": true
+      },
+      "printer": {
+        "text": "فشل طباعة الإيصال · جرّب مرة أخرى أو حوّل للوضع اليدويإعادة المحاولةنسخةإيصال يدوي",
+        "role": "status",
+        "live": "polite",
+        "tone": "warning",
+        "inAside": true,
+        "onScreen": true
+      }
+    },
+    "order": [
+      "v5-sync-attention-banner",
+      "v5-offline-banner",
+      "printer-failure-banner"
+    ],
+    "small": 0,
+    "mainVisible": 604,
+    "offlineTexts": 1,
+    "legacy007": false,
+    "legacyClasses": false,
+    "overflowX": false,
+    "errors": []
+  },
+  {
+    "name": "OfflineAttentionPrinter",
+    "state": "OfflineAttention",
+    "nav": "slim",
+    "width": 1024,
+    "mode": "forced",
+    "file": "rt605-OfflineAttentionPrinter-slim-1024x768-forced.png",
+    "axe": [],
+    "banners": {
+      "attention": {
+        "text": "تعذّر إرسال 1 عمليات. راجع المدير.",
+        "role": "alert",
+        "live": "assertive",
+        "tone": "danger",
+        "inAside": true,
+        "onScreen": true
+      },
+      "shiftClosed": null,
+      "offline": {
+        "text": "غير متصل — البيع محفوظ على هذا الجهاز وسيُرسَل عند عودة الاتصال.",
+        "role": "status",
+        "live": "polite",
+        "tone": "warning",
+        "inAside": true,
+        "onScreen": true
+      },
+      "printer": {
+        "text": "فشل طباعة الإيصال · جرّب مرة أخرى أو حوّل للوضع اليدويإعادة المحاولةنسخةإيصال يدوي",
+        "role": "status",
+        "live": "polite",
+        "tone": "warning",
+        "inAside": true,
+        "onScreen": true
+      }
+    },
+    "order": [
+      "v5-sync-attention-banner",
+      "v5-offline-banner",
+      "printer-failure-banner"
+    ],
+    "small": 0,
+    "mainVisible": 604,
+    "offlineTexts": 1,
+    "legacy007": false,
+    "legacyClasses": false,
+    "overflowX": false,
+    "errors": []
+  },
+  {
+    "name": "OfflineAttentionPrinter",
+    "state": "OfflineAttention",
+    "nav": "slim",
+    "width": 1280,
+    "mode": "light",
+    "file": "rt605-OfflineAttentionPrinter-slim-1280x800.png",
+    "axe": [],
+    "banners": {
+      "attention": {
+        "text": "تعذّر إرسال 1 عمليات. راجع المدير.",
+        "role": "alert",
+        "live": "assertive",
+        "tone": "danger",
+        "inAside": true,
+        "onScreen": true
+      },
+      "shiftClosed": null,
+      "offline": {
+        "text": "غير متصل — البيع محفوظ على هذا الجهاز وسيُرسَل عند عودة الاتصال.",
+        "role": "status",
+        "live": "polite",
+        "tone": "warning",
+        "inAside": true,
+        "onScreen": true
+      },
+      "printer": {
+        "text": "فشل طباعة الإيصال · جرّب مرة أخرى أو حوّل للوضع اليدويإعادة المحاولةنسخةإيصال يدوي",
+        "role": "status",
+        "live": "polite",
+        "tone": "warning",
+        "inAside": true,
+        "onScreen": true
+      }
+    },
+    "order": [
+      "v5-sync-attention-banner",
+      "v5-offline-banner",
+      "printer-failure-banner"
+    ],
+    "small": 0,
+    "mainVisible": 632,
+    "offlineTexts": 1,
+    "legacy007": false,
+    "legacyClasses": false,
+    "overflowX": false,
+    "errors": []
+  },
+  {
+    "name": "OfflineAttentionPrinter",
+    "state": "OfflineAttention",
+    "nav": "slim",
+    "width": 1280,
+    "mode": "forced",
+    "file": "rt605-OfflineAttentionPrinter-slim-1280x800-forced.png",
+    "axe": [],
+    "banners": {
+      "attention": {
+        "text": "تعذّر إرسال 1 عمليات. راجع المدير.",
+        "role": "alert",
+        "live": "assertive",
+        "tone": "danger",
+        "inAside": true,
+        "onScreen": true
+      },
+      "shiftClosed": null,
+      "offline": {
+        "text": "غير متصل — البيع محفوظ على هذا الجهاز وسيُرسَل عند عودة الاتصال.",
+        "role": "status",
+        "live": "polite",
+        "tone": "warning",
+        "inAside": true,
+        "onScreen": true
+      },
+      "printer": {
+        "text": "فشل طباعة الإيصال · جرّب مرة أخرى أو حوّل للوضع اليدويإعادة المحاولةنسخةإيصال يدوي",
+        "role": "status",
+        "live": "polite",
+        "tone": "warning",
+        "inAside": true,
+        "onScreen": true
+      }
+    },
+    "order": [
+      "v5-sync-attention-banner",
+      "v5-offline-banner",
+      "printer-failure-banner"
+    ],
+    "small": 0,
+    "mainVisible": 632,
+    "offlineTexts": 1,
+    "legacy007": false,
+    "legacyClasses": false,
+    "overflowX": false,
+    "errors": []
+  },
+  {
+    "name": "ShiftClosed",
+    "state": "Connected",
+    "nav": "panel",
+    "width": 1024,
+    "mode": "light",
+    "file": "rt605-ShiftClosed-panel-1024x768.png",
+    "axe": [],
+    "banners": {
+      "attention": null,
+      "shiftClosed": {
+        "text": "أُغلقت ورديتك السابقة في 16 أكتوبر 2026 أثناء غيابك.إخفاء",
+        "role": "status",
+        "live": "polite",
+        "tone": "info",
+        "inAside": true,
+        "onScreen": true
+      },
+      "offline": null,
+      "printer": null
+    },
+    "order": [
+      "shift-closed-banner"
+    ],
+    "small": 0,
+    "mainVisible": 698,
+    "offlineTexts": 0,
+    "legacy007": false,
+    "legacyClasses": false,
+    "overflowX": false,
+    "errors": []
+  },
+  {
+    "name": "ShiftClosed",
+    "state": "Connected",
+    "nav": "panel",
+    "width": 1024,
+    "mode": "forced",
+    "file": "rt605-ShiftClosed-panel-1024x768-forced.png",
+    "axe": [],
+    "banners": {
+      "attention": null,
+      "shiftClosed": {
+        "text": "أُغلقت ورديتك السابقة في 16 أكتوبر 2026 أثناء غيابك.إخفاء",
+        "role": "status",
+        "live": "polite",
+        "tone": "info",
+        "inAside": true,
+        "onScreen": true
+      },
+      "offline": null,
+      "printer": null
+    },
+    "order": [
+      "shift-closed-banner"
+    ],
+    "small": 0,
+    "mainVisible": 698,
+    "offlineTexts": 0,
+    "legacy007": false,
+    "legacyClasses": false,
+    "overflowX": false,
+    "errors": []
+  },
+  {
+    "name": "ShiftClosed",
+    "state": "Connected",
+    "nav": "panel",
+    "width": 1280,
+    "mode": "light",
+    "file": "rt605-ShiftClosed-panel-1280x800.png",
+    "axe": [],
+    "banners": {
+      "attention": null,
+      "shiftClosed": {
+        "text": "أُغلقت ورديتك السابقة في 16 أكتوبر 2026 أثناء غيابك.إخفاء",
+        "role": "status",
+        "live": "polite",
+        "tone": "info",
+        "inAside": true,
+        "onScreen": true
+      },
+      "offline": null,
+      "printer": null
+    },
+    "order": [
+      "shift-closed-banner"
+    ],
+    "small": 0,
+    "mainVisible": 726,
+    "offlineTexts": 0,
+    "legacy007": false,
+    "legacyClasses": false,
+    "overflowX": false,
+    "errors": []
+  },
+  {
+    "name": "ShiftClosed",
+    "state": "Connected",
+    "nav": "panel",
+    "width": 1280,
+    "mode": "forced",
+    "file": "rt605-ShiftClosed-panel-1280x800-forced.png",
+    "axe": [],
+    "banners": {
+      "attention": null,
+      "shiftClosed": {
+        "text": "أُغلقت ورديتك السابقة في 16 أكتوبر 2026 أثناء غيابك.إخفاء",
+        "role": "status",
+        "live": "polite",
+        "tone": "info",
+        "inAside": true,
+        "onScreen": true
+      },
+      "offline": null,
+      "printer": null
+    },
+    "order": [
+      "shift-closed-banner"
+    ],
+    "small": 0,
+    "mainVisible": 726,
+    "offlineTexts": 0,
+    "legacy007": false,
+    "legacyClasses": false,
+    "overflowX": false,
+    "errors": []
+  },
+  {
+    "name": "ShiftClosed",
+    "state": "Connected",
+    "nav": "slim",
+    "width": 1024,
+    "mode": "light",
+    "file": "rt605-ShiftClosed-slim-1024x768.png",
+    "axe": [],
+    "banners": {
+      "attention": null,
+      "shiftClosed": {
+        "text": "أُغلقت ورديتك السابقة في 16 أكتوبر 2026 أثناء غيابك.إخفاء",
+        "role": "status",
+        "live": "polite",
+        "tone": "info",
+        "inAside": true,
+        "onScreen": true
+      },
+      "offline": null,
+      "printer": null
+    },
+    "order": [
+      "shift-closed-banner"
+    ],
+    "small": 0,
+    "mainVisible": 698,
+    "offlineTexts": 0,
+    "legacy007": false,
+    "legacyClasses": false,
+    "overflowX": false,
+    "errors": []
+  },
+  {
+    "name": "ShiftClosed",
+    "state": "Connected",
+    "nav": "slim",
+    "width": 1024,
+    "mode": "forced",
+    "file": "rt605-ShiftClosed-slim-1024x768-forced.png",
+    "axe": [],
+    "banners": {
+      "attention": null,
+      "shiftClosed": {
+        "text": "أُغلقت ورديتك السابقة في 16 أكتوبر 2026 أثناء غيابك.إخفاء",
+        "role": "status",
+        "live": "polite",
+        "tone": "info",
+        "inAside": true,
+        "onScreen": true
+      },
+      "offline": null,
+      "printer": null
+    },
+    "order": [
+      "shift-closed-banner"
+    ],
+    "small": 0,
+    "mainVisible": 698,
+    "offlineTexts": 0,
+    "legacy007": false,
+    "legacyClasses": false,
+    "overflowX": false,
+    "errors": []
+  },
+  {
+    "name": "ShiftClosed",
+    "state": "Connected",
+    "nav": "slim",
+    "width": 1280,
+    "mode": "light",
+    "file": "rt605-ShiftClosed-slim-1280x800.png",
+    "axe": [],
+    "banners": {
+      "attention": null,
+      "shiftClosed": {
+        "text": "أُغلقت ورديتك السابقة في 16 أكتوبر 2026 أثناء غيابك.إخفاء",
+        "role": "status",
+        "live": "polite",
+        "tone": "info",
+        "inAside": true,
+        "onScreen": true
+      },
+      "offline": null,
+      "printer": null
+    },
+    "order": [
+      "shift-closed-banner"
+    ],
+    "small": 0,
+    "mainVisible": 726,
+    "offlineTexts": 0,
+    "legacy007": false,
+    "legacyClasses": false,
+    "overflowX": false,
+    "errors": []
+  },
+  {
+    "name": "ShiftClosed",
+    "state": "Connected",
+    "nav": "slim",
+    "width": 1280,
+    "mode": "forced",
+    "file": "rt605-ShiftClosed-slim-1280x800-forced.png",
+    "axe": [],
+    "banners": {
+      "attention": null,
+      "shiftClosed": {
+        "text": "أُغلقت ورديتك السابقة في 16 أكتوبر 2026 أثناء غيابك.إخفاء",
+        "role": "status",
+        "live": "polite",
+        "tone": "info",
+        "inAside": true,
+        "onScreen": true
+      },
+      "offline": null,
+      "printer": null
+    },
+    "order": [
+      "shift-closed-banner"
+    ],
+    "small": 0,
+    "mainVisible": 726,
+    "offlineTexts": 0,
+    "legacy007": false,
+    "legacyClasses": false,
+    "overflowX": false,
+    "errors": []
+  },
+  {
+    "name": "PrinterFailed",
+    "state": "PrinterFailed",
+    "nav": "panel",
+    "width": 1024,
+    "mode": "light",
+    "file": "rt605-PrinterFailed-panel-1024x768.png",
+    "axe": [],
+    "banners": {
+      "attention": null,
+      "shiftClosed": null,
+      "offline": null,
+      "printer": {
+        "text": "فشل طباعة الإيصال · جرّب مرة أخرى أو حوّل للوضع اليدويإعادة المحاولةنسخةإيصال يدوي",
+        "role": "status",
+        "live": "polite",
+        "tone": "warning",
+        "inAside": true,
+        "onScreen": true
+      }
+    },
+    "order": [
+      "printer-failure-banner"
+    ],
+    "small": 0,
+    "mainVisible": 698,
+    "offlineTexts": 0,
+    "legacy007": false,
+    "legacyClasses": false,
+    "overflowX": false,
+    "errors": []
+  },
+  {
+    "name": "PrinterFailed",
+    "state": "PrinterFailed",
+    "nav": "panel",
+    "width": 1024,
+    "mode": "forced",
+    "file": "rt605-PrinterFailed-panel-1024x768-forced.png",
+    "axe": [],
+    "banners": {
+      "attention": null,
+      "shiftClosed": null,
+      "offline": null,
+      "printer": {
+        "text": "فشل طباعة الإيصال · جرّب مرة أخرى أو حوّل للوضع اليدويإعادة المحاولةنسخةإيصال يدوي",
+        "role": "status",
+        "live": "polite",
+        "tone": "warning",
+        "inAside": true,
+        "onScreen": true
+      }
+    },
+    "order": [
+      "printer-failure-banner"
+    ],
+    "small": 0,
+    "mainVisible": 698,
+    "offlineTexts": 0,
+    "legacy007": false,
+    "legacyClasses": false,
+    "overflowX": false,
+    "errors": []
+  },
+  {
+    "name": "PrinterFailed",
+    "state": "PrinterFailed",
+    "nav": "panel",
+    "width": 1280,
+    "mode": "light",
+    "file": "rt605-PrinterFailed-panel-1280x800.png",
+    "axe": [],
+    "banners": {
+      "attention": null,
+      "shiftClosed": null,
+      "offline": null,
+      "printer": {
+        "text": "فشل طباعة الإيصال · جرّب مرة أخرى أو حوّل للوضع اليدويإعادة المحاولةنسخةإيصال يدوي",
+        "role": "status",
+        "live": "polite",
+        "tone": "warning",
+        "inAside": true,
+        "onScreen": true
+      }
+    },
+    "order": [
+      "printer-failure-banner"
+    ],
+    "small": 0,
+    "mainVisible": 726,
+    "offlineTexts": 0,
+    "legacy007": false,
+    "legacyClasses": false,
+    "overflowX": false,
+    "errors": []
+  },
+  {
+    "name": "PrinterFailed",
+    "state": "PrinterFailed",
+    "nav": "panel",
+    "width": 1280,
+    "mode": "forced",
+    "file": "rt605-PrinterFailed-panel-1280x800-forced.png",
+    "axe": [],
+    "banners": {
+      "attention": null,
+      "shiftClosed": null,
+      "offline": null,
+      "printer": {
+        "text": "فشل طباعة الإيصال · جرّب مرة أخرى أو حوّل للوضع اليدويإعادة المحاولةنسخةإيصال يدوي",
+        "role": "status",
+        "live": "polite",
+        "tone": "warning",
+        "inAside": true,
+        "onScreen": true
+      }
+    },
+    "order": [
+      "printer-failure-banner"
+    ],
+    "small": 0,
+    "mainVisible": 726,
+    "offlineTexts": 0,
+    "legacy007": false,
+    "legacyClasses": false,
+    "overflowX": false,
+    "errors": []
+  },
+  {
+    "name": "PrinterFailed",
+    "state": "PrinterFailed",
+    "nav": "slim",
+    "width": 1024,
+    "mode": "light",
+    "file": "rt605-PrinterFailed-slim-1024x768.png",
+    "axe": [],
+    "banners": {
+      "attention": null,
+      "shiftClosed": null,
+      "offline": null,
+      "printer": {
+        "text": "فشل طباعة الإيصال · جرّب مرة أخرى أو حوّل للوضع اليدويإعادة المحاولةنسخةإيصال يدوي",
+        "role": "status",
+        "live": "polite",
+        "tone": "warning",
+        "inAside": true,
+        "onScreen": true
+      }
+    },
+    "order": [
+      "printer-failure-banner"
+    ],
+    "small": 0,
+    "mainVisible": 698,
+    "offlineTexts": 0,
+    "legacy007": false,
+    "legacyClasses": false,
+    "overflowX": false,
+    "errors": []
+  },
+  {
+    "name": "PrinterFailed",
+    "state": "PrinterFailed",
+    "nav": "slim",
+    "width": 1024,
+    "mode": "forced",
+    "file": "rt605-PrinterFailed-slim-1024x768-forced.png",
+    "axe": [],
+    "banners": {
+      "attention": null,
+      "shiftClosed": null,
+      "offline": null,
+      "printer": {
+        "text": "فشل طباعة الإيصال · جرّب مرة أخرى أو حوّل للوضع اليدويإعادة المحاولةنسخةإيصال يدوي",
+        "role": "status",
+        "live": "polite",
+        "tone": "warning",
+        "inAside": true,
+        "onScreen": true
+      }
+    },
+    "order": [
+      "printer-failure-banner"
+    ],
+    "small": 0,
+    "mainVisible": 698,
+    "offlineTexts": 0,
+    "legacy007": false,
+    "legacyClasses": false,
+    "overflowX": false,
+    "errors": []
+  },
+  {
+    "name": "PrinterFailed",
+    "state": "PrinterFailed",
+    "nav": "slim",
+    "width": 1280,
+    "mode": "light",
+    "file": "rt605-PrinterFailed-slim-1280x800.png",
+    "axe": [],
+    "banners": {
+      "attention": null,
+      "shiftClosed": null,
+      "offline": null,
+      "printer": {
+        "text": "فشل طباعة الإيصال · جرّب مرة أخرى أو حوّل للوضع اليدويإعادة المحاولةنسخةإيصال يدوي",
+        "role": "status",
+        "live": "polite",
+        "tone": "warning",
+        "inAside": true,
+        "onScreen": true
+      }
+    },
+    "order": [
+      "printer-failure-banner"
+    ],
+    "small": 0,
+    "mainVisible": 726,
+    "offlineTexts": 0,
+    "legacy007": false,
+    "legacyClasses": false,
+    "overflowX": false,
+    "errors": []
+  },
+  {
+    "name": "PrinterFailed",
+    "state": "PrinterFailed",
+    "nav": "slim",
+    "width": 1280,
+    "mode": "forced",
+    "file": "rt605-PrinterFailed-slim-1280x800-forced.png",
+    "axe": [],
+    "banners": {
+      "attention": null,
+      "shiftClosed": null,
+      "offline": null,
+      "printer": {
+        "text": "فشل طباعة الإيصال · جرّب مرة أخرى أو حوّل للوضع اليدويإعادة المحاولةنسخةإيصال يدوي",
+        "role": "status",
+        "live": "polite",
+        "tone": "warning",
+        "inAside": true,
+        "onScreen": true
+      }
+    },
+    "order": [
+      "printer-failure-banner"
+    ],
+    "small": 0,
+    "mainVisible": 726,
+    "offlineTexts": 0,
+    "legacy007": false,
+    "legacyClasses": false,
+    "overflowX": false,
+    "errors": []
+  },
+  {
+    "name": "FullStack",
+    "state": "OfflineAttention",
+    "nav": "panel",
+    "width": 1024,
+    "mode": "light",
+    "file": "rt605-FullStack-panel-1024x768.png",
+    "axe": [],
+    "banners": {
+      "attention": {
+        "text": "تعذّر إرسال 1 عمليات. راجع المدير.",
+        "role": "alert",
+        "live": "assertive",
+        "tone": "danger",
+        "inAside": true,
+        "onScreen": true
+      },
+      "shiftClosed": {
+        "text": "أُغلقت ورديتك السابقة في 16 أكتوبر 2026 أثناء غيابك.إخفاء",
+        "role": "status",
+        "live": "polite",
+        "tone": "info",
+        "inAside": true,
+        "onScreen": true
+      },
+      "offline": {
+        "text": "غير متصل — البيع محفوظ على هذا الجهاز وسيُرسَل عند عودة الاتصال.",
+        "role": "status",
+        "live": "polite",
+        "tone": "warning",
+        "inAside": true,
+        "onScreen": true
+      },
+      "printer": {
+        "text": "فشل طباعة الإيصال · جرّب مرة أخرى أو حوّل للوضع اليدويإعادة المحاولةنسخةإيصال يدوي",
+        "role": "status",
+        "live": "polite",
+        "tone": "warning",
+        "inAside": true,
+        "onScreen": true
+      }
+    },
+    "order": [
+      "v5-sync-attention-banner",
+      "shift-closed-banner",
+      "v5-offline-banner",
+      "printer-failure-banner"
+    ],
+    "small": 0,
+    "mainVisible": 534,
+    "offlineTexts": 1,
+    "legacy007": false,
+    "legacyClasses": false,
+    "overflowX": false,
+    "errors": []
+  },
+  {
+    "name": "FullStack",
+    "state": "OfflineAttention",
+    "nav": "panel",
+    "width": 1024,
+    "mode": "forced",
+    "file": "rt605-FullStack-panel-1024x768-forced.png",
+    "axe": [],
+    "banners": {
+      "attention": {
+        "text": "تعذّر إرسال 1 عمليات. راجع المدير.",
+        "role": "alert",
+        "live": "assertive",
+        "tone": "danger",
+        "inAside": true,
+        "onScreen": true
+      },
+      "shiftClosed": {
+        "text": "أُغلقت ورديتك السابقة في 16 أكتوبر 2026 أثناء غيابك.إخفاء",
+        "role": "status",
+        "live": "polite",
+        "tone": "info",
+        "inAside": true,
+        "onScreen": true
+      },
+      "offline": {
+        "text": "غير متصل — البيع محفوظ على هذا الجهاز وسيُرسَل عند عودة الاتصال.",
+        "role": "status",
+        "live": "polite",
+        "tone": "warning",
+        "inAside": true,
+        "onScreen": true
+      },
+      "printer": {
+        "text": "فشل طباعة الإيصال · جرّب مرة أخرى أو حوّل للوضع اليدويإعادة المحاولةنسخةإيصال يدوي",
+        "role": "status",
+        "live": "polite",
+        "tone": "warning",
+        "inAside": true,
+        "onScreen": true
+      }
+    },
+    "order": [
+      "v5-sync-attention-banner",
+      "shift-closed-banner",
+      "v5-offline-banner",
+      "printer-failure-banner"
+    ],
+    "small": 0,
+    "mainVisible": 534,
+    "offlineTexts": 1,
+    "legacy007": false,
+    "legacyClasses": false,
+    "overflowX": false,
+    "errors": []
+  },
+  {
+    "name": "FullStack",
+    "state": "OfflineAttention",
+    "nav": "panel",
+    "width": 1280,
+    "mode": "light",
+    "file": "rt605-FullStack-panel-1280x800.png",
+    "axe": [],
+    "banners": {
+      "attention": {
+        "text": "تعذّر إرسال 1 عمليات. راجع المدير.",
+        "role": "alert",
+        "live": "assertive",
+        "tone": "danger",
+        "inAside": true,
+        "onScreen": true
+      },
+      "shiftClosed": {
+        "text": "أُغلقت ورديتك السابقة في 16 أكتوبر 2026 أثناء غيابك.إخفاء",
+        "role": "status",
+        "live": "polite",
+        "tone": "info",
+        "inAside": true,
+        "onScreen": true
+      },
+      "offline": {
+        "text": "غير متصل — البيع محفوظ على هذا الجهاز وسيُرسَل عند عودة الاتصال.",
+        "role": "status",
+        "live": "polite",
+        "tone": "warning",
+        "inAside": true,
+        "onScreen": true
+      },
+      "printer": {
+        "text": "فشل طباعة الإيصال · جرّب مرة أخرى أو حوّل للوضع اليدويإعادة المحاولةنسخةإيصال يدوي",
+        "role": "status",
+        "live": "polite",
+        "tone": "warning",
+        "inAside": true,
+        "onScreen": true
+      }
+    },
+    "order": [
+      "v5-sync-attention-banner",
+      "shift-closed-banner",
+      "v5-offline-banner",
+      "printer-failure-banner"
+    ],
+    "small": 0,
+    "mainVisible": 562,
+    "offlineTexts": 1,
+    "legacy007": false,
+    "legacyClasses": false,
+    "overflowX": false,
+    "errors": []
+  },
+  {
+    "name": "FullStack",
+    "state": "OfflineAttention",
+    "nav": "panel",
+    "width": 1280,
+    "mode": "forced",
+    "file": "rt605-FullStack-panel-1280x800-forced.png",
+    "axe": [],
+    "banners": {
+      "attention": {
+        "text": "تعذّر إرسال 1 عمليات. راجع المدير.",
+        "role": "alert",
+        "live": "assertive",
+        "tone": "danger",
+        "inAside": true,
+        "onScreen": true
+      },
+      "shiftClosed": {
+        "text": "أُغلقت ورديتك السابقة في 16 أكتوبر 2026 أثناء غيابك.إخفاء",
+        "role": "status",
+        "live": "polite",
+        "tone": "info",
+        "inAside": true,
+        "onScreen": true
+      },
+      "offline": {
+        "text": "غير متصل — البيع محفوظ على هذا الجهاز وسيُرسَل عند عودة الاتصال.",
+        "role": "status",
+        "live": "polite",
+        "tone": "warning",
+        "inAside": true,
+        "onScreen": true
+      },
+      "printer": {
+        "text": "فشل طباعة الإيصال · جرّب مرة أخرى أو حوّل للوضع اليدويإعادة المحاولةنسخةإيصال يدوي",
+        "role": "status",
+        "live": "polite",
+        "tone": "warning",
+        "inAside": true,
+        "onScreen": true
+      }
+    },
+    "order": [
+      "v5-sync-attention-banner",
+      "shift-closed-banner",
+      "v5-offline-banner",
+      "printer-failure-banner"
+    ],
+    "small": 0,
+    "mainVisible": 562,
+    "offlineTexts": 1,
+    "legacy007": false,
+    "legacyClasses": false,
+    "overflowX": false,
+    "errors": []
+  },
+  {
+    "name": "FullStack",
+    "state": "OfflineAttention",
+    "nav": "slim",
+    "width": 1024,
+    "mode": "light",
+    "file": "rt605-FullStack-slim-1024x768.png",
+    "axe": [],
+    "banners": {
+      "attention": {
+        "text": "تعذّر إرسال 1 عمليات. راجع المدير.",
+        "role": "alert",
+        "live": "assertive",
+        "tone": "danger",
+        "inAside": true,
+        "onScreen": true
+      },
+      "shiftClosed": {
+        "text": "أُغلقت ورديتك السابقة في 16 أكتوبر 2026 أثناء غيابك.إخفاء",
+        "role": "status",
+        "live": "polite",
+        "tone": "info",
+        "inAside": true,
+        "onScreen": true
+      },
+      "offline": {
+        "text": "غير متصل — البيع محفوظ على هذا الجهاز وسيُرسَل عند عودة الاتصال.",
+        "role": "status",
+        "live": "polite",
+        "tone": "warning",
+        "inAside": true,
+        "onScreen": true
+      },
+      "printer": {
+        "text": "فشل طباعة الإيصال · جرّب مرة أخرى أو حوّل للوضع اليدويإعادة المحاولةنسخةإيصال يدوي",
+        "role": "status",
+        "live": "polite",
+        "tone": "warning",
+        "inAside": true,
+        "onScreen": true
+      }
+    },
+    "order": [
+      "v5-sync-attention-banner",
+      "shift-closed-banner",
+      "v5-offline-banner",
+      "printer-failure-banner"
+    ],
+    "small": 0,
+    "mainVisible": 534,
+    "offlineTexts": 1,
+    "legacy007": false,
+    "legacyClasses": false,
+    "overflowX": false,
+    "errors": []
+  },
+  {
+    "name": "FullStack",
+    "state": "OfflineAttention",
+    "nav": "slim",
+    "width": 1024,
+    "mode": "forced",
+    "file": "rt605-FullStack-slim-1024x768-forced.png",
+    "axe": [],
+    "banners": {
+      "attention": {
+        "text": "تعذّر إرسال 1 عمليات. راجع المدير.",
+        "role": "alert",
+        "live": "assertive",
+        "tone": "danger",
+        "inAside": true,
+        "onScreen": true
+      },
+      "shiftClosed": {
+        "text": "أُغلقت ورديتك السابقة في 16 أكتوبر 2026 أثناء غيابك.إخفاء",
+        "role": "status",
+        "live": "polite",
+        "tone": "info",
+        "inAside": true,
+        "onScreen": true
+      },
+      "offline": {
+        "text": "غير متصل — البيع محفوظ على هذا الجهاز وسيُرسَل عند عودة الاتصال.",
+        "role": "status",
+        "live": "polite",
+        "tone": "warning",
+        "inAside": true,
+        "onScreen": true
+      },
+      "printer": {
+        "text": "فشل طباعة الإيصال · جرّب مرة أخرى أو حوّل للوضع اليدويإعادة المحاولةنسخةإيصال يدوي",
+        "role": "status",
+        "live": "polite",
+        "tone": "warning",
+        "inAside": true,
+        "onScreen": true
+      }
+    },
+    "order": [
+      "v5-sync-attention-banner",
+      "shift-closed-banner",
+      "v5-offline-banner",
+      "printer-failure-banner"
+    ],
+    "small": 0,
+    "mainVisible": 534,
+    "offlineTexts": 1,
+    "legacy007": false,
+    "legacyClasses": false,
+    "overflowX": false,
+    "errors": []
+  },
+  {
+    "name": "FullStack",
+    "state": "OfflineAttention",
+    "nav": "slim",
+    "width": 1280,
+    "mode": "light",
+    "file": "rt605-FullStack-slim-1280x800.png",
+    "axe": [],
+    "banners": {
+      "attention": {
+        "text": "تعذّر إرسال 1 عمليات. راجع المدير.",
+        "role": "alert",
+        "live": "assertive",
+        "tone": "danger",
+        "inAside": true,
+        "onScreen": true
+      },
+      "shiftClosed": {
+        "text": "أُغلقت ورديتك السابقة في 16 أكتوبر 2026 أثناء غيابك.إخفاء",
+        "role": "status",
+        "live": "polite",
+        "tone": "info",
+        "inAside": true,
+        "onScreen": true
+      },
+      "offline": {
+        "text": "غير متصل — البيع محفوظ على هذا الجهاز وسيُرسَل عند عودة الاتصال.",
+        "role": "status",
+        "live": "polite",
+        "tone": "warning",
+        "inAside": true,
+        "onScreen": true
+      },
+      "printer": {
+        "text": "فشل طباعة الإيصال · جرّب مرة أخرى أو حوّل للوضع اليدويإعادة المحاولةنسخةإيصال يدوي",
+        "role": "status",
+        "live": "polite",
+        "tone": "warning",
+        "inAside": true,
+        "onScreen": true
+      }
+    },
+    "order": [
+      "v5-sync-attention-banner",
+      "shift-closed-banner",
+      "v5-offline-banner",
+      "printer-failure-banner"
+    ],
+    "small": 0,
+    "mainVisible": 562,
+    "offlineTexts": 1,
+    "legacy007": false,
+    "legacyClasses": false,
+    "overflowX": false,
+    "errors": []
+  },
+  {
+    "name": "FullStack",
+    "state": "OfflineAttention",
+    "nav": "slim",
+    "width": 1280,
+    "mode": "forced",
+    "file": "rt605-FullStack-slim-1280x800-forced.png",
+    "axe": [],
+    "banners": {
+      "attention": {
+        "text": "تعذّر إرسال 1 عمليات. راجع المدير.",
+        "role": "alert",
+        "live": "assertive",
+        "tone": "danger",
+        "inAside": true,
+        "onScreen": true
+      },
+      "shiftClosed": {
+        "text": "أُغلقت ورديتك السابقة في 16 أكتوبر 2026 أثناء غيابك.إخفاء",
+        "role": "status",
+        "live": "polite",
+        "tone": "info",
+        "inAside": true,
+        "onScreen": true
+      },
+      "offline": {
+        "text": "غير متصل — البيع محفوظ على هذا الجهاز وسيُرسَل عند عودة الاتصال.",
+        "role": "status",
+        "live": "polite",
+        "tone": "warning",
+        "inAside": true,
+        "onScreen": true
+      },
+      "printer": {
+        "text": "فشل طباعة الإيصال · جرّب مرة أخرى أو حوّل للوضع اليدويإعادة المحاولةنسخةإيصال يدوي",
+        "role": "status",
+        "live": "polite",
+        "tone": "warning",
+        "inAside": true,
+        "onScreen": true
+      }
+    },
+    "order": [
+      "v5-sync-attention-banner",
+      "shift-closed-banner",
+      "v5-offline-banner",
+      "printer-failure-banner"
+    ],
+    "small": 0,
+    "mainVisible": 562,
+    "offlineTexts": 1,
+    "legacy007": false,
+    "legacyClasses": false,
+    "overflowX": false,
+    "errors": []
+  }
+]

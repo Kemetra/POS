@@ -34,6 +34,7 @@ const DEFAULTS: OneFrameProofParams = {
   close: 'refused',
   payments: 'on',
   search: 'none',
+  closed: 'none',
 };
 
 type AnyFn = (...args: unknown[]) => unknown;
@@ -103,6 +104,22 @@ describe('OneFrameProof — parameters', () => {
     render(<OneFrameProof />);
     await screen.findByTestId('v5-frame');
     expect(useFeatureFlagsStore.getState().shiftCashup).toBe(true);
+  });
+
+  it('RT-605: reads closed=shift, and defaults it to none', () => {
+    window.location.hash = '#/dev/one-frame-proof?closed=shift';
+    expect(readOneFrameProofParams().closed).toBe('shift');
+    window.location.hash = '#/dev/one-frame-proof?closed=bogus';
+    expect(readOneFrameProofParams().closed).toBe('none');
+  });
+
+  it('RT-605: closed=shift signs in with a forced-close notice, which dismiss clears', async () => {
+    render(<OneFrameProof params={{ ...DEFAULTS, closed: 'shift' }} />);
+    const banner = await screen.findByTestId('shift-closed-banner');
+    await userEvent.click(within(banner).getByRole('button', { name: 'إخفاء' }));
+    await waitFor(() => {
+      expect(screen.queryByTestId('shift-closed-banner')).toBeNull();
+    });
   });
 
   it('RT-502: reads list and close, and ignores unknown values', () => {

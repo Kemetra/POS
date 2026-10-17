@@ -353,6 +353,7 @@ Conditional rows (marked ⏳) depend on the named contract and must not ship bef
 | M-W1 | Shift required | «لا توجد وردية مفتوحة على هذا الجهاز. افتح وردية بمبلغ الافتتاح قبل البيع.» (shipped) | warning |
 | M-W2 | Shift opened / closed | «فُتحت الوردية.» / «أُغلقت الوردية.» (shipped) | success |
 | M-W3 | Blind count hint | «عُدّ النقد في الدرج وأدخله. لا يظهر المبلغ المتوقع قبل تسجيل العدّ.» (shipped) | neutral |
+| M-W4 | Previous shift closed while away (forced-close notice, shown once; RT-605) — **pending owner approval** | «أُغلقت ورديتك السابقة في ‹date› أثناء غيابك.» · action «إخفاء». ‹date› from the absolute-date formatter (Arabic month, Western digits), bidi-isolated | info |
 | **Session and lock** | | | |
 | M-L1 | Locked | «الطرفية مقفلة. أدخل الرقم السري للمتابعة.» | neutral |
 | M-L1b | Locked (manager / admin) | «الطرفية مقفلة. أدخل بيانات الدخول للمتابعة.» | neutral |

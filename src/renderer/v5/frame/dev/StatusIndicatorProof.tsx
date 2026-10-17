@@ -19,6 +19,11 @@ import { OneFrameProof, readOneFrameProofParams } from './OneFrameProof';
  * `main.tsx` mounts it only under `import.meta.env.DEV`; Vite drops the branch
  * from production builds. Every other query key is OneFrameProof's (`path`,
  * `role`, …); `state=PrinterFailed` also sets `banner=printer`.
+ *
+ * RT-605 (VN-S6 S6-4): the same frame mounts the notices stack, so these
+ * states also drive the M-O1 / M-O3 banner captures. `Attention24h` reaches
+ * attention through the 24 h line alone (no dead letter); `OfflineAttention`
+ * shows both banners. `banner=printer` combines with any state.
  */
 
 export const STATUS_PROOF_STATES = [
@@ -30,6 +35,8 @@ export const STATUS_PROOF_STATES = [
   'Sending',
   'Paused',
   'Attention',
+  'Attention24h',
+  'OfflineAttention',
   'PrinterFailed',
 ] as const;
 export type StatusProofState = (typeof STATUS_PROOF_STATES)[number];
@@ -78,6 +85,13 @@ function snapshotFor(state: StatusProofState): TerminalStatusSnapshot {
       return snapshot('online', { ...pending(2), paused: 'no_operator_credential' });
     case 'Attention':
       return snapshot('online', { ...pending(1), deadLetter: 2 });
+    case 'Attention24h':
+      return snapshot('online', {
+        pending: 2,
+        oldestPendingAt: new Date(Date.now() - 26 * HOUR).toISOString(),
+      });
+    case 'OfflineAttention':
+      return snapshot('offline', { ...pending(2), deadLetter: 1 });
     default:
       return snapshot('online');
   }

@@ -1,8 +1,7 @@
-import { useEffect, useState, type JSX } from 'react';
+import { useEffect, type JSX } from 'react';
 import {
   mapTerminalStatus,
   printerRow,
-  syncAttentionDueAt,
   type IndicatorRow,
   type IndicatorTone,
 } from '../../terminal-status/status-mapping';
@@ -11,7 +10,7 @@ import {
   terminalStatusBridge,
   useTerminalStatusStore,
 } from '../../terminal-status/terminal-status-store';
-import type { TerminalStatusSnapshot } from '../../../shared/terminal-status/types';
+import { useAttentionDeadline } from '../../terminal-status/use-attention-deadline';
 import { useBannerState } from '../../ui/receipts/useBannerState';
 import { V5Icon, type V5IconName } from '../foundation/V5Icon';
 import './status-indicator.css';
@@ -24,26 +23,6 @@ const MARK: Readonly<Record<IndicatorTone, V5IconName>> = {
   danger: 'status-danger',
   neutral: 'dash',
 };
-
-/**
- * Re-renders once when the oldest pending sale passes the 24 h attention line
- * (D-6-5). One timer for that moment, never a poll; a new snapshot re-arms it.
- */
-function useAttentionDeadline(snapshot: TerminalStatusSnapshot | null): void {
-  const [, setPassed] = useState(0);
-  useEffect(() => {
-    const due = syncAttentionDueAt(snapshot);
-    if (due === null) return;
-    const wait = due - Date.now() + 1;
-    if (wait <= 0) return;
-    const handle = setTimeout(() => {
-      setPassed((n) => n + 1);
-    }, wait);
-    return () => {
-      clearTimeout(handle);
-    };
-  }, [snapshot]);
-}
 
 function RowContent({ row }: Readonly<{ row: IndicatorRow }>): JSX.Element {
   return (

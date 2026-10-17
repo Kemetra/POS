@@ -56,10 +56,14 @@ function oldestPendingMs(snapshot: TerminalStatusSnapshot): number | null {
   return oldestPendingAt === null ? null : Date.parse(oldestPendingAt);
 }
 
-function needsAttention(snapshot: TerminalStatusSnapshot, nowMs: number): boolean {
-  if (snapshot.sync.deadLetter > 0) return true;
+/** The oldest pending sale is older than N = 24 h (D-6-5). */
+function isAged(snapshot: TerminalStatusSnapshot, nowMs: number): boolean {
   const oldest = oldestPendingMs(snapshot);
   return oldest !== null && nowMs - oldest > SYNC_ATTENTION_AGE_MS;
+}
+
+function needsAttention(snapshot: TerminalStatusSnapshot, nowMs: number): boolean {
+  return snapshot.sync.deadLetter > 0 || isAged(snapshot, nowMs);
 }
 
 function connectionRow(snapshot: TerminalStatusSnapshot | null): IndicatorRow {
@@ -107,6 +111,32 @@ export function mapTerminalStatus(
     connection: connectionRow(snapshot),
     sync: syncRow(snapshot, attention),
   };
+}
+
+/** The notices-stack banners (doc 24 §4.3); both show when both hold. */
+export interface StatusBanners {
+  /** M-O3's ‹n›, or null when nothing needs a human (U2 does not hold). */
+  readonly attention: number | null;
+  /** M-O1: `offline`, or `degraded` shown as offline (D-6-2). */
+  readonly offline: boolean;
+}
+
+/**
+ * RT-605 (VN-S6 S6-4) — which status banners show. Attention is the same U2
+ * test the indicator uses. Its count is the dead letters, plus every pending
+ * sale once the oldest has passed 24 h (they wait behind it). No snapshot
+ * shows nothing, never a guess.
+ */
+export function mapStatusBanners(
+  snapshot: TerminalStatusSnapshot | null,
+  nowMs: number,
+): StatusBanners {
+  if (snapshot === null) return { attention: null, offline: false };
+  const { connection, sync } = snapshot;
+  const offline = connection === 'offline' || connection === 'degraded';
+  if (!needsAttention(snapshot, nowMs)) return { attention: null, offline };
+  const waiting = isAged(snapshot, nowMs) ? sync.pending : 0;
+  return { attention: sync.deadLetter + waiting, offline };
 }
 
 /**
