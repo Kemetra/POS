@@ -7,7 +7,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { cleanup, render, screen, within } from '@testing-library/react';
 import '@testing-library/jest-dom/vitest';
-import { expectNoAxeViolations } from '../../../ui/primitives/__tests__/axe-config';
+import { expectNoAxeViolations } from '../../../test-utils/axe-config';
 import { ScreenSection } from '../ScreenSection';
 
 afterEach(cleanup);

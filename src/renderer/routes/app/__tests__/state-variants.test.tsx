@@ -3,7 +3,7 @@ import { render, screen, cleanup } from '@testing-library/react';
 import '@testing-library/jest-dom/vitest';
 import { MemoryRouter } from 'react-router-dom';
 
-import { expectNoAxeViolations } from '../../../ui/primitives/__tests__/axe-config';
+import { expectNoAxeViolations } from '../../../test-utils/axe-config';
 
 /**
  * T042 — Cross-product state-variant tests (US3).

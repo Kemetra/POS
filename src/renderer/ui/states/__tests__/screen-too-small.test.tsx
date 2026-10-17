@@ -3,7 +3,7 @@ import { render, screen, cleanup } from '@testing-library/react';
 import '@testing-library/jest-dom/vitest';
 
 import { ScreenTooSmall } from '../ScreenTooSmall';
-import { expectNoAxeViolations } from '../../primitives/__tests__/axe-config';
+import { expectNoAxeViolations } from '../../../test-utils/axe-config';
 
 afterEach(cleanup);
 

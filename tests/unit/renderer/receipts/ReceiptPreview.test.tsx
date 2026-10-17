@@ -21,7 +21,7 @@ import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom/vitest';
 
 import { ReceiptPreview } from '../../../../src/renderer/ui/receipts/ReceiptPreview.js';
-import { expectNoAxeViolations } from '../../../../src/renderer/ui/primitives/__tests__/axe-config.js';
+import { expectNoAxeViolations } from '../../../../src/renderer/test-utils/axe-config.js';
 import type {
   ReceiptsBridgeAPI,
   ReceiptsPreviewResponse,

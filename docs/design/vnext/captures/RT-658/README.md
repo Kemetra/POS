@@ -49,27 +49,24 @@ The walk found one keyboard defect, which already exists on main:
 
 ## The shared `shift.css`
 
-`src/renderer/v5/shift/shift.css` is shared with the void screen (RT-654), the recovery page (RT-656), the lock screen, the re-auth dialog and the frame's shift notice. When this PR opened, I grepped every rule against `origin/main` (`44465f0`).
+`src/renderer/v5/shift/shift.css` was shared with the void screen and the recovery page. When I merged `origin/main` at `3df05cf`, both had moved to their own stylesheets: RT-654 (#743) for void and RT-656 (#740) for recovery. I re-ran the grep for every rule against the merged tree. The recovery test even asserts that no `v5-shift` class remains on that page.
 
-**Retired: 15 rules.** On main these were used only by the shift code this PR rewrites:
+**Retired: 30 rules.** Nothing on main uses them any more:
 
-- `v5-shift-actions`, `-manager-screen`, `-mgr-banner`, `-mgr-closed`, `-mgr-commit`
-- `-mgr-count`, `-mgr-counts`, `-mgr-field`, `-mgr-fields`, `-mgr-group`, `-mgr-groups`
-- `-mgr-head--lead`, `-mgr-open`, `-mgr-pin`, `-mgr-reload`
+- The RT-17 frame: `.v5-shift`, `-titlebar`, `-columns`, `-panel`, `-message`, `-outcome`, `-facts` and `-fact`.
+- The old approval list: `-managers` and `-manager`.
+- `-alert`, together with the `ShiftAlert` component, which has no importers left.
+- The old manager page: `-manager-screen`, `-actions` and every `-mgr-*` rule.
 
-**Kept, because something on main still uses them:**
+**Kept, because something still uses them:**
 
 | Rule | Still used by |
 |---|---|
-| `.v5-shift` | void, recovery (root) |
-| `-titlebar`, `-outcome` | void, recovery |
-| `-columns`, `-panel`, `-facts`, `-fact`, `-hint` | void |
-| `-fields`, `-input` | void, recovery, lock screen, re-auth dialog |
-| `-managers`, `-manager` | void approval |
-| `-message`, `-mgr-head`, `-mgr-glyph`, `-mgr-panel`, `-mgr-body`, `-money` | recovery |
-| `-btn`, `-btn--primary` | recovery, plus the shift screens themselves |
-| `-alert` | `ShiftAlert`, still imported by void and recovery |
+| `-hint`, `-money`, `-btn`, `-btn--primary` | the shift screens |
+| `-fields`, `-input` | the lock screen (`LockScreen.tsx`, `lock-screen.css`) and `ReauthDialog` |
 | `-banner`, `-notice` | the frame's `ShiftNotice` |
+
+Everything else in the file is the new G-2 section.
 
 ## Rerun
 

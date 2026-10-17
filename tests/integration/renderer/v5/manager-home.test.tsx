@@ -17,7 +17,7 @@ import { fakeShiftBridge } from '../../../../src/renderer/v5/__tests__/__helpers
 import { HOME_COPY } from '../../../../src/renderer/v5/manager/home/home-copy.js';
 import { installViewport } from '../../../../src/renderer/v5/__tests__/__helpers__/viewport-bands.js';
 import { useFeatureFlagsStore } from '../../../../src/renderer/stores/feature-flags-store.js';
-import { expectNoAxeViolations } from '../../../../src/renderer/ui/primitives/__tests__/axe-config.js';
+import { expectNoAxeViolations } from '../../../../src/renderer/test-utils/axe-config.js';
 import {
   installManagerScreenApi,
   operatorBridge,

@@ -127,6 +127,19 @@ if (
     );
   });
 } else if (
+  // RT-654: the void screen harness, same DEV-only contract (the real AppRouter
+  // at /app/void against in-memory saleVoid / approval bridges).
+  (import.meta as unknown as { env?: { DEV?: boolean } }).env?.DEV &&
+  window.location.hash.startsWith('#/dev/void-proof')
+) {
+  void import('./v5/void/dev/VoidProof').then(({ VoidProof }) => {
+    root.render(
+      <React.StrictMode>
+        <VoidProof />
+      </React.StrictMode>,
+    );
+  });
+} else if (
   // RT-658 (G-2): the shift harness, same DEV-only contract (the real AppRouter —
   // the cashier's /app/shift and the manager's /app/shift/manager — against an
   // in-memory shiftCashup bridge).

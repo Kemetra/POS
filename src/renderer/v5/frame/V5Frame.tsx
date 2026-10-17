@@ -1,7 +1,5 @@
-import { useEffect, useRef, type JSX, type ReactNode } from 'react';
+import { useRef, type JSX, type ReactNode } from 'react';
 import { useLocation } from 'react-router-dom';
-import { useConnectionState } from '../../connection/connection-state';
-import type { ConnectionState } from '../../ui/tokens/connection-state';
 import { ScreenTooSmall } from '../../ui/states/ScreenTooSmall';
 import { useFocusOnReturn } from '../../viewport/useFocusOnReturn';
 import { useViewportTier, viewportShortfall } from '../../viewport/useViewportTier';
@@ -46,31 +44,12 @@ interface V5FrameProps {
  * (`<aside>`): it mixes status banners with the shift / void links, so it is
  * not a navigation region, and it keeps axe's `region` rule clean.
  *
- * RT-498 (VN-S10 S10-1, D-10-7): the `?conn=` dev toggle the legacy AppShell
- * carried lives here. Dev builds only; the module is imported lazily so a
- * production build never ships it.
- *
- * RT-605 (VN-S6 S6-4): the connection banner has moved into the notices stack
- * (M-O1, from the real terminal signal), so the frame no longer renders the
- * 007 StatusBanner and offline is never shown twice. The toggle, the legacy
- * store and the 007 component are retired in S6-5 (RT-606).
+ * RT-605 (VN-S6 S6-4): the connection banner lives in the notices stack
+ * (M-O1, from the real terminal signal). RT-606 (S6-5) retired the 007
+ * StatusBanner, the renderer connection store and the `?conn=` dev toggle.
  */
-function useDevConnectionToggle(setConnectionState: (state: ConnectionState) => void): void {
-  useEffect(() => {
-    const metaEnv = (import.meta as unknown as { env?: { DEV?: boolean } }).env;
-    if (!metaEnv?.DEV) return;
-    void import('../../connection/dev-toggles').then(({ getDevToggles }) => {
-      setConnectionState(getDevToggles().conn);
-    });
-    // Once on mount: URL search params are static per page load.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-}
-
 export function V5Frame({ notices, children }: Readonly<V5FrameProps>): JSX.Element {
   const shortfall = viewportShortfall(useViewportTier());
-  const { setState: setConnectionState } = useConnectionState();
-  useDevConnectionToggle(setConnectionState);
   const { pathname } = useLocation();
   const nav = isActiveSaleRoute(pathname) ? 'slim' : 'panel';
   const mainRef = useRef<HTMLElement>(null);

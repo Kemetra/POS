@@ -10,10 +10,9 @@ import { act, cleanup, screen, within } from '@testing-library/react';
 import '@testing-library/jest-dom/vitest';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { TerminalStatusSnapshot } from '../../../shared/terminal-status/types';
-import { useConnectionStateStore } from '../../connection/connection-state';
 import { STATUS_NOW as NOW, snap } from '../../terminal-status/__tests__/__helpers__/snapshot';
 import { SYNC_ATTENTION_AGE_MS } from '../../terminal-status/status-mapping';
-import { expectNoAxeViolations } from '../../ui/primitives/__tests__/axe-config';
+import { expectNoAxeViolations } from '../../test-utils/axe-config';
 import { V5OperationalNotices } from '../frame/V5OperationalNotices';
 import {
   installStatusApi,
@@ -58,7 +57,6 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   resetStatusKit();
-  useConnectionStateStore.getState().setState('online');
 });
 
 describe('offline banner M-O1 (U3)', () => {
@@ -118,7 +116,7 @@ describe('sync-attention banner M-O3 (U2)', () => {
     expect(banner).not.toBeNull();
     expect(banner).toHaveAttribute('data-tone', 'danger');
     expect(banner).toHaveAttribute('role', 'alert');
-    expect(banner).toHaveTextContent('تعذّر إرسال 2 عمليات. راجع المدير.');
+    expect(banner).toHaveTextContent('تعذّر إرسال عمليتين. راجع المدير.');
     expect(within(banner as HTMLElement).queryByRole('button')).toBeNull();
   });
 
@@ -127,6 +125,14 @@ describe('sync-attention banner M-O3 (U2)', () => {
     await renderAt();
     const num = attentionBanner()?.querySelector('[dir="ltr"]');
     expect(num).toHaveTextContent(/^12$/);
+    expect(attentionBanner()).toHaveTextContent('تعذّر إرسال 12 عملية. راجع المدير.');
+  });
+
+  it('writes 1 as a word, with no number run (RT-646)', async () => {
+    installApi(snap('online', { deadLetter: 1 }));
+    await renderAt();
+    expect(attentionBanner()).toHaveTextContent('تعذّر إرسال عملية واحدة. راجع المدير.');
+    expect(attentionBanner()?.querySelector('[dir="ltr"]')).toBeNull();
   });
 
   it('shows when the oldest pending sale is older than 24 h', async () => {
@@ -145,7 +151,7 @@ describe('sync-attention banner M-O3 (U2)', () => {
       vi.advanceTimersByTime(60_001);
       await Promise.resolve();
     });
-    expect(attentionBanner()).toHaveTextContent('تعذّر إرسال 1 عمليات. راجع المدير.');
+    expect(attentionBanner()).toHaveTextContent('تعذّر إرسال عملية واحدة. راجع المدير.');
     expect(api.getStatus).toHaveBeenCalledTimes(1);
   });
 
@@ -182,7 +188,6 @@ describe('the stack (doc 24 §4.3)', () => {
   });
 
   it('never shows offline twice: the frame no longer renders the 007 connection banner', async () => {
-    useConnectionStateStore.getState().setState('offline');
     installApi(snap('offline'));
     await renderAt();
     expect(screen.getAllByText(/^غير متصل —/)).toHaveLength(1);

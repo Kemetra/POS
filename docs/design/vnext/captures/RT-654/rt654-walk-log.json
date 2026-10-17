@@ -1,0 +1,110 @@
+[
+  {
+    "walk": "lookup",
+    "what": "Tab reaches the sale number field",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "walk": "lookup",
+    "what": "Enter in the field searches; the sale shows; focus stays in the field",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "walk": "lookup",
+    "what": "Tab reaches «بحث» then «إلغاء هذا البيع» (44px each)",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "walk": "dialog",
+    "what": "Enter opens the dialog with focus on «رجوع» (the safe control)",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "walk": "dialog",
+    "what": "Tab cycles inside the dialog and never leaves it",
+    "ok": true,
+    "detail": "INPUT:radio:خالد منصور → INPUT:password:_r_4_ → رجوع → INPUT:radio:خالد منصور → INPUT:password:_r_4_"
+  },
+  {
+    "walk": "dialog",
+    "what": "Esc closes with no request; focus returns to «إلغاء هذا البيع»",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "walk": "confirm",
+    "what": "Shift+Tab from «رجوع» reaches the manager radios",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "walk": "confirm",
+    "what": "Space chooses the manager",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "walk": "confirm",
+    "what": "Tab reaches the PIN field",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "walk": "confirm",
+    "what": "«تأكيد الإلغاء» enables once a manager and a 6-digit PIN are set",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "walk": "confirm",
+    "what": "Enter in the PIN field does not send (the commit is a press only, as before)",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "walk": "confirm",
+    "what": "Tab reaches «تأكيد الإلغاء»",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "walk": "confirm",
+    "what": "Enter on «تأكيد الإلغاء» journals the void; the dialog closes; the notice shows",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "walk": "confirm",
+    "what": "focus returns to the sale number field",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "walk": "refused",
+    "what": "the refusal shows inside the dialog, focus on «رجوع», PIN cleared",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "walk": "journal",
+    "what": "Tab reaches the journal list (a focusable scroll region)",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "walk": "journal",
+    "what": "PageDown scrolls the list",
+    "ok": true,
+    "detail": "0 → 71"
+  },
+  {
+    "walk": "journal",
+    "what": "Tab reaches «تم الاطلاع»",
+    "ok": true,
+    "detail": ""
+  }
+]

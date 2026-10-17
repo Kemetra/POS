@@ -5,7 +5,7 @@ import '@testing-library/jest-dom/vitest';
 import { MemoryRouter } from 'react-router-dom';
 
 import { CheckoutPlaceholder } from '../CheckoutPlaceholder';
-import { expectNoAxeViolations } from '../../../../ui/primitives/__tests__/axe-config';
+import { expectNoAxeViolations } from '../../../../test-utils/axe-config';
 
 afterEach(cleanup);
 afterEach(() => vi.unstubAllGlobals());

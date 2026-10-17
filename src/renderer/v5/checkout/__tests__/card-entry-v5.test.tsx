@@ -27,7 +27,7 @@ import type {
 import { useFeatureFlagsStore } from '../../../stores/feature-flags-store';
 import { useOperatorSessionStore } from '../../../stores/operator-session-store';
 import { usePaymentStore } from '../../../stores/payment-store';
-import { expectNoAxeViolations } from '../../../ui/primitives/__tests__/axe-config';
+import { expectNoAxeViolations } from '../../../test-utils/axe-config';
 import { PaymentSurface } from '../../../ui/payments/PaymentSurface';
 
 const DUE = 37_500; // 375.00 EGP

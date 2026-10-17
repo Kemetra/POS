@@ -52,16 +52,3 @@ export function ShiftScreen(props: Props): JSX.Element | null {
     </ScreenSection>
   );
 }
-
-/**
- * A refusal (or rejected call) in the region that caused it. Kept for the void
- * and recovery screens; the shift screens use ShiftRefusal (RT-658).
- */
-export function ShiftAlert({ message }: Readonly<{ message: string | null }>): JSX.Element | null {
-  if (message === null) return null;
-  return (
-    <p className="v5-shift-alert" role="alert">
-      {message}
-    </p>
-  );
-}

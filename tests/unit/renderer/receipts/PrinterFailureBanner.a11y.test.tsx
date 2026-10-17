@@ -12,7 +12,7 @@ import { cleanup, render, screen } from '@testing-library/react';
 import '@testing-library/jest-dom/vitest';
 
 import { PrinterFailureBanner } from '../../../../src/renderer/ui/receipts/PrinterFailureBanner.js';
-import { expectNoAxeViolations } from '../../../../src/renderer/ui/primitives/__tests__/axe-config.js';
+import { expectNoAxeViolations } from '../../../../src/renderer/test-utils/axe-config.js';
 import type { ReceiptsBridgeAPI } from '../../../../src/shared/bridge-api.js';
 
 const FAILURE = {
