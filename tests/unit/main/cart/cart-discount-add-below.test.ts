@@ -1,23 +1,15 @@
 /**
- * T059 — cart.discountPlaceholders.add below threshold (S3 contract).
+ * T059 — cart.discountPlaceholders.add for a small discount on a cashier
+ * session.
  *
- * When `placeholder_kind` signals a below-threshold discount (e.g.,
- * 'percent_5'), the handler MUST:
- *   1. Insert a `cart_line_discount_placeholders` row.
- *   2. Write a `cart.discount.add` outbox row.
- *   3. Return `{ kind: 'ok', placeholder_id, requires_manager_attribution: false }`.
+ * RT-608 (RT-28, spec 005 FR-023 revised) retires the threshold: there is no
+ * "below-threshold" discount any more. Every positive manual discount needs
+ * manager authority, so a cashier's 5% (or 1%) discount with no approval is
+ * refused `manager_attribution_required` and writes nothing: no placeholder,
+ * no outbox row, no audit row. The approved path is covered end to end by
+ * `src/main/cart/__tests__/discount-manual-approval.e2e.test.ts`.
  *
- * No manager attribution is required. No audit event is emitted for below-
- * threshold discounts (spec FR-023 — audit only fires at/above threshold).
- *
- * Convention: `placeholder_kind` strings starting with a digit ≤ tenant
- * threshold are treated as below-threshold. Tests use 'percent_5' (below)
- * and 'percent_20' (above, tested in T060/T061). The actual threshold
- * evaluation moves to the S3 handler; tests simply assert the contract.
- *
- * Tests asserting { kind: 'ok' } are RED until T069 (discount handler wiring).
- * Gate-layer tests are GREEN (S2 live).
- */
+ * Gate-layer tests are unchanged. */
 
 import { describe, it, expect, beforeAll, beforeEach } from 'vitest';
 import initSqlJs, { type Database as SqlJsDatabase, type SqlJsStatic } from 'sql.js';
@@ -158,87 +150,49 @@ describe('cart.discountPlaceholders.add — gate layer (S2 live)', () => {
   });
 });
 
-// ── S3 contract: below-threshold (T059 — RED until T069) ──────────────────
+// ── RT-608: no threshold — a cashier's small discount needs a manager ─────
 
-describe('cart.discountPlaceholders.add — below-threshold S3 contract (RED until T069)', () => {
+describe('cart.discountPlaceholders.add — no threshold (RT-608)', () => {
   let f: Fixture;
   beforeEach(async () => {
     f = await newCartWithLine();
   });
 
-  it('returns ok with requires_manager_attribution: false for below-threshold kind', async () => {
-    const res = await f.handlers.discountPlaceholdersAdd({
-      cart_id: f.cart_id,
-      line_id: f.line_id,
-      placeholder_kind: 'percent_5',
-      idempotency_key: 'dp-t059-a',
-    });
-    // RED until T069.
-    expect(res.kind).toBe('ok');
-    if (res.kind === 'ok') {
-      expect(res.requires_manager_attribution).toBe(false);
-      expect(typeof res.placeholder_id).toBe('string');
-    }
-  });
+  it.each([['percent_5'], ['percent_1']])(
+    'refuses a cashier %s with no approval: manager_attribution_required',
+    async (kind) => {
+      const res = await f.handlers.discountPlaceholdersAdd({
+        cart_id: f.cart_id,
+        line_id: f.line_id,
+        placeholder_kind: kind,
+        idempotency_key: 'dp-t059-a',
+      });
+      expect(res).toEqual({ kind: 'refused', reason: 'manager_attribution_required' });
+    },
+  );
 
-  it('inserts a cart_line_discount_placeholders row', async () => {
+  it('writes no placeholder row and no outbox row when refused', async () => {
     await f.handlers.discountPlaceholdersAdd({
       cart_id: f.cart_id,
       line_id: f.line_id,
       placeholder_kind: 'percent_5',
       idempotency_key: 'dp-t059-b',
     });
-    // RED until T069.
-    const rows = readDiscountPlaceholders(f.db, f.cart_id);
-    expect(rows).toHaveLength(1);
-    expect(rows[0]?.['placeholder_kind']).toBe('percent_5');
-    expect(rows[0]?.['line_id']).toBe(f.line_id);
+    expect(readDiscountPlaceholders(f.db, f.cart_id)).toHaveLength(0);
+    expect(readOutboxKinds(f.db, f.cart_id).some((k) => k.startsWith('cart.discount'))).toBe(false);
   });
 
-  it('writes an outbox row for the discount action', async () => {
-    await f.handlers.discountPlaceholdersAdd({
-      cart_id: f.cart_id,
-      line_id: f.line_id,
+  it('a manager session applies the same small discount directly (D2)', async () => {
+    const m = await newCartWithLine(makeSession({ role: 'manager', operator_id: 'mgr-t059' }));
+    const res = await m.handlers.discountPlaceholdersAdd({
+      cart_id: m.cart_id,
+      line_id: m.line_id,
       placeholder_kind: 'percent_5',
       idempotency_key: 'dp-t059-c',
     });
-    // RED until T069.
-    const kinds = readOutboxKinds(f.db, f.cart_id);
-    expect(kinds.some((k) => k.startsWith('cart.discount'))).toBe(true);
-  });
-
-  it('is idempotent — same idempotency_key yields ok with same placeholder_id', async () => {
-    const res1 = await f.handlers.discountPlaceholdersAdd({
-      cart_id: f.cart_id,
-      line_id: f.line_id,
-      placeholder_kind: 'percent_5',
-      idempotency_key: 'dp-t059-d',
-    });
-    const res2 = await f.handlers.discountPlaceholdersAdd({
-      cart_id: f.cart_id,
-      line_id: f.line_id,
-      placeholder_kind: 'percent_5',
-      idempotency_key: 'dp-t059-d',
-    });
-    // RED until T069.
-    expect(res1.kind).toBe('ok');
-    expect(res2.kind).toBe('ok');
-    if (res1.kind === 'ok' && res2.kind === 'ok') {
-      expect(res2.placeholder_id).toBe(res1.placeholder_id);
-    }
-  });
-
-  it('does not emit an audit event for below-threshold discount', async () => {
-    // No audit event expected for below-threshold — assert outbox has no
-    // cart.discount.above_threshold row.
-    await f.handlers.discountPlaceholdersAdd({
-      cart_id: f.cart_id,
-      line_id: f.line_id,
-      placeholder_kind: 'percent_5',
-      idempotency_key: 'dp-t059-e',
-    });
-    // RED until T069 (when outbox IS written, assert above_threshold is absent).
-    const kinds = readOutboxKinds(f.db, f.cart_id);
-    expect(kinds).not.toContain('cart.discount.above_threshold');
+    expect(res).toMatchObject({ kind: 'ok', requires_manager_attribution: true });
+    const rows = readDiscountPlaceholders(m.db, m.cart_id);
+    expect(rows[0]?.['requires_manager_attribution']).toBe(1);
+    expect(rows[0]?.['attribution_operator_id']).toBe('mgr-t059');
   });
 });

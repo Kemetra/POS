@@ -208,6 +208,13 @@ export interface InsertDiscountPlaceholderInput {
   created_at: string;
 }
 
+/** What one discount add writes, built inside its transaction. */
+export interface DiscountPlaceholderWrite {
+  placeholder: InsertDiscountPlaceholderInput;
+  outbox: InsertOutboxInput;
+  onInserted?: () => void;
+}
+
 export interface DiscountPlaceholderRow {
   placeholder_id: string;
   cart_id: string;
@@ -246,15 +253,13 @@ export interface CartStore {
    */
   undoLastActionAndOutbox(input: UndoLastInput, outbox: InsertOutboxInput): boolean;
   /**
-   * Atomically writes the discount placeholder row + outbox row, then calls
-   * `onInserted` (if provided) inside the same transaction — same audit-atomic
-   * pattern as `cancelCartAndOutbox`.
+   * ONE transaction: `build` runs first (RT-608: a cashier's manager approval
+   * is consumed there, and its approver names the placeholder), then the
+   * outbox row and the placeholder row are written, then `onInserted` (if
+   * returned) runs — same audit-atomic pattern as `cancelCartAndOutbox`. A
+   * throw anywhere rolls the whole add back.
    */
-  insertDiscountPlaceholderAndOutbox(
-    placeholder: InsertDiscountPlaceholderInput,
-    outbox: InsertOutboxInput,
-    onInserted?: () => void,
-  ): void;
+  insertDiscountPlaceholderAndOutbox(build: () => DiscountPlaceholderWrite): void;
   /** Hard-deletes the placeholder row and writes the outbox row atomically. */
   removeDiscountPlaceholderAndOutbox(placeholder_id: string, outbox: InsertOutboxInput): void;
   getDiscountPlaceholder(placeholder_id: string): DiscountPlaceholderRow | undefined;
@@ -678,8 +683,9 @@ export function bindCartStore(db: DatabaseHandle): CartStore {
       })();
     },
 
-    insertDiscountPlaceholderAndOutbox(placeholder, outbox, onInserted): void {
+    insertDiscountPlaceholderAndOutbox(build): void {
       db.transaction(() => {
+        const { placeholder, outbox, onInserted } = build();
         writeOutbox(outbox);
         insertDiscountPlaceholder.run(
           placeholder.placeholder_id,

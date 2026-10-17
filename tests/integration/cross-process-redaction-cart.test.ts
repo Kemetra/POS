@@ -412,7 +412,9 @@ const BRIDGE_FIXTURES: readonly BridgeCallFixture[] = [
     },
   },
   {
-    name: 'cart.discountPlaceholders.add (above-threshold, attribution required)',
+    // RT-608: no threshold — every add needs manager authority. A renderer-
+    // smuggled attribution id is still the field that MUST be scrubbed.
+    name: 'cart.discountPlaceholders.add (manager authority, RT-608)',
     payload: {
       action_kind: 'cart.discount_placeholder.add',
       cart_id: 'cart-uuid-disc',
@@ -424,6 +426,7 @@ const BRIDGE_FIXTURES: readonly BridgeCallFixture[] = [
         line_id: 'line-uuid-disc',
         placeholder_kind: 'percent_25',
         attribution_operator_id: SENTINEL_ATTRIBUTION_OPERATOR,
+        approval_id: 'approval-uuid-1',
         idempotency_key: 'idem-disc-1',
       },
       response: {

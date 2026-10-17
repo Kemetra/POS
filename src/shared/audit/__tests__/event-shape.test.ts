@@ -62,6 +62,12 @@ describe('audit/event-shape (T007 — FR-025)', () => {
     expect(AUDIT_ACTION_CATEGORIES).toContain('cart.discarded_on_session_end');
   });
 
+  it('RT-608: adds cart.discount.manager_authorized and keeps above_threshold (historical only)', () => {
+    expect(AUDIT_ACTION_CATEGORIES).toContain('cart.discount.manager_authorized');
+    // The catalogue never shrinks: recorded rows keep their meaning (RT-28 D3).
+    expect(AUDIT_ACTION_CATEGORIES).toContain('cart.discount.above_threshold');
+  });
+
   it('AuditEvent type accepts a cart category record (compile-time gate)', () => {
     const record: AuditEvent = {
       event_id: '00000000-0000-4000-8000-000000000005',

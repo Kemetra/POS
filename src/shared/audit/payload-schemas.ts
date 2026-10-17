@@ -312,6 +312,29 @@ export interface CartReturnToSalePayload {
 }
 
 /**
+ * `cart.discount.manager_authorized` (RT-608, RT-28 FR-023 revised) — a manual
+ * discount placeholder authorised by a manager. The requester is the envelope's
+ * `acting_operator_id`, the approver its `approving_supervisor_id` (a consumed
+ * approval's `users.id`, or the manager / admin session itself under D2).
+ * Ids and the closed reason code only: never a PIN, hash or approver name.
+ */
+export interface CartDiscountManagerAuthorizedPayload {
+  /** FK into carts table. */
+  cart_id: string;
+  /** FK into cart_lines table — the line bearing the discount placeholder. */
+  cart_line_id: string;
+  /** The placeholder written (its `idempotency_key`). */
+  placeholder_id: string;
+  /** The consumed `cart.discount.manual` approval; absent when a manager applied directly. */
+  approval_id?: string;
+  /** The approval's reason code; absent when a manager applied directly. */
+  reason_code?: string;
+}
+
+/**
+ * HISTORICAL ONLY (RT-28 D3): never emitted since RT-608; kept so recorded
+ * rows keep their meaning.
+ *
  * `cart.discount.above_threshold` — manager-attributed discount placeholder
  * whose magnitude exceeds the Q2 tenant-configured threshold (spec FR-023).
  * The cart layer records only the placeholder; the discounted amount is
@@ -687,6 +710,7 @@ export type AuditPayloadMap = {
   'cart.handoff_to_payment': CartHandoffToPaymentPayload;
   'cart.cancel.post_handoff': CartCancelPostHandoffPayload;
   'cart.discount.above_threshold': CartDiscountAboveThresholdPayload;
+  'cart.discount.manager_authorized': CartDiscountManagerAuthorizedPayload;
   'cart.discarded_on_session_end': CartDiscardedOnSessionEndPayload;
   // RT-352
   'cart.held_on_session_end': CartHeldOnSessionEndPayload;

@@ -275,7 +275,7 @@ describe('buildPaymentIntentEnvelope with discount placeholders', () => {
   it('envelope includes discount placeholders when cart has them', async () => {
     const db = new SQL.Database();
     for (const sql of MIGRATIONS) db.run(sql);
-    const session = makeSession({ id: 'sess-dp-h', operator_id: 'manager-dp' });
+    const session = makeSession({ id: 'sess-dp-h', operator_id: 'manager-dp', role: 'manager' });
     const handlers = new CartBridgeHandlers({
       getCurrentSession: () => session,
       getTerminalId: () => 'terminal-test-380',
@@ -293,7 +293,7 @@ describe('buildPaymentIntentEnvelope with discount placeholders', () => {
     });
     if (a.kind !== 'ok') throw new Error('add failed');
 
-    // Add a below-threshold discount placeholder (no attribution required)
+    // RT-608: a manager session applies a discount directly (no threshold).
     const dp = await handlers.discountPlaceholdersAdd({
       cart_id: c.cart_id,
       line_id: a.line_id,
@@ -311,7 +311,7 @@ describe('buildPaymentIntentEnvelope with discount placeholders', () => {
     if (res.kind === 'ok') {
       expect(res.envelope.discount_placeholders).toHaveLength(1);
       expect(res.envelope.discount_placeholders[0]?.placeholder_kind).toBe('percent_5');
-      expect(res.envelope.discount_placeholders[0]?.requires_manager_attribution).toBe(false);
+      expect(res.envelope.discount_placeholders[0]?.requires_manager_attribution).toBe(true);
     }
   });
 });

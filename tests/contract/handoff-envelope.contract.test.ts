@@ -45,6 +45,10 @@ const _lineTypeCheck: LineSnapshot = {
   last_action_id: 'action-uuid',
 } as const;
 
+// A pre-RT-608 (legacy) placeholder shape: still representable in an envelope.
+// RT-608 writes only `requires_manager_attribution: true` with a non-null
+// approver; how a legacy row is refused at handoff / payment (envelope steps
+// 3a and 3b) is RT-608 item 6, pending owner authorisation.
 const _discountTypeCheck: DiscountPlaceholderSnapshot = {
   placeholder_id: 'ph-uuid',
   line_id: 'line-uuid',

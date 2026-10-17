@@ -1,21 +1,22 @@
 /**
- * T061 — cart.discountPlaceholders.add above threshold WITH manager
- *        attribution + audit emission (S3 contract).
+ * T061 — cart.discountPlaceholders.add on a manager session, with manager
+ *        attribution + audit emission.
  *
- * RT-183: the approver is never renderer-supplied. Manager attribution comes
- * from the authenticated session: a manager (or admin) session approves its
- * own above-threshold discount (RT-28 D2). The handler MUST:
+ * RT-608 (RT-28, spec 005 FR-023 revised): there is no threshold any more.
+ * Every positive manual discount needs manager authority, and a manager (or
+ * admin) session applies its own discount directly (RT-28 D2). The approver is
+ * never renderer-supplied (RT-183). The handler MUST:
  *   1. Insert a `cart_line_discount_placeholders` row naming the session
  *      manager as `attribution_operator_id`.
  *   2. Write an outbox row.
  *   3. Return `{ kind: 'ok', placeholder_id, requires_manager_attribution: true }`.
- *   4. Emit audit event with category `cart.discount.above_threshold`.
+ *   4. Emit audit event with category `cart.discount.manager_authorized`
+ *      (`cart.discount.above_threshold` is historical only, never emitted).
  *
  * The session manager is both `acting_operator_id` and
  * `approving_supervisor_id` on the audit event envelope. The cashier-session
- * refusal (including a renderer-supplied supervisor id) is covered by T060
- * and `cart-discount-add-no-renderer-supervisor.test.ts`.
- */
+ * path (a consumed `cart.discount.manual` approval) is covered end to end by
+ * `src/main/cart/__tests__/discount-manual-approval.e2e.test.ts`. */
 
 import { describe, it, expect, vi, beforeAll, beforeEach } from 'vitest';
 import initSqlJs, { type Database as SqlJsDatabase, type SqlJsStatic } from 'sql.js';
@@ -163,18 +164,20 @@ describe('cart.discountPlaceholders.add — above-threshold with manager attribu
     expect(rows[0]?.['attribution_operator_id']).toBe(MANAGER_ID);
   });
 
-  it('emits audit event with category cart.discount.above_threshold', async () => {
-    await f.handlers.discountPlaceholdersAdd({
-      cart_id: f.cart_id,
-      line_id: f.line_id,
-      placeholder_kind: 'percent_20',
-      idempotency_key: 'dp-t061-c',
-    });
-    // RED until T070.
-    expect(f.emitFn).toHaveBeenCalledOnce();
-    const emittedEvent = f.emitFn.mock.calls[0][0] as AuditEvent;
-    expect(emittedEvent.action_category).toBe('cart.discount.above_threshold');
-  });
+  it.each([['percent_20'], ['percent_1']])(
+    'emits cart.discount.manager_authorized for %s (no threshold; never above_threshold)',
+    async (kind) => {
+      await f.handlers.discountPlaceholdersAdd({
+        cart_id: f.cart_id,
+        line_id: f.line_id,
+        placeholder_kind: kind,
+        idempotency_key: 'dp-t061-c',
+      });
+      expect(f.emitFn).toHaveBeenCalledOnce();
+      const emittedEvent = f.emitFn.mock.calls[0][0] as AuditEvent;
+      expect(emittedEvent.action_category).toBe('cart.discount.manager_authorized');
+    },
+  );
 
   it('audit event names the session manager as acting_operator and approving_supervisor', async () => {
     await f.handlers.discountPlaceholdersAdd({

@@ -43,7 +43,15 @@ export const AUDIT_ACTION_CATEGORIES = [
   // 005-sales-cart §A3 (FR-026 / Q5) — type-only extension; emitter wiring lands in S3.
   'cart.handoff_to_payment',
   'cart.cancel.post_handoff',
+  // Historical only (RT-28 D3): the threshold rule is retired and this is never
+  // emitted; kept because the catalogue never shrinks.
   'cart.discount.above_threshold',
+  // RT-608 (RT-28 FR-023 revised, D3) — every manual discount, authorised by a
+  // manager: a consumed `cart.discount.manual` approval on a cashier session,
+  // or the manager / admin session itself (D2). Dual-attributed: the requester
+  // acts, the approver is `approving_supervisor_id`. Main-only. Open-set at the
+  // SQL layer (0004). Local only until Backend-Core accepts it (RT-608 gate).
+  'cart.discount.manager_authorized',
   // Kept (the catalogue never shrinks) but no longer emitted: RT-115 D5
   // superseded the 005 Q3 discard; a draft is held instead (RT-352).
   'cart.discarded_on_session_end',
