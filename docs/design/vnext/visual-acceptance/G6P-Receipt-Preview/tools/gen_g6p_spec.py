@@ -1,6 +1,6 @@
-"""Generate G6R-Spec.html (RT-659): the preview states, the reprint path, the two owner options and the copy.
+"""Generate G6P-Spec.html (RT-659): the preview states, the reprint path, the two owner options and the copy.
 
-Usage: python -I gen_g6r_spec.py   (writes into this script's parent folder, G6R-Receipt-Preview/)
+Usage: python -I gen_g6p_spec.py   (writes into this script's parent folder, G6P-Receipt-Preview/)
 """
 
 from __future__ import annotations
@@ -68,9 +68,9 @@ FORCED_NOTES = """
 """
 
 CHECKS = """
-    <p>أُنتجت الصور وفُحصت بـ<code>tools/capture_g6r.cjs</code> (أداة <code>../tools/capture-refs.cjs</code> المشتركة، نفس فحوص G-6 وPK-3): الاحتواء داخل الإطار،
+    <p>أُنتجت الصور وفُحصت بـ<code>tools/capture_g6p.cjs</code> (أداة <code>../tools/capture-refs.cjs</code> المشتركة، نفس فحوص G-6 وPK-3): الاحتواء داخل الإطار،
       لا نص أصغر من 12 بكسل، لا هدف أصغر من 44×44، لا عنصر قابل للتركيز خلف النافذة، وaxe-core بلا مخالفات. تُولَّد الملفات من
-      <code>tools/gen_g6r.py</code> وهذه الصفحة من <code>tools/gen_g6r_spec.py</code>.</p>
+      <code>tools/gen_g6p.py</code> وهذه الصفحة من <code>tools/gen_g6p_spec.py</code>.</p>
 """
 
 STYLE = """
@@ -104,9 +104,9 @@ FORCED_STATES = ("A-Ready", "B-Sent", "Failed")
 
 
 def load_states() -> list[tuple[str, str]]:
-    spec = importlib.util.spec_from_file_location("gen_g6r", TOOLS / "gen_g6r.py")
+    spec = importlib.util.spec_from_file_location("gen_g6p", TOOLS / "gen_g6p.py")
     module = importlib.util.module_from_spec(spec)
-    sys.modules["gen_g6r"] = module  # dataclasses resolves its owner module by name
+    sys.modules["gen_g6p"] = module  # dataclasses resolves its owner module by name
     spec.loader.exec_module(module)
     return [(key, title) for key, title, _ in module.STATES]
 
@@ -130,20 +130,20 @@ def figure(src: str, caption: str) -> str:
 
 def figures(states: list[tuple[str, str]]) -> str:
     return "".join(
-        figure(f"G6R-{k}-{w}-light.png", f"{t} · {w}") for k, t in states for w in ("1280", "1024")
+        figure(f"G6P-{k}-{w}-light.png", f"{t} · {w}") for k, t in states for w in ("1280", "1024")
     )
 
 
 def forced_figures(states: list[tuple[str, str]]) -> str:
     return "".join(
-        figure(f"G6R-{k}-1280-forced.png", f"{t} · تباين عالٍ") for k, t in states if k in FORCED_STATES
+        figure(f"G6P-{k}-1280-forced.png", f"{t} · تباين عالٍ") for k, t in states if k in FORCED_STATES
     )
 
 
 def build(states: list[tuple[str, str]]) -> str:
     states_body = (
         f'<div class="grid">{figures(states)}</div>'
-        "<p>لكل حالة ملفان <code>G6R-&lt;State&gt;-1024.html</code> و<code>-1280.html</code>، والصور في <code>captures/</code> (فاتح وتباين عالٍ لكل عرض).</p>"
+        "<p>لكل حالة ملفان <code>G6P-&lt;State&gt;-1024.html</code> و<code>-1280.html</code>، والصور في <code>captures/</code> (فاتح وتباين عالٍ لكل عرض).</p>"
         f'<div class="grid">{forced_figures(states)}</div>'
     )
     sections = [
@@ -165,10 +165,10 @@ def build(states: list[tuple[str, str]]) -> str:
 
 def main() -> None:
     if len(sys.argv) != 1:
-        sys.exit("usage: python -I gen_g6r_spec.py")
+        sys.exit("usage: python -I gen_g6p_spec.py")
     states = load_states()
-    (TOOLS.parent / "G6R-Spec.html").write_text(build(states), encoding="utf-8")
-    print(f"[OK] wrote G6R-Spec.html ({len(states)} states)")
+    (TOOLS.parent / "G6P-Spec.html").write_text(build(states), encoding="utf-8")
+    print(f"[OK] wrote G6P-Spec.html ({len(states)} states)")
 
 
 if __name__ == "__main__":

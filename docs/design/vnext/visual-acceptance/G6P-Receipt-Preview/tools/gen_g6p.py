@@ -13,7 +13,7 @@ Two owner options for «طباعة» (RT-659):
   (b) the button is wired to the existing `receipts.reprint` path, unchanged.
 The loading and failed states are the same under both options.
 
-Usage: python -I gen_g6r.py   (writes into this script's parent folder, G6R-Receipt-Preview/)
+Usage: python -I gen_g6p.py   (writes into this script's parent folder, G6P-Receipt-Preview/)
 """
 
 from __future__ import annotations
@@ -61,7 +61,7 @@ def page(title: str, width: int, body: str, label: str) -> str:
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>DRAFT · RT-659 G-6 addendum · {title} · {width}×{height}</title>
 <link rel="stylesheet" href="../G6-Manager/g6.css">
-<link rel="stylesheet" href="g6r.css">
+<link rel="stylesheet" href="g6p.css">
 </head>
 <body>
 <div class="rt w{width}" data-ref="{label}" data-w="{width}">
@@ -147,11 +147,11 @@ STATES = [
 def main() -> None:
     # The pack folder is this script's parent: no path is taken from the command line.
     if len(sys.argv) != 1:
-        sys.exit("usage: python -I gen_g6r.py")
+        sys.exit("usage: python -I gen_g6p.py")
     out = TOOLS.parent
     for key, title, fn in STATES:
         for w in (1024, 1280):
-            (out / f"G6R-{key}-{w}.html").write_text(page(title, w, fn(w), f"G6R-{key}"), encoding="utf-8")
+            (out / f"G6P-{key}-{w}.html").write_text(page(title, w, fn(w), f"G6P-{key}"), encoding="utf-8")
     print(f"[OK] wrote {len(STATES) * 2} files to {out}")
 
 
