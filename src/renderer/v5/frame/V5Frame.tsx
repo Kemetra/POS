@@ -44,6 +44,10 @@ interface V5FrameProps {
  * (`data-nav="slim"`), elsewhere the labelled panel — decided by the route
  * alone, never by cart state.
  *
+ * RT-595 (RT-505 F1): the notices strip is a labelled complementary landmark
+ * (`<aside>`): it mixes status banners with the shift / void links, so it is
+ * not a navigation region, and it keeps axe's `region` rule clean.
+ *
  * RT-498 (VN-S10 S10-1, D-10-7): the `?conn=` dev toggle the legacy AppShell
  * carried lives here now, so the connection banner stays exercisable until a
  * real signal exists (VN-S6). Dev builds only; the module is imported lazily
@@ -89,9 +93,13 @@ export function V5Frame({ notices, children }: Readonly<V5FrameProps>): JSX.Elem
             />
           )}
           {notices !== undefined && (
-            <div className="v5-frame__notices" data-testid="v5-frame-notices">
+            <aside
+              className="v5-frame__notices"
+              data-testid="v5-frame-notices"
+              aria-label="إشعارات التشغيل"
+            >
               {notices}
-            </div>
+            </aside>
           )}
           <main ref={mainRef} className="v5-frame__main" tabIndex={-1}>
             {children}
