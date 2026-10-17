@@ -4,6 +4,7 @@ import type { ShellNavEntryId } from '../../../../specs/003-pos-ui-shell/contrac
 import { useOperatorSessionStore } from '../../stores/operator-session-store';
 import { V5Icon, type V5IconName } from '../foundation/V5Icon';
 import { isNavEntryCurrent, roleLabelAr, visibleNavEntries } from './nav-model';
+import { StatusIndicator } from './StatusIndicator';
 import { V5SignOut } from './V5SignOut';
 
 /** RT-242: the slim rail's glyph per entry (decorative; the label beside it names the entry). */
@@ -23,6 +24,9 @@ const NAV_ICON: Readonly<Record<ShellNavEntryId, V5IconName>> = {
  * operators are workflow experts, not icon readers. On an active-sale route
  * the frame narrows this to the slim rail (RT-242); the icon then sits above
  * the label, which is still the link's text and accessible name.
+ *
+ * RT-604 (VN-S6 S6-3): the footer holds the status indicator (connection,
+ * sale sync, printer on failure) above the operator block.
  */
 export function V5Navigation(): JSX.Element {
   const session = useOperatorSessionStore((s) =>
@@ -56,6 +60,8 @@ export function V5Navigation(): JSX.Element {
           </li>
         ))}
       </ul>
+
+      <StatusIndicator />
 
       {session !== undefined && (
         <div className="v5-frame__operator" data-testid="v5-frame-operator">

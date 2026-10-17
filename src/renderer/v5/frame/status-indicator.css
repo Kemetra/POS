@@ -1,0 +1,89 @@
+/*
+ * RT-604 (VN-S6 S6-3) — the nav footer's status indicator. Consumes the
+ * foundation aliases and the status tokens only; status colour appears on the
+ * glyph (a status surface), never on the text or as decoration.
+ */
+
+.v5-status {
+  display: grid;
+  gap: var(--space-1);
+  margin-block-start: auto;
+  padding: var(--space-3) var(--space-2) 0;
+  border-block-start: var(--v5-divider);
+}
+
+/* The indicator takes the footer's auto margin; the operator block follows it. */
+.v5-frame .v5-status + .v5-frame__operator {
+  margin-block-start: 0;
+}
+
+.v5-status__row {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  margin: 0;
+  color: var(--color-text);
+  font-size: var(--v5-text-meta);
+  line-height: var(--line-height-snug);
+}
+
+.v5-status__mark {
+  display: inline-flex;
+  flex: none;
+  /* Centre the 16px glyph on the first line of text. */
+  margin-block-start: 1px;
+  color: var(--tone-ink, var(--v5-text-muted));
+}
+
+.v5-status__row[data-tone='success'] {
+  --tone-ink: var(--color-success);
+}
+
+.v5-status__row[data-tone='warning'] {
+  --tone-ink: var(--color-warning);
+}
+
+.v5-status__row[data-tone='info'] {
+  --tone-ink: var(--color-info);
+}
+
+.v5-status__row[data-tone='danger'] {
+  --tone-ink: var(--color-danger);
+}
+
+/* «checking» has no tone colour: the neutral glyph stays muted, the text plain. */
+
+.v5-status__text {
+  min-inline-size: 0;
+  overflow-wrap: anywhere;
+}
+
+/* Counts: an isolated LTR run with Western tabular digits that never breaks. */
+.v5-status__num {
+  direction: ltr;
+  unicode-bidi: isolate;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* Slim rail (active sale): glyphs only, centred; the text stays for assistive tech. */
+.v5-frame[data-nav='slim'] .v5-status {
+  justify-items: center;
+  padding-inline: 0;
+}
+
+.v5-frame[data-nav='slim'] .v5-status__text {
+  position: absolute;
+  inline-size: 1px;
+  block-size: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* Forced colours drop the tone colour; the glyph's shape still carries the state. */
+@media (forced-colors: active) {
+  .v5-status__mark {
+    color: CanvasText;
+  }
+}
