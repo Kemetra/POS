@@ -146,6 +146,7 @@ export function ReturnOutcome({
   const heading = useFocusOnMount<HTMLHeadingElement>();
   const confirmed = outcome.kind === 'confirmed';
   const ret = retOf(outcome);
+  const withPayout = confirmed && ret !== null;
 
   const facts = (
     <>
@@ -157,19 +158,18 @@ export function ReturnOutcome({
   return (
     <ReturnsPanel id="v5-returns-outcome" title="نتيجة المرتجع" headingRef={heading}>
       <div className="v5-manager-panel__body">
-        {confirmed && ret !== null ? (
-          // G6R (RD-3): the announcement and facts beside the payout.
-          <div className="v5-returns-outcome">
-            <div className="v5-returns-outcome__col">{facts}</div>
+        {/* G6R (RD-3): the announcement and facts beside the payout. The wrapper
+            stays mounted across "check again", so the live region is never re-inserted. */}
+        <div className={withPayout ? 'v5-returns-outcome' : undefined}>
+          <div className="v5-returns-outcome__col">{facts}</div>
+          {withPayout && (
             <PayoutPanel
               bridge={payout.bridge}
               ret={payout.latest(ret.returnId) ?? ret}
               reload={payout.reload}
             />
-          </div>
-        ) : (
-          facts
-        )}
+          )}
+        </div>
         <div className="v5-returns-actions">
           <CheckAgain flow={flow} outcome={outcome} />
           <button

@@ -44,7 +44,7 @@ export const PROOF_SALE: ReturnableSaleView = {
   saleNumber: PROOF_SALE_NUMBER,
   saleRef: SALE_REF,
   currencyCode: 'EGP',
-  lines: LINES.map(line),
+  lines: LINES.map((row, i) => line(row, i)),
 };
 
 export const PROOF_QUOTE: ReturnQuoteView = {

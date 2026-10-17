@@ -14,10 +14,24 @@ const focused = (p) =>
     const a = document.activeElement;
     return (a?.getAttribute('aria-label') || a?.textContent || a?.tagName || '').trim().slice(0, 48);
   });
-async function tabTo(p, name, max = 30) {
+/**
+ * Tab forward until focus reaches `name`. Fails, rather than passing out of order, when focus first
+ * lands on any of `notBefore`, or wraps back to a control it already visited (the target was behind).
+ */
+async function tabTo(p, name, max = 30, notBefore = []) {
+  const run = `t${Date.now()}${Math.random()}`;
   for (let i = 0; i < max; i++) {
     await p.keyboard.press('Tab');
-    if ((await focused(p)).startsWith(name)) return true;
+    const now = await focused(p);
+    if (now.startsWith(name)) return true;
+    // Mark the focused element itself, so two controls with the same text are not taken for a wrap.
+    const wrapped = await p.evaluate((mark) => {
+      const a = document.activeElement;
+      if (!a || a.dataset.walkSeen === mark) return true;
+      a.dataset.walkSeen = mark;
+      return false;
+    }, run);
+    if (wrapped || notBefore.some((other) => now.startsWith(other))) return false;
   }
   return false;
 }
@@ -62,7 +76,7 @@ async function toSummary(p, walk) {
     await p.keyboard.press('Space');
     await settle(p);
     step('flow', 'Space confirms; focus moves to «نتيجة المرتجع»', await headingFocused(p, 'نتيجة المرتجع'));
-    step('flow', 'Tab reaches «افتح الدرج واصرف النقد» before «مرتجع جديد»', await tabTo(p, 'افتح الدرج واصرف النقد'));
+    step('flow', 'Tab reaches «افتح الدرج واصرف النقد» before «مرتجع جديد»', await tabTo(p, 'افتح الدرج واصرف النقد', 30, ['مرتجع جديد']));
     await p.keyboard.press('Enter');
     await settle(p);
     step('flow', 'Enter pays out; the region says it was recorded', (await p.getByText('سُجّل صرف المبلغ نقدًا.').count()) === 1);

@@ -106,6 +106,16 @@ async function captureOne(browser, state, w, mode) {
   }
 }
 
+/** The checks a capture failed, by name; empty when it passed every one. */
+function failures(r) {
+  const failed = {
+    errors: r.errors.length > 0, axe: r.axe.length > 0, targets: r.targets.length > 0, small: r.small.length > 0,
+    overflowX: r.overflowX, offscreen: r.offscreen.length > 0, spill: r.spill.length > 0,
+    pageScrolls: r.pageScrolls, legacy: r.legacy.length > 0,
+  };
+  return Object.keys(failed).filter((k) => failed[k]);
+}
+
 (async () => {
   fs.mkdirSync(outDir, { recursive: true });
   const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/chrome' });
@@ -115,8 +125,9 @@ async function captureOne(browser, state, w, mode) {
       for (const w of Object.keys(SIZES)) {
         for (const mode of ['light', 'forced']) {
           const r = await captureOne(browser, state, w, mode);
-          log.push(r);
-          console.log(state, w, mode, JSON.stringify({ axe: r.axe, t: r.targets, s: r.small.length, o: r.offscreen, sp: r.spill, x: r.overflowX, scroll: r.pageScrolls, legacy: r.legacy.length, f: r.focus, e: r.errors }));
+          const failed = failures(r);
+          log.push({ ...r, failed });
+          console.log(failed.length ? 'FAIL' : 'PASS', state, w, mode, JSON.stringify({ failed, axe: r.axe, t: r.targets, s: r.small.length, o: r.offscreen, sp: r.spill, x: r.overflowX, scroll: r.pageScrolls, legacy: r.legacy.length, f: r.focus, e: r.errors }));
         }
       }
     }
@@ -124,4 +135,9 @@ async function captureOne(browser, state, w, mode) {
     await browser.close();
   }
   fs.writeFileSync(path.join(outDir, 'rt660-capture-log.json'), JSON.stringify(log, null, 2));
+  const bad = log.filter((r) => r.failed.length > 0);
+  if (bad.length > 0) {
+    console.error(`${bad.length} of ${log.length} captures failed a check`);
+    process.exitCode = 1;
+  }
 })().catch((e) => { console.error(e); process.exit(1); });
