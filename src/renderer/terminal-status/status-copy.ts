@@ -19,3 +19,15 @@ export const STATUS_COPY = {
   /** D-6-7, doc 24 §4.2: only while the last print failed. */
   printerFailed: 'فشل آخر إيصال',
 } as const;
+
+/**
+ * RT-605 (VN-S6 S6-4) — the two status banners in the notices stack, verbatim
+ * from doc 15 §M-O (D-6-11: M-O3 stays as frozen). `status-banners.test.ts`
+ * checks them against doc 15. No list of online-only actions (D-6-9).
+ */
+export const BANNER_COPY = {
+  /** M-O1, warning: `offline`, and `degraded` shown as offline (D-6-2). */
+  offline: 'غير متصل — البيع محفوظ على هذا الجهاز وسيُرسَل عند عودة الاتصال.',
+  /** M-O3, danger: «تعذّر إرسال ‹n› عمليات. راجع المدير.», around the count. */
+  syncAttention: { before: 'تعذّر إرسال ', after: ' عمليات. راجع المدير.' },
+} as const;

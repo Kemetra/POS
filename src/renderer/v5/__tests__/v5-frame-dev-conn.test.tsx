@@ -1,9 +1,12 @@
 /**
  * RT-498 (VN-S10 S10-1, owner decision D-10-7) — the `?conn=` dev toggle moves
  * from the legacy AppShell into the v5 frame. In a dev build the frame reads
- * it once on mount and drives the one connection store, so the connection
- * banner can be exercised until a real signal exists (VN-S6). Vitest runs as a
- * dev build (`import.meta.env.DEV` is true), as the AppShell test did.
+ * it once on mount and drives the one connection store. Vitest runs as a dev
+ * build (`import.meta.env.DEV` is true), as the AppShell test did.
+ *
+ * RT-605 (VN-S6 S6-4): the frame no longer renders the 007 connection banner
+ * (M-O1 now comes from the real signal in the notices stack), so the toggle
+ * only sets the legacy store until S6-5 (RT-606) retires both.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, render, screen, waitFor } from '@testing-library/react';
@@ -42,17 +45,19 @@ afterEach(() => {
 });
 
 describe('V5Frame — ?conn= dev toggle (D-10-7)', () => {
-  it('?conn=offline shows the offline connection banner', async () => {
-    window.history.replaceState(null, '', '/?conn=offline');
-    renderFrame();
-    expect(await screen.findByText(CONNECTION_BANNER_MESSAGES.offline)).toBeInTheDocument();
-  });
-
-  it('?conn=syncing shows the syncing banner', async () => {
-    window.history.replaceState(null, '', '/?conn=syncing');
-    renderFrame();
-    expect(await screen.findByText(CONNECTION_BANNER_MESSAGES.syncing)).toBeInTheDocument();
-  });
+  it.each(['offline', 'syncing'] as const)(
+    '?conn=%s sets the legacy store but shows no 007 banner in the frame (RT-605)',
+    async (conn) => {
+      window.history.replaceState(null, '', `/?conn=${conn}`);
+      renderFrame();
+      await waitFor(() => {
+        expect(useConnectionStateStore.getState().state).toBe(conn);
+      });
+      for (const message of Object.values(CONNECTION_BANNER_MESSAGES)) {
+        expect(screen.queryByText(message)).not.toBeInTheDocument();
+      }
+    },
+  );
 
   it('no ?conn= leaves the state online: no banner', async () => {
     window.history.replaceState(null, '', '/');
