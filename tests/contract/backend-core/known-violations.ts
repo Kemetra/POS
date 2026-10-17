@@ -52,4 +52,14 @@ export const KNOWN_VIOLATIONS: readonly KnownViolation[] = [
     tickets: ['RT-218'],
     note: 'Same as validateVoucher: POST /vouchers/reverse declares operator-identity.',
   },
+  {
+    call: 'runLivenessProbe',
+    kind: 'endpoint-missing',
+    tickets: ['RT-602', 'RT-600'],
+    note:
+      'GET /api/v1/health/live is a real Backend-Core route (@Public, unthrottled; confirmed by ' +
+      'RT-600 / DEP-1), but Backend-Core publishes no health contract under ' +
+      'packages/contracts/openapi, so the pinned snapshot cannot hold it. Delete this entry when a ' +
+      're-pin brings the health contract in.',
+  },
 ];

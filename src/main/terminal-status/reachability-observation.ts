@@ -35,9 +35,13 @@ const BACKEND_CORE_4XX: ReadonlySet<number> = new Set([401, 403, 404, 409, 422])
  *  - 2xx and the Backend-Core 4xx set → `reachable`;
  *  - 5xx (incl. an edge's 502/503/504/521) and 429 → `server_failure` (degraded);
  *  - anything else (1xx, 3xx, other 4xx) → `ignored`.
+ *
+ * RT-602: the probe's `not_backend_core` (something other than Backend-Core
+ * answered the liveness GET) is a server failure too (§2.4: degraded).
  */
 export function classifyObservation(observation: ReachabilityObservation): ObservationClass {
   if (observation.kind === 'transport_fault') return 'transport_fault';
+  if (observation.kind === 'not_backend_core') return 'server_failure';
   const { status } = observation;
   const statusClass = Math.floor(status / 100);
   if (statusClass === 2) return 'reachable';

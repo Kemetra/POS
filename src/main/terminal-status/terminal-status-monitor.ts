@@ -28,10 +28,15 @@ import { classifyObservation } from './reachability-observation.js';
 
 export type ConnectionStateCode = 'checking' | 'online' | 'degraded' | 'offline';
 
-/** What a feeder saw on one request: an HTTP answer, or no answer at all. */
+/**
+ * What a feeder saw on one request: an HTTP answer, no answer at all, or (the
+ * RT-602 liveness probe only) an answer that is not Backend-Core's liveness
+ * reply — an edge, proxy or portal answered in its place.
+ */
 export type ReachabilityObservation =
   | { readonly kind: 'answer'; readonly status: number }
-  | { readonly kind: 'transport_fault' };
+  | { readonly kind: 'transport_fault' }
+  | { readonly kind: 'not_backend_core' };
 
 export interface ConnectionTransition {
   readonly from: ConnectionStateCode;

@@ -39,6 +39,10 @@ describe('RT-601 classifyObservation', () => {
   it('a transport fault → transport_fault', () => {
     expect(classifyObservation({ kind: 'transport_fault' })).toBe('transport_fault');
   });
+
+  it('RT-602: an answer that is not Backend-Core liveness → server_failure', () => {
+    expect(classifyObservation({ kind: 'not_backend_core' })).toBe('server_failure');
+  });
 });
 
 /** Run one call through the seam; returns what the observer saw and the outcome. */

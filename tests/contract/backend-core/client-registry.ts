@@ -36,6 +36,7 @@ import { createShiftSyncClient } from '../../../src/main/shift-cashup/shift-sync
 import { validateVoucher } from '../../../src/main/payments/voucher-authority-client/validate.js';
 import { redeemVoucher } from '../../../src/main/payments/voucher-authority-client/redeem.js';
 import { reverseVoucher } from '../../../src/main/payments/voucher-authority-client/reverse.js';
+import { runLivenessProbe } from '../../../src/main/terminal-status/liveness-probe.js';
 import type { HttpMethod } from './openapi-index.js';
 
 export type FetchLike = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
@@ -189,6 +190,8 @@ const SHIFT_SYNC_CLIENT = 'src/main/shift-cashup/shift-sync-client.ts';
 const SHIFT_SYNC_WIRING =
   'not wired yet (RT-17 slice 3 part 3): `getDeviceToken` = createSendableDeviceTokenReader (paired only; never once revoked, RT-215)';
 
+const LIVENESS_PROBE = 'src/main/terminal-status/liveness-probe.ts';
+
 export const CLIENT_MODULES: readonly ClientModule[] = [
   { module: BACKEND_CLIENT, fetchCallSites: 2, surface: backendClient },
   { module: 'src/main/pairing/network.ts', fetchCallSites: 1, surface: pairingNetwork },
@@ -212,6 +215,8 @@ export const CLIENT_MODULES: readonly ClientModule[] = [
   { module: `${VOUCHER_DIR}/validate.ts`, fetchCallSites: 1 },
   { module: `${VOUCHER_DIR}/redeem.ts`, fetchCallSites: 1 },
   { module: `${VOUCHER_DIR}/reverse.ts`, fetchCallSites: 1 },
+  // RT-602: the connection monitor's credential-free liveness probe.
+  { module: LIVENESS_PROBE, fetchCallSites: 1 },
 ];
 
 /** Modules that call `fetch` but not Backend-Core. Each needs a reason. */
@@ -249,6 +254,12 @@ export const TRANSPORT_DECORATORS: ReadonlyArray<{
     fetchCallSites: 1,
     reason:
       'RT-601 withReachabilityObservation wraps the fetch of the Backend-Core device and operator clients and only reports the response status, or that the request rejected, to the connection monitor; request and response pass through untouched.',
+  },
+  {
+    module: 'src/main/terminal-status/compose-terminal-status.ts',
+    fetchCallSites: 1,
+    reason:
+      'RT-602 trackInFlight wraps the same observed fetch and only counts the request as in flight (no liveness probe meanwhile); request and response pass through untouched.',
   },
 ];
 
@@ -521,5 +532,14 @@ export const CLIENT_CALLS: readonly ClientCall[] = [
         { redemption_id: UUID },
         { baseUrl: BASE_URL, fetch, logger: NOOP_LOGGER, idempotencyKey: UUID },
       ),
+  },
+  {
+    id: 'runLivenessProbe',
+    module: LIVENESS_PROBE,
+    method: 'get',
+    pathTemplate: '/api/v1/health/live',
+    wiring:
+      'none — the public liveness probe sends no credential (index.ts composeTerminalStatus probe, RT-602)',
+    invoke: (fetch) => runLivenessProbe({ fetch, baseUrl: BASE_URL, timeoutMs: 4_000 }),
   },
 ];
