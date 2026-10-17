@@ -1,4 +1,4 @@
-import { readdirSync, readFileSync, statSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { extname, join, relative, resolve } from 'node:path';
 import ts from 'typescript';
 import { describe, expect, it } from 'vitest';
@@ -33,7 +33,7 @@ const REPO = resolve(RENDERER, '../..');
 const TARGET_PX = 44;
 
 /** Classes that carry no size of their own and depend on a context rule. */
-const CONTEXT_SIZED = ['v5-live-btn'] as const;
+const CONTEXT_SIZED: ReadonlySet<string> = new Set(['v5-live-btn']);
 
 /** The v5 Dialog panel's classes (foundation/Dialog.tsx). */
 const DIALOG_CLASSES = ['v5-dialog', 'v5-live-dialog'];
@@ -47,77 +47,37 @@ const KNOWN_UNDERSIZED: ReadonlyArray<{ file: string; reason: string }> = [
   {
     file: 'src/renderer/v5/void/SaleVoidNotice.tsx',
     reason:
-      'the void attention banner link «v5-live-btn v5-live-btn--primary» has no size rule ' +
-      'in .v5-void-banner (void-banner follow-up; RT-654 recomposed only the void screen)',
+      'RT-670: the void attention banner link «v5-live-btn v5-live-btn--primary» has no ' +
+      'size rule in .v5-void-banner',
   },
 ];
 
-function walk(dir: string, keep: (path: string) => boolean): string[] {
-  const out: string[] = [];
-  for (const entry of readdirSync(dir)) {
-    if (entry === 'node_modules') continue;
-    const full = join(dir, entry);
-    if (statSync(full).isDirectory()) out.push(...walk(full, keep));
-    else if (keep(full)) out.push(full);
-  }
-  return out;
+// ── files ───────────────────────────────────────────────────────────────
+
+interface Source {
+  readonly path: string;
+  readonly text: string;
 }
 
-const isTest = (path: string): boolean => /[\\/]__tests__[\\/]|\.test\.tsx?$/.test(path);
+interface FileQuery {
+  readonly dir: string;
+  readonly ext: '.css' | '.tsx';
+}
+
+const TEST_PATH = /[\\/]__tests__[\\/]|\.test\.tsx?$/;
+
+/** Every file with the extension under the directory, node_modules aside. */
+function filesUnder(query: FileQuery): string[] {
+  return readdirSync(query.dir, { recursive: true, encoding: 'utf-8' })
+    .filter((rel) => !rel.includes('node_modules') && extname(rel) === query.ext)
+    .map((rel) => join(query.dir, rel));
+}
+
+function readSource(path: string): Source {
+  return { path, text: readFileSync(path, 'utf-8') };
+}
 
 // ── stylesheet rules ────────────────────────────────────────────────────
-
-interface Rule {
-  readonly selector: string;
-  readonly body: string;
-}
-
-/** Top-level rules (and rules inside `@layer`), skipping every other at-rule. */
-function parseRules(css: string): Rule[] {
-  const source = css.replace(/\/\*[\s\S]*?\*\//g, '');
-  const rules: Rule[] = [];
-  const stack: boolean[] = []; // true when the open block is a skipped at-rule (or inside one)
-  let start = 0;
-  for (let i = 0; i < source.length; i += 1) {
-    const ch = source[i];
-    if (ch === '{') {
-      const prelude = source.slice(start, i).trim();
-      const insideSkipped = stack.includes(true);
-      const atRule = prelude.startsWith('@');
-      stack.push(insideSkipped || (atRule && !prelude.startsWith('@layer')));
-      if (!atRule && !insideSkipped) {
-        const end = source.indexOf('}', i);
-        const body = source.slice(i + 1, end);
-        if (!body.includes('{')) {
-          rules.push({ selector: prelude, body });
-          stack.pop();
-          i = end;
-        }
-      }
-      start = i + 1;
-    } else if (ch === '}') {
-      stack.pop();
-      start = i + 1;
-    } else if (ch === ';' && stack.length === 0) {
-      start = i + 1;
-    }
-  }
-  return rules;
-}
-
-function sizePx(body: string): number {
-  let best = 0;
-  const pattern =
-    /(?:^|[\s;])(?:min-)?(?:block-size|height)\s*:\s*(?:var\(\s*--[\w-]+\s*,\s*)?(\d+(?:\.\d+)?)px/g;
-  for (const match of body.matchAll(pattern)) best = Math.max(best, Number(match[1]));
-  return best;
-}
-
-function setsBoxDisplay(body: string): boolean {
-  return /(?:^|[\s;])display\s*:\s*(?:inline-flex|inline-block|inline-grid|flex|grid|block)\b/.test(
-    body,
-  );
-}
 
 interface Compound {
   readonly tag: string | null;
@@ -125,12 +85,103 @@ interface Compound {
   readonly other: boolean; // attribute, id or pseudo parts this guard does not model
 }
 
+interface Selector {
+  /** The compound the rule styles; null for a pseudo-element or an empty selector. */
+  readonly target: Compound | null;
+  readonly context: readonly Compound[];
+}
+
+interface Rule {
+  readonly selectors: readonly Selector[];
+  readonly sizePx: number;
+  readonly boxed: boolean;
+}
+
+const SIZE_DECL =
+  /(?:^|[\s;])(?:min-)?(?:block-size|height)\s*:\s*(?:var\(\s*--[\w-]+\s*,\s*)?(\d+(?:\.\d+)?)px/g;
+const BOX_DISPLAY =
+  /(?:^|[\s;])display\s*:\s*(?:inline-flex|inline-block|inline-grid|flex|grid|block)\b/;
+
 function compound(text: string): Compound {
   const tag = /^[a-z][\w-]*/i.exec(text)?.[0]?.toLowerCase() ?? null;
-  const classes = [...text.matchAll(/\.([\w-]+)/g)].map((m) => m[1] ?? '');
-  const other = /[[#:]/.test(text);
-  return { tag: tag === null || tag === '*' ? null : tag, classes, other };
+  return {
+    tag,
+    classes: [...text.matchAll(/\.([\w-]+)/g)].map((m) => m[1] ?? ''),
+    other: /[[#:]/.test(text),
+  };
 }
+
+function parseSelector(text: string): Selector {
+  const parts = text
+    .replace(/\s*[>+~]\s*/g, ' ')
+    .split(/\s+/)
+    .filter(Boolean)
+    .map(compound);
+  const target = text.includes('::') ? null : (parts.pop() ?? null);
+  return { target, context: parts };
+}
+
+function toRule(declaration: { readonly selector: string; readonly body: string }): Rule {
+  const sizes = [...declaration.body.matchAll(SIZE_DECL)].map((m) => Number(m[1]));
+  return {
+    selectors: declaration.selector.split(',').map(parseSelector),
+    sizePx: Math.max(0, ...sizes),
+    boxed: BOX_DISPLAY.test(declaration.body),
+  };
+}
+
+type Block = 'rule' | 'layer' | 'skip';
+
+interface Token {
+  readonly text: string;
+  readonly delim: string;
+}
+
+/** A block is skipped inside a rule or a non-`@layer` at-rule, and is itself one when it opens such an at-rule. */
+function blockKind(prelude: string, open: readonly Block[]): Block {
+  if (open.some((b) => b !== 'layer')) return 'skip';
+  if (!prelude.startsWith('@')) return 'rule';
+  return prelude.startsWith('@layer') ? 'layer' : 'skip';
+}
+
+/** Collects top-level rules (and rules inside `@layer`), skipping every other at-rule. */
+class RuleCollector {
+  readonly rules: Rule[] = [];
+  private readonly open: Block[] = [];
+  private selector = '';
+  private body = '';
+
+  feed(token: Token): void {
+    if (token.delim === '{') this.openBlock(token);
+    else if (token.delim === '}') this.closeBlock(token);
+    else this.body += token.text + token.delim;
+  }
+
+  private openBlock(token: Token): void {
+    const prelude = token.text.trim();
+    this.open.push(blockKind(prelude, this.open));
+    this.selector = prelude;
+    this.body = '';
+  }
+
+  private closeBlock(token: Token): void {
+    if (this.open.pop() === 'rule') {
+      this.rules.push(toRule({ selector: this.selector, body: this.body + token.text }));
+    }
+    this.body = '';
+  }
+}
+
+function parseRules(sheet: Source): Rule[] {
+  const parts = sheet.text.replace(/\/\*[\s\S]*?\*\//g, '').split(/([{};])/);
+  const collector = new RuleCollector();
+  for (let i = 0; i < parts.length; i += 2) {
+    collector.feed({ text: parts[i] ?? '', delim: parts[i + 1] ?? '' });
+  }
+  return collector.rules;
+}
+
+// ── matching a control ──────────────────────────────────────────────────
 
 interface Control {
   readonly tag: 'button' | 'a';
@@ -138,61 +189,87 @@ interface Control {
   readonly ancestorClasses: ReadonlySet<string>;
 }
 
-/** Whether one selector of a rule applies to the control, as far as static JSX can tell. */
-function selectorApplies(selector: string, control: Control): boolean {
-  if (selector.includes('::')) return false;
-  const parts = selector
-    .replace(/\s*[>+~]\s*/g, ' ')
-    .trim()
-    .split(/\s+/)
-    .filter(Boolean)
-    .map(compound);
-  const last = parts.pop();
-  if (last === undefined || last.other) return false;
-  if (last.tag === null && last.classes.length === 0) return false;
-  if (last.tag !== null && last.tag !== control.tag) return false;
-  if (!last.classes.every((c) => control.classes.includes(c))) return false;
-  return parts.every((p) => p.classes.every((c) => control.ancestorClasses.has(c)));
+/** The selector's last compound names the control itself (by tag or own classes). */
+function namesControl(target: Compound, control: Control): boolean {
+  if (target.other) return false;
+  if (target.tag === null && target.classes.length === 0) return false;
+  const tagOk = target.tag === null || target.tag === control.tag;
+  return tagOk && target.classes.every((c) => control.classes.includes(c));
+}
+
+/** Whether one selector applies to the control, as far as static JSX can tell. */
+function selectorApplies(selector: Selector, control: Control): boolean {
+  if (selector.target === null || !namesControl(selector.target, control)) return false;
+  return selector.context.every((p) => p.classes.every((c) => control.ancestorClasses.has(c)));
 }
 
 function meetsTarget(control: Control, rules: readonly Rule[]): boolean {
-  const applying = rules.filter((r) =>
-    r.selector.split(',').some((s) => selectorApplies(s.trim(), control)),
-  );
-  const sized = applying.some((r) => sizePx(r.body) >= TARGET_PX);
-  const boxed = control.tag === 'button' || applying.some((r) => setsBoxDisplay(r.body));
+  const applying = rules.filter((r) => r.selectors.some((s) => selectorApplies(s, control)));
+  const sized = applying.some((r) => r.sizePx >= TARGET_PX);
+  const boxed = control.tag === 'button' || applying.some((r) => r.boxed);
   return sized && boxed;
 }
 
 // ── JSX controls ────────────────────────────────────────────────────────
 
-function tagName(node: ts.JsxElement | ts.JsxSelfClosingElement): string {
-  const opening = ts.isJsxElement(node) ? node.openingElement : node;
-  return opening.tagName.getText();
+type JsxLike = ts.JsxElement | ts.JsxSelfClosingElement;
+
+const CONTROL_TAGS = new Map<string, Control['tag']>([
+  ['button', 'button'],
+  ['a', 'a'],
+  ['Link', 'a'],
+]);
+
+function isJsxLike(node: ts.Node): node is JsxLike {
+  return ts.isJsxElement(node) || ts.isJsxSelfClosingElement(node);
+}
+
+function openingOf(node: JsxLike): ts.JsxOpeningLikeElement {
+  return ts.isJsxElement(node) ? node.openingElement : node;
+}
+
+function tagName(node: JsxLike): string {
+  return openingOf(node).tagName.getText();
+}
+
+function childrenOf(node: ts.Node): ts.Node[] {
+  const out: ts.Node[] = [];
+  node.forEachChild((child) => {
+    out.push(child);
+  });
+  return out;
+}
+
+/** The text of every string and template-literal piece under the node. */
+function literalTexts(node: ts.Node): string[] {
+  const own = ts.isStringLiteralLike(node) || ts.isTemplateLiteralToken(node) ? [node.text] : [];
+  return [...own, ...childrenOf(node).flatMap(literalTexts)];
+}
+
+function isClassName(attribute: ts.JsxAttributeLike): attribute is ts.JsxAttribute {
+  return ts.isJsxAttribute(attribute) && attribute.name.getText() === 'className';
 }
 
 /** Every class-like word in the element's `className` string and template parts. */
-function classesOf(node: ts.JsxElement | ts.JsxSelfClosingElement): string[] {
-  const opening = ts.isJsxElement(node) ? node.openingElement : node;
-  const attr = opening.attributes.properties.find(
-    (p): p is ts.JsxAttribute => ts.isJsxAttribute(p) && p.name.getText() === 'className',
-  );
-  if (attr?.initializer === undefined) return [];
-  const texts: string[] = [];
-  const collect = (n: ts.Node): void => {
-    if (ts.isStringLiteral(n) || ts.isNoSubstitutionTemplateLiteral(n)) texts.push(n.text);
-    else if (ts.isTemplateHead(n) || ts.isTemplateMiddle(n) || ts.isTemplateTail(n))
-      texts.push(n.text);
-    n.forEachChild(collect);
-  };
-  collect(attr.initializer);
-  return texts.flatMap((t) => t.split(/\s+/)).filter((c) => /^[\w-]+$/.test(c));
+function classesOf(node: JsxLike): string[] {
+  const initializer = openingOf(node).attributes.properties.find(isClassName)?.initializer;
+  if (initializer === undefined) return [];
+  return literalTexts(initializer)
+    .flatMap((t) => t.split(/\s+/))
+    .filter((c) => /^[\w-]+$/.test(c));
 }
 
-function ancestorsOf(node: ts.Node): ts.Node[] {
-  const out: ts.Node[] = [];
-  for (let p = node; !ts.isSourceFile(p); p = p.parent) out.push(p.parent);
+function jsxAncestorsOf(node: ts.Node): JsxLike[] {
+  const out: JsxLike[] = [];
+  for (let p = node.parent; !ts.isSourceFile(p); p = p.parent) {
+    if (isJsxLike(p)) out.push(p);
+  }
   return out;
+}
+
+function jsxElementsIn(node: ts.Node): JsxLike[] {
+  const own = isJsxLike(node) ? [node] : [];
+  return [...own, ...childrenOf(node).flatMap(jsxElementsIn)];
 }
 
 interface Found {
@@ -201,64 +278,63 @@ interface Found {
   readonly inDialog: boolean;
 }
 
-function contextSizedControls(fileName: string, source: string): Found[] {
+function toFound(node: JsxLike): Found | null {
+  const tag = CONTROL_TAGS.get(tagName(node));
+  const classes = classesOf(node);
+  if (tag === undefined || !classes.some((c) => CONTEXT_SIZED.has(c))) return null;
+  const ancestors = jsxAncestorsOf(node);
+  const inDialog = ancestors.some((p) => tagName(p) === 'Dialog');
+  const ancestorClasses = new Set([
+    ...ancestors.flatMap(classesOf),
+    ...(inDialog ? DIALOG_CLASSES : []),
+  ]);
+  const { line } = node.getSourceFile().getLineAndCharacterOfPosition(node.getStart());
+  return { line: line + 1, control: { tag, classes, ancestorClasses }, inDialog };
+}
+
+function contextSizedControls(source: Source): Found[] {
   const file = ts.createSourceFile(
-    fileName,
-    source,
+    source.path,
+    source.text,
     ts.ScriptTarget.Latest,
     true,
     ts.ScriptKind.TSX,
   );
-  const found: Found[] = [];
-  const visit = (node: ts.Node): void => {
-    if (ts.isJsxElement(node) || ts.isJsxSelfClosingElement(node)) {
-      const name = tagName(node);
-      const classes = classesOf(node);
-      const tag = name === 'button' ? 'button' : name === 'a' || name === 'Link' ? 'a' : null;
-      if (tag !== null && classes.some((c) => (CONTEXT_SIZED as readonly string[]).includes(c))) {
-        const ancestorClasses = new Set<string>();
-        let inDialog = false;
-        for (const p of ancestorsOf(node)) {
-          if (!ts.isJsxElement(p) && !ts.isJsxSelfClosingElement(p)) continue;
-          if (tagName(p) === 'Dialog') {
-            inDialog = true;
-            for (const c of DIALOG_CLASSES) ancestorClasses.add(c);
-          }
-          for (const c of classesOf(p)) ancestorClasses.add(c);
-        }
-        const { line } = file.getLineAndCharacterOfPosition(node.getStart());
-        found.push({ line: line + 1, control: { tag, classes, ancestorClasses }, inDialog });
-      }
-    }
-    node.forEachChild(visit);
-  };
-  visit(file);
-  return found;
+  return jsxElementsIn(file)
+    .map(toFound)
+    .filter((f): f is Found => f !== null);
 }
 
 // ── the tree ────────────────────────────────────────────────────────────
 
-const RULES = walk(RENDERER, (p) => extname(p) === '.css').flatMap((f) =>
-  parseRules(readFileSync(f, 'utf-8')),
-);
-const PRODUCTION_TSX = walk(RENDERER, (p) => extname(p) === '.tsx' && !isTest(p));
+const RULES = filesUnder({ dir: RENDERER, ext: '.css' }).map(readSource).flatMap(parseRules);
+const PRODUCTION_TSX = filesUnder({ dir: RENDERER, ext: '.tsx' })
+  .filter((path) => !TEST_PATH.test(path))
+  .map(readSource);
 
-function undersized(file: string): string[] {
-  return contextSizedControls(file, readFileSync(file, 'utf-8'))
+function repoPath(source: Source): string {
+  return relative(REPO, source.path).replace(/\\/g, '/');
+}
+
+function undersized(source: Source): string[] {
+  return contextSizedControls(source)
     .filter((f) => !f.inDialog && !meetsTarget(f.control, RULES))
-    .map(
-      (f) =>
-        `${relative(REPO, file).replace(/\\/g, '/')}:${String(f.line)} (${f.control.classes.join(' ')})`,
-    );
+    .map((f) => `${repoPath(source)}:${String(f.line)} (${f.control.classes.join(' ')})`);
+}
+
+function sheet(text: string): Rule[] {
+  return parseRules({ path: 'probe.css', text });
+}
+
+function probe(text: string): Found[] {
+  return contextSizedControls({ path: 'probe.tsx', text });
 }
 
 describe('RT-652 touch-target guard — context-sized V5 buttons', () => {
   it('scans a real tree with real rules', () => {
     expect(PRODUCTION_TSX.length).toBeGreaterThan(100);
     expect(RULES.length).toBeGreaterThan(500);
-    const users = PRODUCTION_TSX.filter(
-      (f) => contextSizedControls(f, readFileSync(f, 'utf-8')).length > 0,
-    );
+    const users = PRODUCTION_TSX.filter((s) => contextSizedControls(s).length > 0);
     expect(users.length).toBeGreaterThan(3);
   });
 
@@ -277,54 +353,56 @@ describe('RT-652 touch-target guard — context-sized V5 buttons', () => {
   });
 
   it('flags a v5-live-btn outside a dialog with no size rule, and passes one inside <Dialog>', () => {
-    const outside = contextSizedControls(
-      'probe.tsx',
+    const outside = probe(
       '<div className="v5-probe"><button className="v5-live-btn">x</button></div>',
     );
-    const [probe] = outside;
+    const [first] = outside;
     expect(outside).toHaveLength(1);
-    expect(probe?.inDialog).toBe(false);
-    expect(probe !== undefined && meetsTarget(probe.control, RULES)).toBe(false);
+    expect(first?.inDialog).toBe(false);
+    expect(first !== undefined && meetsTarget(first.control, RULES)).toBe(false);
 
-    const inside = contextSizedControls(
-      'probe.tsx',
+    const inside = probe(
       '<Dialog label="x"><div><button className="v5-live-btn">x</button></div></Dialog>',
     );
     expect(inside[0]?.inDialog).toBe(true);
   });
 
+  it('reads classes from template literals, and maps <Link> to a link', () => {
+    const [link] = probe('<Link className={`v5-live-btn ${tone}`} to="/x">x</Link>');
+    expect(link?.control.tag).toBe('a');
+    expect(link?.control.classes).toEqual(['v5-live-btn']);
+  });
+
   it('a link needs a box display as well as a size', () => {
-    const rules = parseRules('.probe a { min-block-size: 44px; }');
     const link: Control = {
       tag: 'a',
       classes: ['v5-live-btn'],
       ancestorClasses: new Set(['probe']),
     };
-    expect(meetsTarget(link, rules)).toBe(false);
-    const boxed = parseRules('.probe a { display: inline-flex; min-block-size: 44px; }');
-    expect(meetsTarget(link, boxed)).toBe(true);
+    expect(meetsTarget(link, sheet('.probe a { min-block-size: 44px; }'))).toBe(false);
+    expect(
+      meetsTarget(link, sheet('.probe a { display: inline-flex; min-block-size: 44px; }')),
+    ).toBe(true);
   });
 
   it('ignores size rules inside @media, and reads var() fallbacks', () => {
     const control: Control = { tag: 'button', classes: ['x'], ancestorClasses: new Set() };
     expect(
-      meetsTarget(control, parseRules('@media (min-width: 1px) { .x { min-height: 44px; } }')),
+      meetsTarget(control, sheet('@media (min-width: 1px) { .x { min-height: 44px; } }')),
     ).toBe(false);
-    expect(
-      meetsTarget(control, parseRules('@layer c { .x { min-block-size: var(--t, 44px); } }')),
-    ).toBe(true);
+    expect(meetsTarget(control, sheet('@layer c { .x { min-block-size: var(--t, 44px); } }'))).toBe(
+      true,
+    );
   });
 
   it('every v5-live-btn outside a v5 Dialog has a 44px size rule (known offenders aside)', () => {
     const known = new Set(KNOWN_UNDERSIZED.map((k) => k.file));
-    const offenders = PRODUCTION_TSX.filter(
-      (f) => !known.has(relative(REPO, f).replace(/\\/g, '/')),
-    ).flatMap(undersized);
+    const offenders = PRODUCTION_TSX.filter((s) => !known.has(repoPath(s))).flatMap(undersized);
     expect(offenders).toEqual([]);
   });
 
   it.each(KNOWN_UNDERSIZED)('known-failing: $file is still undersized — $reason', ({ file }) => {
-    // When this fails, the fix landed: delete the entry from KNOWN_UNDERSIZED.
-    expect(undersized(join(REPO, file)).length).toBeGreaterThan(0);
+    // When this fails, the fix landed (RT-670): delete the entry from KNOWN_UNDERSIZED.
+    expect(undersized(readSource(join(REPO, file))).length).toBeGreaterThan(0);
   });
 });
