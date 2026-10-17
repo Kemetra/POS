@@ -11,6 +11,7 @@ import { approval } from './manager-approval.js';
 import { recovery } from './recovery.js';
 import { saleVoid } from './sale-void.js';
 import { saleHistory } from './sale-history.js';
+import { createTerminalStatusBridge } from './terminal-status.js';
 import type {
   CancelTakeoverRequest,
   CancelTakeoverResponse,
@@ -217,6 +218,9 @@ const api: PreloadBridgeAPI = {
   // Backend-Core. Main runs the RT-546 gate and OD-534-1/2; no scope or credential
   // crosses the bridge.
   saleHistory,
+  // RT-603 (VN-S6 S6-2) — terminalStatus.* (get + the coalesced push). Read-only;
+  // every payload is validated here and the IpcRendererEvent is never forwarded.
+  terminalStatus: createTerminalStatusBridge(ipcRenderer),
 };
 
 contextBridge.exposeInMainWorld('api', api);

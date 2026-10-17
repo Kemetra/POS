@@ -25,8 +25,10 @@
  * is reported as `{ from, to }` and nothing else (A4-8, no PII).
  */
 import { classifyObservation } from './reachability-observation.js';
+import type { ConnectionStateCode } from '../../shared/terminal-status/types.js';
 
-export type ConnectionStateCode = 'checking' | 'online' | 'degraded' | 'offline';
+// RT-603: the code set now lives in the shared bridge contract.
+export type { ConnectionStateCode };
 
 /**
  * What a feeder saw on one request: an HTTP answer, no answer at all, or (the
