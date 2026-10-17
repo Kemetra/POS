@@ -1281,8 +1281,9 @@ export class CartBridgeHandlers {
       return { kind: 'ok' };
     }
 
+    // A placeholder of another cart is refused like a missing one (RT-615).
     const placeholder = store.getDiscountPlaceholder(req.placeholder_id);
-    if (placeholder === undefined) return refuse('wrong_owner');
+    if (placeholder?.cart_id !== req.cart_id) return refuse('wrong_owner');
 
     const now = this.clock().toISOString();
     store.removeDiscountPlaceholderAndOutbox(req.placeholder_id, {
