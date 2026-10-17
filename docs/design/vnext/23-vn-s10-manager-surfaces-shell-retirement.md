@@ -200,6 +200,19 @@ Cashiers) exist. Under the pack's rule, a screen is implementation-safe only whe
 FROZEN, and no manager surface in §3 has a frozen reference. G-6 closes that gap (S10-R) before
 any surface slice. Record it in 15 §6 in the S10-R PR, not here.
 
+### Accepted deviations from G-6
+
+Two things on `main` differ from the owner-approved G-6 references. The owner accepted both on
+2026-10-17. G-6 is not redrawn; S10-V compares against G-6 **plus** these two notes, and neither is
+a defect to report.
+
+| Ref | Surface | Deviation | Decision |
+|---|---|---|---|
+| RT-596 / D2 | `/app/sales` | The store sales-history block «سجل مبيعات المتجر», with the date range «من / إلى / عرض / اليوم / أمس» (RT-541 #694, RT-542 #699), was added after G-6, so G6-Sales does not draw it. It is an approved addition | Accepted as built |
+| RT-595 / D1 | Manager surfaces | The frame notices strip («حالة الوردية», «إلغاء بيع», shown when the `shiftCashup` / `saleVoid` flags are on) renders above the `h1`. G-6 does not draw it | Accepted as is. Its landmark fix (F1) is a separate code PR and is **not done** by this note |
+
+Context: RT-505 cloud report.
+
 ## 7. Slices
 
 Every implementation slice follows 15 §7 verbatim:
