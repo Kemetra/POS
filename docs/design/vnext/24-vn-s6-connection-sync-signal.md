@@ -1,8 +1,9 @@
 # VN-S6 plan — a truthful connection and sync-status signal (RT-599)
 
 > **Work Mode: Planning.** Jira **RT-599** (Epic RT-106). Docs only: no production code, tests or
-> configuration. **Status: awaiting owner decisions D-6-1 … D-6-11 (§8).** Implementation issues
-> are created only after the owner approves this plan.
+> configuration. **Status: APPROVED by the owner on 2026-10-17. D-6-1 … D-6-11 are decided as
+> recommended (§8).** Each slice in §9 becomes its own bounded Jira issue; no implementation starts
+> without one.
 >
 > Baseline: `Kemetra/POS` `origin/main` = `d2bf51aeb0c3eb806a6fcc1e98c0670a1cdb6613` (RT-593 /
 > #715), read on 2026-10-17. Every `file:line` below is at that commit.
@@ -337,6 +338,22 @@ Each deleting slice re-greps for consumers at its own baseline.
 | DEP-4 | Bench access (rt9 lab, packaged build, ability to stop the API and pull the cable) | Owner / lab | S6-V |
 
 ## 8. Owner decisions
+
+**Decided (owner, 2026-10-17): all eleven as recommended**, recorded on RT-599. In short:
+
+- **D-6-1 = A**, in two steps: passive first (S6-1a), then the probe once DEP-1 is confirmed (S6-1b). C is rejected.
+- **D-6-2 = a**, plus the new string «جارٍ التحقق من الاتصال».
+- **D-6-3:** the §2.5 values, tuned after B1.
+- **D-6-4 = a.**
+- **D-6-5 = b**, with N = 24 h.
+- **D-6-6 = a.**
+- **D-6-7 = a.**
+- **D-6-8 = a.**
+- **D-6-9 = a.**
+- **D-6-10 = a.**
+- **D-6-11 = a.**
+
+The table below keeps the options as proposed.
 
 | ID | Decision | Options | Recommendation |
 |---|---|---|---|
