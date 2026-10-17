@@ -1,4 +1,12 @@
-import { useEffect, useId, useRef, useState, type JSX, type ReactNode } from 'react';
+import {
+  useEffect,
+  useId,
+  useRef,
+  useState,
+  type JSX,
+  type ReactNode,
+  type RefObject,
+} from 'react';
 
 import type { ManagerActionKind } from '../../../shared/operator/manager-action-kinds';
 import type { ManagerApprover } from '../../../shared/operator/manager-approval';
@@ -7,7 +15,6 @@ import { MANAGER_PIN_PATTERN } from '../../../shared/shift-cashup/types';
 import { formatCheckoutMoney } from '../../ui/payments/format-checkout-money';
 import { Dialog } from '../foundation/Dialog';
 import { dismissUnlessBusy, useSingleFlight } from '../shift/shift-bridge';
-import { ShiftAlert } from '../shift/ShiftScreen';
 import { normalizeDigits } from '../shift/shift-format';
 import {
   NO_EXTRAS,
@@ -20,8 +27,9 @@ import {
   type RecoveryExtras,
 } from './recovery-actions';
 import { RECOVERY_COPY, recoveryRefusalMessage } from './recovery-copy';
+import { RecoveryAlert } from './RecoveryAlert';
 import type { RecoveryBridges } from './RecoveryScreen';
-import '../sale/live-sale.css';
+import './recovery.css';
 
 export type { RecoveryAction } from './recovery-actions';
 
@@ -120,15 +128,15 @@ function CashField(
 ): JSX.Element {
   const cashId = useId();
   return (
-    <div className="v5-shift-fields">
+    <div className="v5-recovery-fields">
       <p>
         {RECOVERY_COPY.remaining}:{' '}
-        <bdi className="v5-shift-money">{formatCheckoutMoney(props.stuck.remaining_minor)}</bdi>
+        <bdi className="v5-recovery-num">{formatCheckoutMoney(props.stuck.remaining_minor)}</bdi>
       </p>
       <label htmlFor={cashId}>{RECOVERY_COPY.cashReceived}</label>
       <input
         id={cashId}
-        className="v5-shift-input v5-ltr"
+        className="v5-recovery-input v5-recovery-input--code"
         inputMode="decimal"
         autoComplete="off"
         value={props.value}
@@ -148,7 +156,7 @@ function Confirm(
   }>,
 ): JSX.Element {
   return (
-    <label>
+    <label className="v5-recovery-choice">
       <input
         type="checkbox"
         checked={props.checked}
@@ -180,7 +188,8 @@ function TenderConfirms(
             props.onChange({ ...extras, cashReturned });
           }}
         >
-          {RECOVERY_COPY.confirmCash} (<bdi>{formatCheckoutMoney(stuck.cash_minor)}</bdi>)
+          {RECOVERY_COPY.confirmCash} (
+          <bdi className="v5-recovery-num">{formatCheckoutMoney(stuck.cash_minor)}</bdi>)
         </Confirm>
       )}
       {stuck.card_minor > 0 && (
@@ -228,18 +237,20 @@ function PinField(
     approver: ManagerApprover;
     value: string;
     onChange: (value: string) => void;
+    inputRef: RefObject<HTMLInputElement | null>;
   }>,
 ): JSX.Element {
   const pinId = useId();
   return (
-    <div className="v5-shift-fields">
+    <div className="v5-recovery-fields">
       <p>{RECOVERY_COPY.approvalBody}</p>
       <label htmlFor={pinId}>
         {RECOVERY_COPY.pinLabel} — <bdi>{props.approver.display_name}</bdi>
       </label>
       <input
+        ref={props.inputRef}
         id={pinId}
-        className="v5-shift-input v5-ltr"
+        className="v5-recovery-input v5-recovery-input--pin"
         type="password"
         inputMode="numeric"
         autoComplete="off"
@@ -254,9 +265,11 @@ function PinField(
 }
 
 function ApproverState({ state }: Readonly<{ state: Approver }>): JSX.Element | null {
-  if (state.kind === 'loading') return <output>{RECOVERY_COPY.loading}</output>;
-  if (state.kind === 'refused') return <ShiftAlert message={state.message} />;
-  if (state.approver === null) return <ShiftAlert message={RECOVERY_COPY.noPin} />;
+  if (state.kind === 'loading') {
+    return <output className="v5-recovery-muted">{RECOVERY_COPY.loading}</output>;
+  }
+  if (state.kind === 'refused') return <RecoveryAlert message={state.message} />;
+  if (state.approver === null) return <RecoveryAlert message={RECOVERY_COPY.noPin} />;
   return null;
 }
 
@@ -270,6 +283,7 @@ export function RecoveryActionDialog(props: Readonly<Props>): JSX.Element {
   const state = useRecoveryApprover(props.bridges, RECOVERY_ACTION_KIND[action.kind]);
   const { busy, error, submit } = useRecoverySubmit(props);
   const backRef = useRef<HTMLButtonElement>(null);
+  const pinRef = useRef<HTMLInputElement>(null);
   const [pin, setPin] = useState('');
   const [extras, setExtras] = useState<RecoveryExtras>(NO_EXTRAS);
   const approver = state.kind === 'ready' ? state.approver : null;
@@ -277,6 +291,10 @@ export function RecoveryActionDialog(props: Readonly<Props>): JSX.Element {
   const ready = approver !== null && pinValid && recoveryExtrasReady(action, extras);
   const dismiss = dismissUnlessBusy(busy, props.onDismiss);
   const title = RECOVERY_ACTION_TITLE[action.kind];
+  // RT-656 OD-4: a refused PIN is cleared, so the next try starts in the PIN field.
+  useEffect(() => {
+    if (error !== null) pinRef.current?.focus();
+  }, [error]);
 
   const press = (): void => {
     if (approver === null) return;
@@ -287,16 +305,20 @@ export function RecoveryActionDialog(props: Readonly<Props>): JSX.Element {
 
   return (
     <Dialog label={title} onCancel={dismiss} initialFocusRef={backRef}>
-      <h2 className="v5-live-dialog-title">{title}</h2>
+      <h2 className="v5-recovery-dialog-title">{title}</h2>
       <ActionExtras action={action} extras={extras} onChange={setExtras} />
       <ApproverState state={state} />
-      {approver !== null && <PinField approver={approver} value={pin} onChange={setPin} />}
-      <ShiftAlert message={error} />
-      <div>
+      {approver !== null && (
+        <PinField approver={approver} value={pin} onChange={setPin} inputRef={pinRef} />
+      )}
+      <div className="v5-recovery-slot">
+        <RecoveryAlert message={error} />
+      </div>
+      <div className="v5-recovery-dialog-actions">
         <button
           ref={backRef}
           type="button"
-          className="v5-live-btn"
+          className="v5-recovery-btn"
           disabled={busy}
           onClick={dismiss}
         >
@@ -304,7 +326,7 @@ export function RecoveryActionDialog(props: Readonly<Props>): JSX.Element {
         </button>
         <button
           type="button"
-          className="v5-live-btn v5-live-btn--primary"
+          className="v5-recovery-btn v5-recovery-btn--primary"
           disabled={!ready || busy}
           onClick={press}
         >

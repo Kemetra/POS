@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type JSX } from 'react';
+import { useCallback, useEffect, useRef, useState, type JSX, type ReactNode } from 'react';
 
 import type { ListBranchRosterResponse } from '../../../shared/bridge-api';
 import type { ManagerApprovalBridgeAPI } from '../../../shared/operator/manager-approval';
@@ -9,11 +9,12 @@ import type {
   RecoveryStuckAttemptView,
 } from '../../../shared/operator/recovery';
 import { formatCheckoutMoney } from '../../ui/payments/format-checkout-money';
+import { Notice } from '../foundation/Notice';
+import { ScreenSection } from '../foundation/ScreenSection';
 import { V5Icon } from '../foundation/V5Icon';
-import { ShiftAlert } from '../shift/ShiftScreen';
 import { RECOVERY_COPY, recoveryRefusalMessage } from './recovery-copy';
 import { RecoveryActionDialog, type RecoveryAction } from './RecoveryActionDialog';
-import '../shift/shift.css';
+import { RecoveryAlert } from './RecoveryAlert';
 import './recovery.css';
 
 /**
@@ -27,6 +28,9 @@ import './recovery.css';
  *
  * A session admitted in recovery mode lands here and can do nothing else
  * until the stuck payment is completed or cancelled; main then signs it out.
+ *
+ * RT-656 — drawn on the G-6 page header (ScreenSection) and V5 controls, as
+ * the owner-approved references in docs/design/vnext/visual-acceptance/RC-Recovery.
  */
 
 export interface RecoveryBridges {
@@ -107,13 +111,12 @@ export function RecoveryScreen({ bridges }: Readonly<{ bridges: RecoveryBridges 
   };
 
   return (
-    <section className="v5-shift v5-recovery" dir="rtl" lang="ar" aria-labelledby="recovery-title">
-      <div className="v5-shift-titlebar">
-        <h1 id="recovery-title">{RECOVERY_COPY.title}</h1>
-      </div>
-      <div className="v5-recovery-grid">
+    <ScreenSection title={RECOVERY_COPY.title}>
+      <div className="v5-recovery" dir="rtl" lang="ar">
         {outcome !== null && (
-          <output className="v5-shift-outcome v5-recovery-wide">{outcome}</output>
+          <Notice tone="success">
+            <Outcome message={outcome} />
+          </Notice>
         )}
         <HeldBody held={held} nameOf={nameOf} onAction={open} />
       </div>
@@ -131,7 +134,7 @@ export function RecoveryScreen({ bridges }: Readonly<{ bridges: RecoveryBridges 
           }}
         />
       )}
-    </section>
+    </ScreenSection>
   );
 }
 
@@ -144,25 +147,54 @@ function HeldBody(
 ): JSX.Element {
   const { held } = props;
   if (held.kind === 'loading') {
-    return <output className="v5-shift-message v5-recovery-wide">{RECOVERY_COPY.loading}</output>;
+    return (
+      <div className="v5-recovery-state v5-recovery-neutral" aria-busy="true">
+        <Notice tone="info">{RECOVERY_COPY.loading}</Notice>
+      </div>
+    );
   }
   if (held.kind === 'refused') {
     return (
-      <div className="v5-shift-message v5-recovery-wide">
-        <ShiftAlert message={recoveryRefusalMessage(held.reason)} />
+      <div className="v5-recovery-state">
+        <RecoveryAlert message={recoveryRefusalMessage(held.reason)} />
       </div>
     );
   }
   return (
     <>
       {held.recovery_mode && (
-        <p className="v5-recovery-mode v5-recovery-wide" role="note">
-          <V5Icon name="status-info" />
-          <span>{RECOVERY_COPY.recoveryMode}</span>
-        </p>
+        <div className="v5-recovery-neutral" role="note">
+          <Notice tone="info" announce={false}>
+            {RECOVERY_COPY.recoveryMode}
+          </Notice>
+        </div>
       )}
-      <StuckPanel stuck={held.stuck} nameOf={props.nameOf} onAction={props.onAction} />
-      <HeldPanel held={held.held} nameOf={props.nameOf} onAction={props.onAction} />
+      <div className="v5-recovery-grid">
+        <StuckPanel stuck={held.stuck} nameOf={props.nameOf} onAction={props.onAction} />
+        <HeldPanel held={held.held} nameOf={props.nameOf} onAction={props.onAction} />
+      </div>
+    </>
+  );
+}
+
+/** An amount or a count: Western digits, LTR, tabular (DESIGN.md OD-3). */
+function Num({ children }: Readonly<{ children: string | number }>): JSX.Element {
+  return <bdi className="v5-recovery-num">{children}</bdi>;
+}
+
+/** formatCheckoutMoney's output inside a sentence: «1,250.00 EGP», «−5.00 EGP». */
+const MONEY_RUN = /\u2212?[\d,]+\.\d{2} EGP/;
+
+/** An outcome sentence with its amount isolated, so bidi never reads «EGP 50.00». */
+function Outcome({ message }: Readonly<{ message: string }>): JSX.Element {
+  const run = MONEY_RUN.exec(message);
+  if (run === null) return <>{message}</>;
+  const end = run.index + run[0].length;
+  return (
+    <>
+      {message.slice(0, run.index)}
+      <Num>{run[0]}</Num>
+      {message.slice(end)}
     </>
   );
 }
@@ -180,22 +212,43 @@ function Fact(
     >
       <dt>{label}</dt>
       <dd className={props.text === true ? 'v5-recovery-text' : undefined}>
-        <bdi>{value}</bdi>
+        {props.text === true ? <bdi>{value}</bdi> : <Num>{value}</Num>}
       </dd>
     </div>
   );
 }
 
-function PanelHead(
-  props: Readonly<{ id: string; title: string; icon: 'tender-cash' | 'manager-held' }>,
+function Panel(
+  props: Readonly<{
+    id: string;
+    title: string;
+    icon: 'tender-cash' | 'manager-held';
+    className?: string;
+    children: ReactNode;
+  }>,
 ): JSX.Element {
+  const cls = props.className === undefined ? '' : ` ${props.className}`;
   return (
-    <header className="v5-shift-mgr-head v5-recovery-head">
-      <span className="v5-shift-mgr-glyph">
-        <V5Icon name={props.icon} />
-      </span>
-      <h2 id={props.id}>{props.title}</h2>
-    </header>
+    <section className={`v5-recovery-panel${cls}`} aria-labelledby={props.id}>
+      <header className="v5-recovery-panel-head">
+        <span className="v5-recovery-glyph">
+          <V5Icon name={props.icon} />
+        </span>
+        <h2 id={props.id}>{props.title}</h2>
+      </header>
+      {props.children}
+    </section>
+  );
+}
+
+function Empty({ text }: Readonly<{ text: string }>): JSX.Element {
+  return (
+    <div className="v5-recovery-panel-body">
+      <p className="v5-recovery-empty">
+        <V5Icon name="dash" />
+        {text}
+      </p>
+    </div>
   );
 }
 
@@ -216,41 +269,40 @@ function StuckPanel(
 ): JSX.Element {
   const { stuck } = props;
   return (
-    <section className="v5-shift-mgr-panel" aria-labelledby="recovery-stuck">
-      <PanelHead id="recovery-stuck" title={RECOVERY_COPY.stuckTitle} icon="tender-cash" />
-      <div className="v5-shift-mgr-body">
-        {stuck === null ? (
-          <p className="v5-recovery-empty">
-            <V5Icon name="dash" />
-            {RECOVERY_COPY.noneStuck}
-          </p>
-        ) : (
-          <>
-            <StuckFacts stuck={stuck} owner={props.nameOf(stuck.owning_operator_id)} />
-            <div className="v5-recovery-actions">
-              <button
-                type="button"
-                className="v5-shift-btn v5-shift-btn--primary"
-                onClick={() => {
-                  props.onAction({ kind: 'complete', stuck });
-                }}
-              >
-                {RECOVERY_COPY.complete}
-              </button>
-              <button
-                type="button"
-                className="v5-shift-btn"
-                onClick={() => {
-                  props.onAction({ kind: 'cancel_attempt', stuck });
-                }}
-              >
-                {RECOVERY_COPY.cancelPayment}
-              </button>
-            </div>
-          </>
-        )}
-      </div>
-    </section>
+    <Panel
+      id="recovery-stuck"
+      title={RECOVERY_COPY.stuckTitle}
+      icon="tender-cash"
+      className="v5-recovery-panel--stuck"
+    >
+      {stuck === null ? (
+        <Empty text={RECOVERY_COPY.noneStuck} />
+      ) : (
+        <div className="v5-recovery-panel-body">
+          <StuckFacts stuck={stuck} owner={props.nameOf(stuck.owning_operator_id)} />
+          <div className="v5-recovery-actions">
+            <button
+              type="button"
+              className="v5-recovery-btn v5-recovery-btn--primary"
+              onClick={() => {
+                props.onAction({ kind: 'complete', stuck });
+              }}
+            >
+              {RECOVERY_COPY.complete}
+            </button>
+            <button
+              type="button"
+              className="v5-recovery-btn"
+              onClick={() => {
+                props.onAction({ kind: 'cancel_attempt', stuck });
+              }}
+            >
+              {RECOVERY_COPY.cancelPayment}
+            </button>
+          </div>
+        </div>
+      )}
+    </Panel>
   );
 }
 
@@ -276,7 +328,7 @@ function StuckFacts(
       <div className="v5-recovery-fact v5-recovery-fact--due">
         <dt>{RECOVERY_COPY.remaining}</dt>
         <dd>
-          <bdi>{formatCheckoutMoney(stuck.remaining_minor)}</bdi>
+          <Num>{formatCheckoutMoney(stuck.remaining_minor)}</Num>
         </dd>
       </div>
     </dl>
@@ -291,15 +343,11 @@ function HeldPanel(
   }>,
 ): JSX.Element {
   return (
-    <section className="v5-shift-mgr-panel" aria-labelledby="recovery-held">
-      <PanelHead id="recovery-held" title={RECOVERY_COPY.heldTitle} icon="manager-held" />
+    <Panel id="recovery-held" title={RECOVERY_COPY.heldTitle} icon="manager-held">
       {props.held.length === 0 ? (
-        <p className="v5-shift-mgr-body v5-recovery-empty">
-          <V5Icon name="dash" />
-          {RECOVERY_COPY.noneHeld}
-        </p>
+        <Empty text={RECOVERY_COPY.noneHeld} />
       ) : (
-        <ul className="v5-recovery-list">
+        <ul className="v5-recovery-rows">
           {props.held.map((cart) => (
             <HeldRow
               key={cart.cart_id}
@@ -310,7 +358,7 @@ function HeldPanel(
           ))}
         </ul>
       )}
-    </section>
+    </Panel>
   );
 }
 
@@ -326,7 +374,9 @@ function HeldRow(
     <li className="v5-recovery-row">
       <Initial name={props.owner} />
       <div className="v5-recovery-row__who">
-        <strong>{props.owner}</strong>
+        <span className="v5-recovery-name">
+          <bdi>{props.owner}</bdi>
+        </span>
         <span className="v5-recovery-tags">
           <span className="v5-recovery-tag">
             {cart.kind === 'draft' ? RECOVERY_COPY.draft : RECOVERY_COPY.handedOff}
@@ -335,14 +385,14 @@ function HeldRow(
         </span>
       </div>
       <div className="v5-recovery-row__sum">
-        <bdi className="v5-shift-money">{formatCheckoutMoney(cart.total_minor)}</bdi>
+        <Num>{formatCheckoutMoney(cart.total_minor)}</Num>
         <span>
-          {RECOVERY_COPY.lines} <bdi>{cart.line_count}</bdi>
+          {RECOVERY_COPY.lines} <Num>{cart.line_count}</Num>
         </span>
       </div>
       <button
         type="button"
-        className="v5-shift-btn"
+        className="v5-recovery-btn"
         onClick={() => {
           props.onAction({ kind: 'cancel_cart', cart });
         }}
