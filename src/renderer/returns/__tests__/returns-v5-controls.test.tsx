@@ -150,7 +150,8 @@ describe('the steps are shared v5 panels, fields and buttons (G6R)', () => {
     const announced = await screen.findByText(OUTCOME_COPY.confirmed);
     const notice = announced.closest('.v5-notice');
     expect(notice).toHaveAttribute('data-tone', 'success');
-    expect(notice).toHaveAttribute('role', 'status');
+    expect(notice?.tagName).toBe('OUTPUT');
+    expect(notice).not.toHaveAttribute('role');
     const panel = panelOf('نتيجة المرتجع');
     expect(panel.querySelector('dl')).toHaveClass('v5-manager-facts');
     expect(panel.querySelector('.v5-returns-outcome .v5-returns-payout')).not.toBeNull();

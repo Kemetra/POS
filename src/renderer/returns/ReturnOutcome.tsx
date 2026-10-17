@@ -110,17 +110,19 @@ function Announcement({ outcome }: Readonly<{ outcome: Outcome }>): JSX.Element 
   const confirmed = outcome.kind === 'confirmed';
   const tone: Tone = confirmed ? 'success' : 'danger';
   return (
-    <div className="v5-notice" data-tone={tone} role={confirmed ? 'status' : 'alert'}>
+    // An <output> is a status region; anything but a confirmed outcome interrupts as an alert.
+    // The element stays the same across "check again", so the region is never re-inserted.
+    <output className="v5-notice" data-tone={tone} role={confirmed ? undefined : 'alert'}>
       {shown !== null && (
         <>
           <ToneIcon tone={tone} />
-          <div className="v5-notice__text">
-            <p className="v5-returns-headline">{headline(shown)}</p>
-            {mayBeRecorded(shown) && <p>{OUTCOME_COPY.mayBeRecorded}</p>}
-          </div>
+          <span className="v5-notice__text">
+            <span className="v5-returns-headline">{headline(shown)}</span>
+            {mayBeRecorded(shown) && <span>{OUTCOME_COPY.mayBeRecorded}</span>}
+          </span>
         </>
       )}
-    </div>
+    </output>
   );
 }
 

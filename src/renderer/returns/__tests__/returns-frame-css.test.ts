@@ -49,9 +49,9 @@ describe('v5-returns.css sits inside the V5 frame', () => {
   });
 
   it('only the journal table scrolls (RD-3)', () => {
-    const scrolls = [...CSS.matchAll(/([^{}]+)\{[^}]*overflow(-[xy])?\s*:\s*(auto|scroll)/g)].map(
-      (m) => (m[1] ?? '').trim(),
-    );
+    const scrolls = CSS.split('}')
+      .filter((rule) => /overflow(-[xy])?\s*:\s*(auto|scroll)/.test(rule))
+      .map((rule) => rule.slice(0, rule.indexOf('{')).trim());
     expect(scrolls).toEqual(['.v5-returns-table-scroll']);
   });
 
