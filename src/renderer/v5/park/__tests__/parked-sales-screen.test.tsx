@@ -1,6 +1,6 @@
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import '@testing-library/jest-dom/vitest';
 
 import type { CartBridgeAPI } from '../../../../shared/bridge-api';
@@ -17,13 +17,25 @@ import { useCartStore } from '../../../stores/cart-store';
 import { ParkedSalesScreen } from '../ParkedSalesScreen';
 import { PARK_COPY } from '../park-copy';
 
+/**
+ * RT-672: a fixed mid-day instant (12:00 in Cairo), so «today» never depends
+ * on when the suite runs. Only `Date` is faked: userEvent and waitFor keep
+ * real timers.
+ */
+const NOW = Date.parse('2026-10-17T09:00:00Z');
+
+beforeEach(() => {
+  vi.useFakeTimers({ toFake: ['Date'] });
+  vi.setSystemTime(NOW);
+});
+
 afterEach(() => {
+  vi.useRealTimers();
   cleanup();
   useCartStore.getState().reset();
   resetScanGuardForTests();
 });
 
-const NOW = Date.now();
 const at = (minutesAgo: number): string => new Date(NOW - minutesAgo * 60_000).toISOString();
 
 const ROWS: ParkedSaleView[] = [
@@ -45,6 +57,12 @@ const ROWS: ParkedSaleView[] = [
     stale: true,
   },
 ];
+
+function nthRow(i: number): ParkedSaleView {
+  const row = ROWS[i];
+  if (row === undefined) throw new Error(`no fixture row ${String(i)}`);
+  return row;
+}
 
 const CHANGE = {
   line_id: 'l1',
@@ -168,6 +186,14 @@ describe('the parked list (PK3-List*)', () => {
     expect(items[2]).toHaveTextContent(PARK_COPY.stale);
     expect(items[2]?.querySelector('time')?.textContent).toMatch(/^\d{2}\/\d{2} \d{2}:\d{2}$/);
     expect(items[0]).not.toHaveTextContent(PARK_COPY.stale);
+  });
+
+  it('OD-12: a sale parked just before the Cairo midnight shows its date once the day turns', async () => {
+    vi.setSystemTime(Date.parse('2026-10-17T21:05:00Z')); // 00:05 on 18/10 in Cairo
+    const item = { ...nthRow(1), parked_at: '2026-10-17T20:45:00Z' }; // 23:45 on 17/10
+    setup({ items: [item] });
+    const [row] = await screen.findAllByRole('listitem');
+    expect(row?.querySelector('time')?.textContent).toBe('17/10 23:45');
   });
 
   it('empty: the drawn line, «لا شيء», focus on «رجوع إلى البيع»', async () => {
