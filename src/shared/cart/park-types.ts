@@ -67,18 +67,31 @@ export interface CartPreviewResumeRequest {
   cart_id: string;
 }
 
-export interface ResumePriceChange {
+/**
+ * RT-610 (RT-471 OD-1) — a reviewed line as the cashier sees it: its product
+ * name and quantity, read in main from the parked line itself (the name is the
+ * add-time snapshot). Display only: never sent back, never part of `diff_token`.
+ */
+export interface ResumeLineRef {
   line_id: string;
+  display_name: string;
+  quantity: number;
+}
+
+export interface ResumePriceChange extends ResumeLineRef {
   old_unit_minor: number;
   new_unit_minor: number;
 }
+
+/** A line whose product is no longer in the catalogue. */
+export type ResumeUnavailableLine = ResumeLineRef;
 
 export type CartPreviewResumeResponse =
   | {
       kind: 'preview';
       changes: ResumePriceChange[];
       /** Lines whose product is no longer in the catalogue (removed on an accepted resume). */
-      unavailable: string[];
+      unavailable: ResumeUnavailableLine[];
       /** Opaque: pass it back to `cart.resume` unchanged. */
       diff_token: string;
     }

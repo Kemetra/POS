@@ -162,14 +162,16 @@ Returns the **current operator's** parked sales on this terminal, newest first:
 For a parked cart owned by the current operator, compares each active line with the local catalogue read model:
 
 ```
-{ changes: [{ line_id, old_unit_minor, new_unit_minor }],
-  unavailable: [line_id],
+{ changes: [{ line_id, display_name, quantity, old_unit_minor, new_unit_minor }],
+  unavailable: [{ line_id, display_name, quantity }],
   diff_token }
 ```
 
+- **`display_name` and `quantity`** (RT-610, RT-471 OD-1, 2026-10-17) let the review name each product and show how many. Main reads both from the parked line itself (`cart_lines.display_name`, the add-time snapshot, and `cart_lines.quantity`); the renderer never supplies them. They are display only: they are not part of `diff_token` and not an input to `cart.resume`. No `item_ref`, no line or sale total, no owner or label. Bridge-security note: [`security-review/s-preview-resume-name-qty-review.md`](security-review/s-preview-resume-name-qty-review.md).
+
 - A line is **unavailable** only when the catalogue repo answers **`not_found`** for its product: zero active matches against a populated, readable catalogue (`src/main/catalogue/product-repo.ts`, FR-24). An inactive product counts as not found for selling.
 - When the repo answers **`unavailable`** (catalogue empty, missing or unreadable), no line is classified. The call is refused **`catalogue_unavailable`**, the same reason the catalogue bridge already uses. An infrastructure failure must never be read as "every product was removed".
-- `diff_token` is a digest of `changes` + `unavailable`. It is opaque to the renderer.
+- `diff_token` is a digest of `changes` + `unavailable`, by line id and unit prices only (the name and quantity are not in it). It is opaque to the renderer.
 - Read only. Writes nothing.
 - Refusals: `not_parked`, `wrong_owner`, `catalogue_unavailable`.
 

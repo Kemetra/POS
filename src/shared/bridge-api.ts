@@ -991,6 +991,9 @@ export interface CartBridgeAPI {
    * operator's parked sales, preview and resume one. Main-authoritative.
    * Optional on the TYPE only (the `snapshot?` precedent): the production
    * preload always wires it; PK-3 is its first caller.
+   * RT-610: `previewResume` names each changed and unavailable line with its
+   * stored product name and quantity (display only; read in main, never taken
+   * from the renderer, never part of `diff_token`).
    */
   parked?: CartParkBridgeAPI;
 }
