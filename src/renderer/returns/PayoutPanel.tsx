@@ -5,6 +5,8 @@ import type {
   ReturnPayoutMethod,
   ReturnsBridgeAPI,
 } from '../../shared/returns/types.js';
+import { ToneIcon, type Tone as NoticeTone } from '../v5/foundation/ToneIcon';
+import { RefundTotal } from './ReturnsPanel';
 import type { PayoutPhase } from './payout-state.js';
 import { formatReturnMoney, formatReturnTime } from './returns-format.js';
 import {
@@ -25,6 +27,11 @@ import { usePayout, type Payout, type Reload } from './usePayout.js';
  * a manual payout needs a second, explicit step whose first focus is Cancel.
  */
 type Tone = 'success' | 'warning' | 'danger' | 'neutral';
+
+/** A neutral region keeps the info glyph, drawn muted (G6R notice-neutral). */
+function glyphOf(tone: Tone): NoticeTone {
+  return tone === 'neutral' ? 'info' : tone;
+}
 
 const TONES: Readonly<Record<PayoutPhase['kind'], Tone>> = {
   ready: 'neutral',
@@ -108,7 +115,9 @@ function Btn(props: {
     <button
       type="button"
       ref={props.autoFocusRef}
-      className={`rt-btn ${props.primary === true ? 'rt-btn--primary rt-btn--commit' : 'rt-btn--secondary'}`}
+      className={
+        props.primary === true ? 'v5-manager-btn v5-manager-btn--primary' : 'v5-manager-btn'
+      }
       disabled={props.disabled}
       aria-busy={props.busy === true}
       onClick={props.onClick}
@@ -224,19 +233,17 @@ function ReprintResult({ payout }: ActionProps): JSX.Element | null {
 function Amount({ ret }: { readonly ret: ReturnJournalView }): JSX.Element {
   const minor = ret.returnTotalMinor;
   return (
-    <div className="rt-total">
-      <span>{PAYOUT_COPY.amountLabel}</span>
-      <bdi className="rt-num rt-total__amount">
-        {minor === null ? '—' : formatReturnMoney(minor, ret.currencyCode)}
-      </bdi>
-    </div>
+    <RefundTotal
+      label={PAYOUT_COPY.amountLabel}
+      amount={minor === null ? '—' : formatReturnMoney(minor, ret.currencyCode)}
+    />
   );
 }
 
 function StartedAt({ ret }: { readonly ret: ReturnJournalView }): JSX.Element | null {
   if (ret.payout === null || ret.payout.paidAt !== null) return null;
   return (
-    <p className="rt-returns__meta">
+    <p className="v5-returns-meta">
       بدأ الصرف:{' '}
       <time dateTime={ret.payout.startedAt}>{formatReturnTime(ret.payout.startedAt)}</time>
     </p>
@@ -252,26 +259,24 @@ export interface PayoutPanelProps {
 export function PayoutPanel({ bridge, ret, reload }: PayoutPanelProps): JSX.Element {
   const payout = usePayout(bridge, ret, reload);
   const { phase } = payout.state;
+  const tone = toneOf(payout.state);
   return (
-    <section className="rt-payout" aria-labelledby="rt-payout-heading">
-      <h3 id="rt-payout-heading" className="rt-returns__heading">
-        {PAYOUT_COPY.heading}
-      </h3>
+    <section className="v5-returns-payout" aria-labelledby="v5-returns-payout-heading">
+      <h3 id="v5-returns-payout-heading">{PAYOUT_COPY.heading}</h3>
       <Amount ret={payout.state.ret} />
       <StartedAt ret={payout.state.ret} />
       {/* A persistent polite live region: each new phase is announced. */}
-      <div
-        className={`rt-outcome rt-outcome--${toneOf(payout.state)}`}
-        aria-live="polite"
-        aria-atomic="true"
-      >
-        {statusLines(phase).map((line) => (
-          <p key={line}>{line}</p>
-        ))}
-        {payout.busy === 'payout' && <p>{PAYOUT_COPY.opening}</p>}
-        <ReprintResult payout={payout} />
+      <div className="v5-notice" data-tone={tone} aria-live="polite" aria-atomic="true">
+        <ToneIcon tone={glyphOf(tone)} />
+        <div className="v5-notice__text">
+          {statusLines(phase).map((line) => (
+            <p key={line}>{line}</p>
+          ))}
+          {payout.busy === 'payout' && <p>{PAYOUT_COPY.opening}</p>}
+          <ReprintResult payout={payout} />
+        </div>
       </div>
-      <div className="rt-returns__actions">
+      <div className="v5-returns-actions v5-returns-actions--start">
         <Actions payout={payout} />
       </div>
     </section>

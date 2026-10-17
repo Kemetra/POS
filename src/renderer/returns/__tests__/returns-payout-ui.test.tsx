@@ -64,8 +64,10 @@ function payoutRegion(): HTMLElement {
 describe('pay out from the confirmed outcome', () => {
   it('the payout is the one filled commit: "new return" is secondary beside it', async () => {
     await confirmedOutcome(fakeBridge());
-    expect(screen.getByRole('button', { name: START_NAME })).toHaveClass('rt-btn--primary');
-    expect(screen.getByRole('button', { name: 'مرتجع جديد' })).not.toHaveClass('rt-btn--primary');
+    expect(screen.getByRole('button', { name: START_NAME })).toHaveClass('v5-manager-btn--primary');
+    expect(screen.getByRole('button', { name: 'مرتجع جديد' })).not.toHaveClass(
+      'v5-manager-btn--primary',
+    );
   });
 
   it('a paid payout with a printed slip is success green', async () => {
@@ -73,8 +75,9 @@ describe('pay out from the confirmed outcome', () => {
     bridge.payout.mockResolvedValueOnce(PAID_BY_DRAWER);
     const user = await confirmedOutcome(bridge);
     await user.click(screen.getByRole('button', { name: START_NAME }));
-    expect((await screen.findByText(PAYOUT_COPY.paid)).parentElement).toHaveClass(
-      'rt-outcome--success',
+    expect((await screen.findByText(PAYOUT_COPY.paid)).closest('.v5-notice')).toHaveAttribute(
+      'data-tone',
+      'success',
     );
   });
 
@@ -108,7 +111,7 @@ describe('pay out from the confirmed outcome', () => {
     // One call: the whole payout was the single «pay out» action.
     expect(bridge.payout).toHaveBeenCalledTimes(1);
     expect(bridge.payout).toHaveBeenCalledWith({ returnId: 'ret-1', action: 'start' });
-    expect(payoutRegion().querySelector('.rt-outcome--success')).not.toBeNull();
+    expect(payoutRegion().querySelector('.v5-notice[data-tone="success"]')).not.toBeNull();
   });
 
   it('RT-531: a configured drawer that fails still warns and keeps the manual attestation', async () => {
@@ -288,7 +291,10 @@ describe('the slip after a payout', () => {
     expect(await screen.findByText(PAYOUT_COPY.slipFailed)).toBeInTheDocument();
     expect(screen.getByText(PAYOUT_COPY.paid)).toBeInTheDocument();
     // DESIGN.md: a printer failure after a completed payout is degraded amber, not green.
-    expect(screen.getByText(PAYOUT_COPY.paid).parentElement).toHaveClass('rt-outcome--warning');
+    expect(screen.getByText(PAYOUT_COPY.paid).closest('.v5-notice')).toHaveAttribute(
+      'data-tone',
+      'warning',
+    );
     const pending = deferred<{ kind: 'printed' }>();
     bridge.reprintSlip.mockReturnValueOnce(pending.promise);
     await user.dblClick(screen.getByRole('button', { name: PAYOUT_COPY.reprint }));

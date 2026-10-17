@@ -19,6 +19,9 @@ const PATHS = {
   'status-success': 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18ZM8 12.5l2.5 2.5L16 9.5',
   'status-warning': 'M12 4 2.5 20h19L12 4ZM12 10v4M12 17h.01',
   'status-danger': 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18ZM9 9l6 6M15 9l-6 6',
+  // RT-660 — a state that is not known yet (an unconfirmed return): a question, not a warning.
+  'status-unknown':
+    'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18ZM9.6 9.5a2.5 2.5 0 1 1 3.4 2.3c-.6.3-1 .8-1 1.5v.5M12 17h.01',
   // RT-242 — slim-rail nav glyphs; the visible short label beside each carries the meaning.
   'nav-dashboard': 'M4 4h7v7H4zM13 4h7v4h-7zM13 10h7v10h-7zM4 13h7v7H4z',
   'nav-cart': 'M3 5h2l2.2 10.2a1 1 0 0 0 1 .8h8.6a1 1 0 0 0 1-.8L20 8H6.2M9 20h.01M17 20h.01',

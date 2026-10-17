@@ -3,6 +3,7 @@ import type { JSX } from 'react';
 import type { Role } from '../../shared/operator/role.js';
 import type { ReturnsBridgeAPI } from '../../shared/returns/types.js';
 import { ScreenSection } from '../v5/foundation/ScreenSection';
+import { HonestNotice } from '../v5/manager/honest/HonestNotice';
 import { useFeatureFlagsStore } from '../stores/feature-flags-store.js';
 import {
   useOperatorSessionStore,
@@ -11,7 +12,9 @@ import {
 import { windowReturnsBridge, windowSessionEvents, type SessionEvents } from './returns-bridge.js';
 import { OUTCOME_COPY, refusalMessage } from './returns-messages.js';
 import { ReturnsScreen } from './ReturnsScreen';
-import './returns.css';
+import '../v5/foundation/messages.css';
+import '../v5/manager/manager.css';
+import './v5-returns.css';
 
 /**
  * RT-15 S3 — `/app/returns`: the manager/admin return flow (replaces the
@@ -57,13 +60,16 @@ export function ReturnsRoute({ bridge, sessionEvents }: ReturnsRouteProps): JSX.
 
   return (
     <ScreenSection title="المرتجعات">
-      <div className="rt-returns">
-        {blocked !== null || api === null ? (
-          <output className="rt-returns__policy">{blocked}</output>
-        ) : (
+      {blocked !== null || api === null ? (
+        // RT-660 (G6R Disabled): the G-6 honest page — one neutral status notice.
+        <div className="v5-honest-state">
+          <HonestNotice notice={blocked ?? ''} />
+        </div>
+      ) : (
+        <div className="v5-returns">
           <ReturnsScreen key={session.id} bridge={api} sessionEvents={events} />
-        )}
-      </div>
+        </div>
+      )}
     </ScreenSection>
   );
 }

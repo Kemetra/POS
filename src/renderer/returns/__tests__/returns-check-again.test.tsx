@@ -44,6 +44,18 @@ describe('check again (U1)', () => {
     expect(bridge.resolve).toHaveBeenCalledTimes(1);
   });
 
+  it('announces the confirmed result in the same live region, never a re-inserted one', async () => {
+    // K2 / RT-660: unconfirmed → confirmed moves the facts beside the payout;
+    // the <output> must stay mounted or a screen reader may miss the result.
+    const { user } = await unconfirmedThen([journal({ state: 'confirmed' })]);
+    const before = screen.getByRole('alert');
+    expect(before.tagName).toBe('OUTPUT');
+    await user.click(screen.getByRole('button', { name: 'تحقّق مجددًا' }));
+    const after = await screen.findByRole('status');
+    expect(after).toHaveTextContent(OUTCOME_COPY.confirmed);
+    expect(after).toBe(before);
+  });
+
   it('shows the refusal when the journal says it was refused', async () => {
     const row = journal({ state: 'refused', returnRef: null, refusalReason: 'over_return' });
     const { user } = await unconfirmedThen([row]);

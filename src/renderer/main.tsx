@@ -114,6 +114,19 @@ if (
     );
   });
 } else if (
+  // RT-660: the Returns harness, same DEV-only contract (the real AppRouter at
+  // /app/returns — the RT-15 screen — against an in-memory returns bridge).
+  (import.meta as unknown as { env?: { DEV?: boolean } }).env?.DEV &&
+  window.location.hash.startsWith('#/dev/returns-proof')
+) {
+  void import('./returns/dev/ReturnsProof').then(({ ReturnsProof }) => {
+    root.render(
+      <React.StrictMode>
+        <ReturnsProof />
+      </React.StrictMode>,
+    );
+  });
+} else if (
   // RT-604 (VN-S6 S6-3): the status indicator harness, same DEV-only contract
   // (the real frame and indicator against an in-memory terminalStatus bridge).
   (import.meta as unknown as { env?: { DEV?: boolean } }).env?.DEV &&

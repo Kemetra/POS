@@ -42,7 +42,7 @@ async function outcomeFor(submit: unknown): Promise<ReturnType<typeof fakeBridge
   // coverage run's load): wait for the headline before asserting on it.
   const outcome = screen.getByRole('region', { name: 'نتيجة المرتجع' });
   await waitFor(() => {
-    expect(outcome.querySelector('.rt-outcome__headline')).not.toBeNull();
+    expect(outcome.querySelector('.v5-returns-headline')).not.toBeNull();
   });
   return bridge;
 }

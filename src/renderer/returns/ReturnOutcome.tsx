@@ -1,8 +1,10 @@
 import { useEffect, useState, type JSX } from 'react';
 
 import type { ReturnJournalView, ReturnsBridgeAPI } from '../../shared/returns/types.js';
+import { ToneIcon } from '../v5/foundation/ToneIcon';
 import { PayoutPanel } from './PayoutPanel';
 import { ReturnNotice } from './ReturnNotice';
+import { ReturnsPanel } from './ReturnsPanel';
 import { formatReturnMoney } from './returns-format.js';
 import { OUTCOME_COPY, refusalMessage } from './returns-messages.js';
 import { mayBeRecorded, type Outcome } from './return-flow-state.js';
@@ -53,14 +55,14 @@ function Facts({
 }: Readonly<{ ret: ReturnJournalView; confirmed: boolean }>): JSX.Element {
   const amount = confirmed ? ret.returnTotalMinor : ret.quotedTotalMinor;
   return (
-    <dl className="rt-facts">
+    <dl className="v5-manager-facts">
       <dt>رقم البيع</dt>
       <dd>
-        <bdi className="rt-num">{ret.saleNumber}</bdi>
+        <bdi className="v5-manager-num v5-returns-code">{ret.saleNumber}</bdi>
       </dd>
       <dt>{confirmed ? 'مبلغ الاسترداد النقدي' : 'المبلغ المطلوب'}</dt>
       <dd>
-        <bdi className="rt-num">
+        <bdi className="v5-manager-num">
           {amount === null ? '—' : formatReturnMoney(amount, ret.currencyCode)}
         </bdi>
       </dd>
@@ -68,7 +70,7 @@ function Facts({
         <>
           <dt>مرجع الخادم</dt>
           <dd>
-            <bdi className="rt-num">{ret.returnRef}</bdi>
+            <bdi className="v5-manager-num v5-returns-code">{ret.returnRef}</bdi>
           </dd>
         </>
       )}
@@ -84,7 +86,7 @@ function CheckAgain({ flow, outcome }: Readonly<{ flow: ReturnFlow; outcome: Out
       <ReturnNotice notice={outcome.notice} />
       <button
         type="button"
-        className="rt-btn rt-btn--primary"
+        className="v5-manager-btn v5-manager-btn--primary"
         disabled={busy}
         aria-busy={busy}
         onClick={() => void flow.checkAgain()}
@@ -108,10 +110,19 @@ function Announcement({ outcome }: Readonly<{ outcome: Outcome }>): JSX.Element 
   const confirmed = outcome.kind === 'confirmed';
   const tone: Tone = confirmed ? 'success' : 'danger';
   return (
-    <div className={`rt-outcome rt-outcome--${tone}`} role={confirmed ? 'status' : 'alert'}>
-      {shown !== null && <p className="rt-outcome__headline">{headline(shown)}</p>}
-      {shown !== null && mayBeRecorded(shown) && <p>{OUTCOME_COPY.mayBeRecorded}</p>}
-    </div>
+    // An <output> is a status region; anything but a confirmed outcome interrupts as an alert.
+    // The element stays the same across "check again", so the region is never re-inserted.
+    <output className="v5-notice" data-tone={tone} role={confirmed ? undefined : 'alert'}>
+      {shown !== null && (
+        <>
+          <ToneIcon tone={tone} />
+          <span className="v5-notice__text">
+            <span className="v5-returns-headline">{headline(shown)}</span>
+            {mayBeRecorded(shown) && <span>{OUTCOME_COPY.mayBeRecorded}</span>}
+          </span>
+        </>
+      )}
+    </output>
   );
 }
 
@@ -135,32 +146,46 @@ export function ReturnOutcome({
   const heading = useFocusOnMount<HTMLHeadingElement>();
   const confirmed = outcome.kind === 'confirmed';
   const ret = retOf(outcome);
+  const withPayout = confirmed && ret !== null;
 
-  return (
-    <section className="rt-returns__panel" aria-labelledby="rt-returns-outcome">
-      <h2 id="rt-returns-outcome" ref={heading} tabIndex={-1} className="rt-returns__heading">
-        نتيجة المرتجع
-      </h2>
+  const facts = (
+    <>
       <Announcement outcome={outcome} />
       {ret !== null && <Facts ret={ret} confirmed={confirmed} />}
-      {confirmed && ret !== null && (
-        <PayoutPanel
-          bridge={payout.bridge}
-          ret={payout.latest(ret.returnId) ?? ret}
-          reload={payout.reload}
-        />
-      )}
-      <div className="rt-returns__actions">
-        <CheckAgain flow={flow} outcome={outcome} />
-        <button
-          type="button"
-          className={`rt-btn ${newReturnIsSecondary(outcome) ? 'rt-btn--secondary' : 'rt-btn--primary'}`}
-          disabled={flow.busy === 'check'}
-          onClick={flow.startOver}
-        >
-          مرتجع جديد
-        </button>
+    </>
+  );
+
+  return (
+    <ReturnsPanel id="v5-returns-outcome" title="نتيجة المرتجع" headingRef={heading}>
+      <div className="v5-manager-panel__body">
+        {/* G6R (RD-3): the announcement and facts beside the payout. The wrapper
+            stays mounted across "check again", so the live region is never re-inserted. */}
+        <div className={withPayout ? 'v5-returns-outcome' : undefined}>
+          <div className="v5-returns-outcome__col">{facts}</div>
+          {withPayout && (
+            <PayoutPanel
+              bridge={payout.bridge}
+              ret={payout.latest(ret.returnId) ?? ret}
+              reload={payout.reload}
+            />
+          )}
+        </div>
+        <div className="v5-returns-actions">
+          <CheckAgain flow={flow} outcome={outcome} />
+          <button
+            type="button"
+            className={
+              newReturnIsSecondary(outcome)
+                ? 'v5-manager-btn'
+                : 'v5-manager-btn v5-manager-btn--primary'
+            }
+            disabled={flow.busy === 'check'}
+            onClick={flow.startOver}
+          >
+            مرتجع جديد
+          </button>
+        </div>
       </div>
-    </section>
+    </ReturnsPanel>
   );
 }

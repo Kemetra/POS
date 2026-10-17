@@ -46,6 +46,34 @@
   cursor: pointer;
 }
 
+/* RT-660 — the one filled commit per region, and the quiet text action (G-6 .btn-primary, .btn-ghost). */
+.v5-manager-btn--primary {
+  border-color: var(--color-primary);
+  background: var(--color-primary);
+  color: var(--color-primary-on);
+}
+
+.v5-manager-btn--ghost {
+  border-color: transparent;
+  background: transparent;
+  color: var(--color-primary-emphasis);
+}
+
+.v5-manager-btn:disabled {
+  cursor: not-allowed;
+}
+
+/* An unavailable commit is sunken with muted ink and must not look actionable (DESIGN.md). */
+.v5-manager-btn--primary:disabled {
+  border-color: var(--color-border);
+  background: var(--color-surface-sunken);
+  color: var(--color-text-muted);
+}
+
+.v5-manager-btn:not(.v5-manager-btn--primary):disabled {
+  opacity: 0.55;
+}
+
 .v5-manager-btn:focus-visible,
 .v5-manager-tile:focus-visible,
 .v5-manager-input:focus-visible {
@@ -204,6 +232,13 @@
   font-size: 16px;
 }
 
+/* A code (a sale number) is LTR, mono and left-aligned inside the RTL page. */
+.v5-manager-input--code {
+  direction: ltr;
+  text-align: left;
+  font-family: var(--font-family-mono);
+}
+
 @media (max-width: 1279px) {
   .v5-manager-tile {
     min-block-size: 88px;
@@ -244,5 +279,18 @@
   .v5-manager-tile:focus-visible,
   .v5-manager-input:focus-visible {
     outline-color: Highlight;
+  }
+
+  .v5-manager-btn--primary {
+    border: 2px solid ButtonText;
+  }
+
+  .v5-manager-btn--ghost {
+    border-color: ButtonText;
+  }
+
+  .v5-manager-btn:disabled {
+    border-color: GrayText;
+    color: GrayText;
   }
 }
