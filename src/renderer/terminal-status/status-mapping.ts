@@ -49,11 +49,17 @@ export function rowText(row: IndicatorRow): string {
   return `${row.before}${row.count === null ? '' : String(row.count)}${row.after}`;
 }
 
+/** When the oldest pending sale was queued (ms), or null with nothing pending. */
+function oldestPendingMs(snapshot: TerminalStatusSnapshot): number | null {
+  const { pending, oldestPendingAt } = snapshot.sync;
+  if (pending === 0) return null;
+  return oldestPendingAt === null ? null : Date.parse(oldestPendingAt);
+}
+
 function needsAttention(snapshot: TerminalStatusSnapshot, nowMs: number): boolean {
-  const { deadLetter, pending, oldestPendingAt } = snapshot.sync;
-  if (deadLetter > 0) return true;
-  if (pending === 0 || oldestPendingAt === null) return false;
-  return nowMs - Date.parse(oldestPendingAt) > SYNC_ATTENTION_AGE_MS;
+  if (snapshot.sync.deadLetter > 0) return true;
+  const oldest = oldestPendingMs(snapshot);
+  return oldest !== null && nowMs - oldest > SYNC_ATTENTION_AGE_MS;
 }
 
 function connectionRow(snapshot: TerminalStatusSnapshot | null): IndicatorRow {
@@ -109,10 +115,9 @@ export function mapTerminalStatus(
  * pending or a dead letter already decides attention.
  */
 export function syncAttentionDueAt(snapshot: TerminalStatusSnapshot | null): number | null {
-  if (snapshot === null) return null;
-  const { deadLetter, pending, oldestPendingAt } = snapshot.sync;
-  if (deadLetter > 0 || pending === 0 || oldestPendingAt === null) return null;
-  return Date.parse(oldestPendingAt) + SYNC_ATTENTION_AGE_MS;
+  if (snapshot === null || snapshot.sync.deadLetter > 0) return null;
+  const oldest = oldestPendingMs(snapshot);
+  return oldest === null ? null : oldest + SYNC_ATTENTION_AGE_MS;
 }
 
 /** D-6-7 = a: a row only while the last print failed; never «جاهز». */

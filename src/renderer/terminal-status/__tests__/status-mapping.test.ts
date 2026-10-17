@@ -15,6 +15,7 @@ import type {
 import {
   SYNC_ATTENTION_AGE_MS,
   mapTerminalStatus,
+  type IndicatorRow,
   printerRow,
   rowText,
   syncAttentionDueAt,
@@ -55,112 +56,123 @@ const pending = (n: number): Partial<TerminalStatusSync> => ({
 });
 
 describe('mapTerminalStatus — doc 24 §4.1 (U2…U7)', () => {
-  it.each([
-    // [label, snapshot, rule, connection tone, connection text, sync tone, sync text]
-    [
-      'U2 dead letter while online',
-      snap('online', { deadLetter: 1 }),
-      'U2',
-      'success',
-      'متصل',
-      'danger',
-      'تحتاج مراجعة',
-    ],
-    [
-      'U2 dead letter while offline',
-      snap('offline', { deadLetter: 2, ...pending(3) }),
-      'U2',
-      'warning',
-      'غير متصل',
-      'danger',
-      'تحتاج مراجعة',
-    ],
-    [
-      'U2 dead letter while checking',
-      snap('checking', { deadLetter: 1 }),
-      'U2',
-      'neutral',
-      'جارٍ التحقق من الاتصال',
-      'danger',
-      'تحتاج مراجعة',
-    ],
-    [
-      'U2 oldest pending older than 24 h (D-6-5)',
-      snap('online', { pending: 1, oldestPendingAt: iso(NOW - SYNC_ATTENTION_AGE_MS - 1) }),
-      'U2',
-      'success',
-      'متصل',
-      'danger',
-      'تحتاج مراجعة',
-    ],
-    ['U3 offline, nothing pending', snap('offline'), 'U3', 'warning', 'غير متصل', null, null],
-    [
-      'U3 offline with pending → M-O2',
-      snap('offline', pending(3)),
-      'U3',
-      'warning',
-      'غير متصل',
-      'info',
-      '3 عمليات بانتظار الإرسال',
-    ],
-    [
-      'U3 degraded shown as offline (D-6-2)',
-      snap('degraded'),
-      'U3',
-      'warning',
-      'غير متصل',
-      null,
-      null,
-    ],
-    [
-      'U3 degraded with pending → M-O2',
-      snap('degraded', pending(2)),
-      'U3',
-      'warning',
-      'غير متصل',
-      'info',
-      '2 عمليات بانتظار الإرسال',
-    ],
-    [
-      'U4 online, pending, not paused → S16',
-      snap('online', pending(4)),
-      'U4',
-      'success',
-      'متصل',
-      'info',
-      'جارٍ إرسال 4 عملية…',
-    ],
-    [
-      'U5 online, pending, paused → M-O2 (D-6-6)',
-      snap('online', { ...pending(2), paused: 'no_operator_credential' }),
-      'U5',
-      'success',
-      'متصل',
-      'info',
-      '2 عمليات بانتظار الإرسال',
-    ],
-    ['U6 online, nothing pending → M-O4', snap('online'), 'U6', 'success', 'متصل', null, null],
-    ['U7 checking', snap('checking'), 'U7', 'neutral', 'جارٍ التحقق من الاتصال', null, null],
-    [
-      'U7 checking with pending → M-O2, never «sending»',
-      snap('checking', pending(1)),
-      'U7',
-      'neutral',
-      'جارٍ التحقق من الاتصال',
-      'info',
-      '1 عمليات بانتظار الإرسال',
-    ],
-  ] as const)('%s', (_label, snapshot, rule, connTone, connText, syncTone, syncText) => {
-    const view = mapTerminalStatus(snapshot, NOW);
-    expect(view.rule).toBe(rule);
-    expect(view.connection.tone).toBe(connTone);
-    expect(rowText(view.connection)).toBe(connText);
-    if (syncTone === null) {
-      expect(view.sync).toBeNull();
-    } else {
-      expect(view.sync?.tone).toBe(syncTone);
-      expect(view.sync === null ? null : rowText(view.sync)).toBe(syncText);
-    }
+  // Each row: the snapshot, the rule, and the expected rows as `tone · text`.
+  interface Case {
+    readonly label: string;
+    readonly snapshot: TerminalStatusSnapshot;
+    readonly rule: string;
+    readonly connection: string;
+    readonly sync: string | null;
+  }
+  const ONLINE = 'success · متصل';
+  const OFFLINE = 'warning · غير متصل';
+  const CHECKING = 'neutral · جارٍ التحقق من الاتصال';
+  const ATTENTION = 'danger · تحتاج مراجعة';
+  const cases: Case[] = [
+    {
+      label: 'U2 dead letter while online',
+      snapshot: snap('online', { deadLetter: 1 }),
+      rule: 'U2',
+      connection: ONLINE,
+      sync: ATTENTION,
+    },
+    {
+      label: 'U2 dead letter while offline',
+      snapshot: snap('offline', { deadLetter: 2, ...pending(3) }),
+      rule: 'U2',
+      connection: OFFLINE,
+      sync: ATTENTION,
+    },
+    {
+      label: 'U2 dead letter while checking',
+      snapshot: snap('checking', { deadLetter: 1 }),
+      rule: 'U2',
+      connection: CHECKING,
+      sync: ATTENTION,
+    },
+    {
+      label: 'U2 oldest pending older than 24 h (D-6-5)',
+      snapshot: snap('online', {
+        pending: 1,
+        oldestPendingAt: iso(NOW - SYNC_ATTENTION_AGE_MS - 1),
+      }),
+      rule: 'U2',
+      connection: ONLINE,
+      sync: ATTENTION,
+    },
+    {
+      label: 'U3 offline, nothing pending',
+      snapshot: snap('offline'),
+      rule: 'U3',
+      connection: OFFLINE,
+      sync: null,
+    },
+    {
+      label: 'U3 offline with pending → M-O2',
+      snapshot: snap('offline', pending(3)),
+      rule: 'U3',
+      connection: OFFLINE,
+      sync: 'info · 3 عمليات بانتظار الإرسال',
+    },
+    {
+      label: 'U3 degraded shown as offline (D-6-2)',
+      snapshot: snap('degraded'),
+      rule: 'U3',
+      connection: OFFLINE,
+      sync: null,
+    },
+    {
+      label: 'U3 degraded with pending → M-O2',
+      snapshot: snap('degraded', pending(2)),
+      rule: 'U3',
+      connection: OFFLINE,
+      sync: 'info · 2 عمليات بانتظار الإرسال',
+    },
+    {
+      label: 'U4 online, pending, not paused → S16',
+      snapshot: snap('online', pending(4)),
+      rule: 'U4',
+      connection: ONLINE,
+      sync: 'info · جارٍ إرسال 4 عملية…',
+    },
+    {
+      label: 'U5 online, pending, paused → M-O2 (D-6-6)',
+      snapshot: snap('online', { ...pending(2), paused: 'no_operator_credential' }),
+      rule: 'U5',
+      connection: ONLINE,
+      sync: 'info · 2 عمليات بانتظار الإرسال',
+    },
+    {
+      label: 'U6 online, nothing pending → M-O4',
+      snapshot: snap('online'),
+      rule: 'U6',
+      connection: ONLINE,
+      sync: null,
+    },
+    {
+      label: 'U7 checking',
+      snapshot: snap('checking'),
+      rule: 'U7',
+      connection: CHECKING,
+      sync: null,
+    },
+    {
+      label: 'U7 checking with pending → M-O2, never «sending»',
+      snapshot: snap('checking', pending(1)),
+      rule: 'U7',
+      connection: CHECKING,
+      sync: 'info · 1 عمليات بانتظار الإرسال',
+    },
+  ];
+
+  const describeRow = (row: IndicatorRow | null): string | null =>
+    row === null ? null : `${row.tone} · ${rowText(row)}`;
+
+  it.each(cases)('$label', (c) => {
+    const view = mapTerminalStatus(c.snapshot, NOW);
+    expect(view.rule).toBe(c.rule);
+    expect(describeRow(view.connection)).toBe(c.connection);
+    expect(describeRow(view.sync)).toBe(c.sync);
   });
 
   it('starts at checking, never online, before the first snapshot', () => {
