@@ -143,6 +143,7 @@ import { createManagerPinStore } from './operator/manager-pin-store.js';
 import { createManagerApprovalService } from './operator/manager-approval-service.js';
 import { registerManagerApprovalHandlers } from './ipc/manager-approval.js';
 import { postHandoffCancelApprovalResolver } from './cart/post-handoff-approval.js';
+import { manualDiscountApprovalResolver } from './cart/discount-approval.js';
 import { bindSaleNumberAllocator } from './sales/sale-number-allocator.js';
 import { createSaleAuditEmitter, type SaleAuditEvent } from './sales/audit-emitter.js';
 import { bindFinalizeTransaction } from './sales/finalize-transaction.js';
@@ -1007,6 +1008,8 @@ singleInstanceReady
       managerPins,
       resolvers: {
         'cart.cancel_post_handoff': postHandoffCancelApprovalResolver(bindCartStore(db)),
+        // RT-608 — a cashier's manual discount: this cart, line and kind, at this line version.
+        'cart.discount.manual': manualDiscountApprovalResolver(bindCartStore(db)),
         // RT-530 — a finalized sale's void: bound to the sale, its total and its requester.
         'sale.void': (input) => saleVoidRef.current?.service.approvalSubject(input) ?? null,
         // RT-441 — manager recovery (bound below, once the payment path exists).

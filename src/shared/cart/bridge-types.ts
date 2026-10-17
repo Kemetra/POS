@@ -79,15 +79,25 @@ export type CartLinesSetNoteResponse =
 
 // ── cart.discountPlaceholders.add ─────────────────────────────────────────────
 //
-// No approver crosses this bridge (RT-183; spec 005 contracts/bridge-api.md):
-// main records the authenticated session operator as the approving
-// supervisor and drops any renderer-supplied `attribution_operator_id`.
+// RT-608 (RT-28, spec 005 FR-023 revised): every manual discount needs manager
+// authority, with no threshold. No approver and no credential cross this
+// bridge (C10; contracts/bridge-api.md): a manager / admin session applies
+// directly and is the approver; a cashier carries an `approval_id` that main
+// issued for kind `cart.discount.manual` on
+// `discountApprovalSubjectRef({ cart_id, line_id, placeholder_kind })`
+// (`shared/cart/discount-approval.ts`). Any renderer-supplied
+// `attribution_operator_id` is dropped.
 
 export interface CartDiscountPlaceholdersAddRequest {
   readonly cart_id: string;
   readonly line_id: string;
   readonly placeholder_kind: string;
   readonly idempotency_key: string;
+  /**
+   * RT-608 — a cashier's add carries the manager approval granted for exactly
+   * this cart, line and kind; a manager or admin applies directly and sends none.
+   */
+  readonly approval_id?: string;
 }
 
 export type CartDiscountPlaceholdersAddResponse =

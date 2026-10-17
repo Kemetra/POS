@@ -99,7 +99,12 @@ export interface ConsumeApprovalInput {
 }
 
 export type ConsumeApprovalOutcome =
-  | { kind: 'consumed'; approverUserId: string }
+  | {
+      kind: 'consumed';
+      approverUserId: string;
+      /** RT-608: the reason code the approval was granted for, for the action's audit. */
+      reasonCode?: string;
+    }
   | { kind: 'refused'; reason: 'approval_invalid' | 'approval_stale' };
 
 export interface ManagerApprovalService {
@@ -141,6 +146,7 @@ interface ApprovalRow {
   approver_user_id: string;
   requester_user_id: string | null;
   policy_version: string;
+  reason_code: string;
   issued_at: string;
   expires_at: string;
   consumed_at: string | null;
@@ -159,7 +165,7 @@ const INSERT = `
 const SELECT = `
   SELECT tenant_id, branch_id, terminal_id, action_kind, subject_ref, subject_version,
          amount_minor, requester_operator_id, approver_user_id, requester_user_id, policy_version,
-         issued_at, expires_at, consumed_at
+         reason_code, issued_at, expires_at, consumed_at
     FROM manager_approvals WHERE approval_id = ?`;
 
 const CONSUME = `UPDATE manager_approvals SET consumed_at = ?
@@ -365,7 +371,11 @@ export function createManagerApprovalService(
       }
       const { changes } = (deps.db.prepare(CONSUME) as Run).run(now, input.approvalId);
       if (changes !== 1) return refused('approval_invalid') as ConsumeApprovalOutcome;
-      return { kind: 'consumed', approverUserId: row.approver_user_id };
+      return {
+        kind: 'consumed',
+        approverUserId: row.approver_user_id,
+        reasonCode: row.reason_code,
+      };
     },
 
     evidence(approvalId) {

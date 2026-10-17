@@ -41,9 +41,13 @@ import { requireOperatorSession } from './require-operator-session.js';
 import type {
   CartRow,
   CartStore,
-  InsertDiscountPlaceholderInput,
+  DiscountPlaceholderRow,
+  DiscountPlaceholderWrite,
   InsertOutboxInput,
+  OutboxRow,
 } from './cart-store.js';
+import { manualDiscountApprovalSubject } from './discount-approval.js';
+import { discountApprovalSubjectRef } from '../../shared/cart/discount-approval.js';
 import { AuditEmitter } from '../audit/audit-emitter.js';
 import { buildPaymentIntentEnvelope } from './handoff-envelope-builder.js';
 import { freezeEnvelope } from '../../shared/cart/handoff-envelope.js';
@@ -300,14 +304,34 @@ export function postHandoffApprovalSubject(
   };
 }
 
-/** RT-443: a cashier's approval did not hold; thrown to roll the cancel back. */
-class CancelApprovalRefused extends Error {
+/** RT-443 / RT-608: a cashier's approval did not hold; thrown to roll the action back. */
+class ApprovalRefused extends Error {
   readonly reason: 'approval_invalid' | 'approval_stale';
 
   constructor(reason: 'approval_invalid' | 'approval_stale') {
     super(reason);
     this.reason = reason;
   }
+}
+
+/** RT-608: a committed discount add's outcome (also its exact replay's). */
+function discountAdded(placeholderId: string): CartDiscountPlaceholdersAddResponse {
+  return { kind: 'ok', placeholder_id: placeholderId, requires_manager_attribution: true };
+}
+
+/**
+ * RT-608: a key already used is an exact replay only when it was this add —
+ * the same cart and line, and (while the placeholder still exists) the same
+ * kind. A key reused for anything else never reports an add that did not happen.
+ */
+function isSameDiscountAddReplay(
+  replay: OutboxRow,
+  placeholder: DiscountPlaceholderRow | undefined,
+  req: CartDiscountPlaceholdersAddRequest,
+): boolean {
+  if (replay.action_kind !== 'cart.discount_placeholder.add') return false;
+  if (replay.cart_id !== req.cart_id || replay.line_id !== req.line_id) return false;
+  return placeholder === undefined || placeholder.placeholder_kind === req.placeholder_kind;
 }
 
 /**
@@ -1088,6 +1112,24 @@ export class CartBridgeHandlers {
 
   // ── cart.discountPlaceholders.* ─────────────────────────────────────
 
+  /**
+   * RT-608 (RT-28, spec 005 FR-023 revised) — every manual discount needs
+   * manager authority; there is no threshold and no cashier-only path.
+   *
+   * 1. The shared mutable-cart gate.
+   * 2. The idempotency replay check FIRST: an exact replay returns the
+   *    original outcome and never re-validates or re-consumes its approval.
+   * 3. A manager / admin session applies directly and is the approver (D2).
+   *    A cashier must carry an `approval_id` (`manager_attribution_required`
+   *    otherwise); any renderer-supplied approver id is ignored (C10).
+   * 4. The line must be a live line of this cart (`wrong_owner`).
+   * 5. ONE transaction: the cashier's `cart.discount.manual` approval is
+   *    consumed against the cart and line as they stand now
+   *    (`approval_invalid` / `approval_stale` roll everything back), then the
+   *    outbox row, the placeholder (`requires_manager_attribution = 1`, the
+   *    approver as `attribution_operator_id`) and the
+   *    `cart.discount.manager_authorized` audit event.
+   */
   // eslint-disable-next-line @typescript-eslint/require-await
   async discountPlaceholdersAdd(
     req: CartDiscountPlaceholdersAddRequest,
@@ -1096,86 +1138,131 @@ export class CartBridgeHandlers {
     if (gated.kind !== 'ok') return gated;
     const { session, store, cart } = gated;
 
-    // Threshold: percent_NN where NN > 10 is above-threshold.
-    const pctMatch = /^percent_(\d+)$/.exec(req.placeholder_kind);
-    const pctDigits = pctMatch?.[1] ?? null;
-    const isAboveThreshold = pctDigits !== null && parseInt(pctDigits, 10) > 10;
-
-    // RT-183: the approving supervisor is derived from the authenticated
-    // session only — never from the renderer. A manager or admin session
-    // approves its own discount (RT-28 D2). A cashier session has no
-    // main-held approval to consume yet (the RT-28/RT-114 step-up does not
-    // exist), so an above-threshold add fails closed.
-    const sessionIsManager = session.role === 'manager' || session.role === 'admin';
-    if (isAboveThreshold && !sessionIsManager) {
-      return refuse('manager_attribution_required');
-    }
-    const attributionOperatorId = isAboveThreshold ? session.operator_id : null;
-
     // Idempotency: the idempotency_key doubles as placeholder_id.
     const replay = store.getOutboxRow(req.idempotency_key);
     if (replay !== undefined) {
-      if (replay.action_kind !== 'cart.discount_placeholder.add')
-        return refuse('idempotency_payload_mismatch');
-      return {
-        kind: 'ok',
-        placeholder_id: req.idempotency_key,
-        requires_manager_attribution: isAboveThreshold,
-      };
+      return isSameDiscountAddReplay(replay, store.getDiscountPlaceholder(req.idempotency_key), req)
+        ? discountAdded(req.idempotency_key)
+        : refuse('idempotency_payload_mismatch');
     }
 
-    const now = this.clock().toISOString();
-    const placeholder: InsertDiscountPlaceholderInput = {
-      placeholder_id: req.idempotency_key,
-      cart_id: req.cart_id,
-      line_id: req.line_id,
-      placeholder_kind: req.placeholder_kind,
-      requires_manager_attribution: isAboveThreshold ? 1 : 0,
-      attribution_operator_id: attributionOperatorId,
-      created_at: now,
-    };
+    const isManager = session.role === 'manager' || session.role === 'admin';
+    if (!isManager && (this.deps.approvals === undefined || req.approval_id === undefined)) {
+      return refuse('manager_attribution_required');
+    }
+    const line = store.getLine(req.cart_id, req.line_id);
+    if (line === undefined || line.removed_at !== null) return refuse('wrong_owner');
 
-    const outboxRow = {
-      action_id: req.idempotency_key,
-      cart_id: req.cart_id,
-      line_id: req.line_id,
-      action_kind: 'cart.discount_placeholder.add' as const,
-      acting_operator_id: session.operator_id,
-      attribution_operator_id: null as string | null,
-      operator_session_id: session.id,
-      payload_json: JSON.stringify({ cart_id: req.cart_id, cart_line_id: req.line_id }),
-      applied_at: now,
-    };
-
-    if (isAboveThreshold && attributionOperatorId !== null) {
-      const event_id = randomUUID();
-      store.insertDiscountPlaceholderAndOutbox(
-        placeholder,
-        { ...outboxRow, attribution_operator_id: attributionOperatorId },
-        () => {
-          this.deps.auditEmitter?.emit({
-            event_id,
-            tenant_id: cart.tenant_id,
-            branch_id: cart.branch_id,
-            originating_terminal_id: cart.terminal_id,
-            acting_operator_id: session.operator_id,
-            session_id: session.id,
-            shift_id: null,
-            action_category: 'cart.discount.above_threshold',
-            created_at: now,
-            approving_supervisor_id: attributionOperatorId,
-            payload: { cart_id: req.cart_id, cart_line_id: req.line_id },
-          });
-        },
+    try {
+      store.insertDiscountPlaceholderAndOutbox(() =>
+        this.authorizedDiscountWrite({ store, cart, session, req, isManager }),
       );
-    } else {
-      store.insertDiscountPlaceholderAndOutbox(placeholder, outboxRow);
+    } catch (err) {
+      // The approval did not hold; the transaction rolled back.
+      if (err instanceof ApprovalRefused) return refuse(err.reason);
+      throw err;
     }
+    return discountAdded(req.idempotency_key);
+  }
 
+  /**
+   * Inside the add's transaction: the approver (the consumed approval's, or
+   * the manager session's own) and the rows naming it. A refused approval
+   * throws `ApprovalRefused`, rolling the add back.
+   */
+  private authorizedDiscountWrite(ctx: {
+    store: CartStore;
+    cart: StoredCart;
+    session: OperatorSessionRecord;
+    req: CartDiscountPlaceholdersAddRequest;
+    isManager: boolean;
+  }): DiscountPlaceholderWrite {
+    const { store, cart, session, req, isManager } = ctx;
+    const authority = this.discountAuthority({ store, session, req, isManager });
+    const now = this.clock().toISOString();
+    const event_id = randomUUID();
     return {
-      kind: 'ok',
-      placeholder_id: req.idempotency_key,
-      requires_manager_attribution: isAboveThreshold,
+      placeholder: {
+        placeholder_id: req.idempotency_key,
+        cart_id: req.cart_id,
+        line_id: req.line_id,
+        placeholder_kind: req.placeholder_kind,
+        requires_manager_attribution: 1,
+        attribution_operator_id: authority.approver,
+        created_at: now,
+      },
+      outbox: {
+        action_id: req.idempotency_key,
+        cart_id: req.cart_id,
+        line_id: req.line_id,
+        action_kind: 'cart.discount_placeholder.add',
+        acting_operator_id: session.operator_id,
+        attribution_operator_id: authority.approver,
+        operator_session_id: session.id,
+        payload_json: JSON.stringify({ cart_id: req.cart_id, cart_line_id: req.line_id }),
+        applied_at: now,
+      },
+      onInserted: () => {
+        this.deps.auditEmitter?.emit({
+          event_id,
+          tenant_id: cart.tenant_id,
+          branch_id: cart.branch_id,
+          originating_terminal_id: cart.terminal_id,
+          acting_operator_id: session.operator_id,
+          session_id: session.id,
+          shift_id: null,
+          action_category: 'cart.discount.manager_authorized',
+          created_at: now,
+          approving_supervisor_id: authority.approver,
+          payload: {
+            cart_id: req.cart_id,
+            cart_line_id: req.line_id,
+            placeholder_id: req.idempotency_key,
+            ...(authority.approvalId === undefined ? {} : { approval_id: authority.approvalId }),
+            ...(authority.reasonCode === undefined ? {} : { reason_code: authority.reasonCode }),
+          },
+        });
+      },
+    };
+  }
+
+  /**
+   * Who authorises this discount. A manager / admin session is its own
+   * approver (D2), by `users.id` when known. A cashier's approval is consumed
+   * against the cart and line as read now, inside the transaction.
+   */
+  private discountAuthority(ctx: {
+    store: CartStore;
+    session: OperatorSessionRecord;
+    req: CartDiscountPlaceholdersAddRequest;
+    isManager: boolean;
+  }): { approver: string; approvalId?: string; reasonCode?: string } {
+    const { store, session, req, isManager } = ctx;
+    if (isManager) {
+      return { approver: session.manager_user_id?.toLowerCase() ?? session.operator_id };
+    }
+    const approvals = this.deps.approvals;
+    const approvalId = req.approval_id;
+    if (approvals === undefined || approvalId === undefined) {
+      throw new ApprovalRefused('approval_invalid');
+    }
+    const consumed = approvals.consume({
+      approvalId,
+      actionKind: 'cart.discount.manual',
+      subjectRef: discountApprovalSubjectRef(req),
+      subject: manualDiscountApprovalSubject(
+        store.getCart(req.cart_id),
+        store.getLine(req.cart_id, req.line_id),
+        req.placeholder_kind,
+        session,
+      ) ?? { version: '', amountMinor: null },
+      session,
+    });
+    if (consumed.kind === 'refused') throw new ApprovalRefused(consumed.reason);
+    return {
+      approver: consumed.approverUserId,
+      approvalId,
+      ...(consumed.reasonCode === undefined ? {} : { reasonCode: consumed.reasonCode }),
     };
   }
 
@@ -1373,7 +1460,7 @@ export class CartBridgeHandlers {
       );
     } catch (err) {
       // RT-443: the approval did not hold; the transaction rolled back.
-      if (err instanceof CancelApprovalRefused) return refuse(err.reason);
+      if (err instanceof ApprovalRefused) return refuse(err.reason);
       throw err;
     }
     return cancelled ? { kind: 'ok' } : refuse('closed');
@@ -1382,7 +1469,7 @@ export class CartBridgeHandlers {
   /**
    * Inside the post-handoff cancel transaction: consume the cashier's manager
    * approval (RT-443) and emit the `cart.cancel.post_handoff` audit event.
-   * A refused approval throws `CancelApprovalRefused`, rolling the cancel back.
+   * A refused approval throws `ApprovalRefused`, rolling the cancel back.
    */
   private consumeApprovalAndAuditCancel(ctx: {
     cart: StoredCart;
@@ -1414,7 +1501,7 @@ export class CartBridgeHandlers {
         },
         session,
       });
-      if (consumed.kind === 'refused') throw new CancelApprovalRefused(consumed.reason);
+      if (consumed.kind === 'refused') throw new ApprovalRefused(consumed.reason);
       approvingSupervisorId = consumed.approverUserId;
     }
     this.deps.auditEmitter?.emit({
