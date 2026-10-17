@@ -26,6 +26,11 @@ type FetchLike = (input: RequestInfo | URL, init?: RequestInit) => Promise<Respo
 
 const BASE = 'https://backend.example';
 
+/** The init of the single recorded call. */
+function onlyInit(calls: ReadonlyArray<{ init: RequestInit | undefined }>): RequestInit {
+  return calls[0]?.init ?? {};
+}
+
 /** The URL a fetch was called with. */
 function requestUrl(input: RequestInfo | URL): string {
   if (typeof input === 'string') return input;
@@ -106,15 +111,16 @@ describe('RT-602 liveness probe — the request', () => {
     };
     await probe(fetchImpl);
 
-    expect(calls).toHaveLength(1);
-    const [call] = calls;
-    expect(call?.url).toBe('https://backend.example/api/v1/health/live');
-    expect(call?.init?.method).toBe('GET');
-    expect(call?.init?.redirect).toBe('manual');
-    expect(call?.init?.cache).toBe('no-store');
-    expect(call?.init?.credentials).toBe('omit');
-    expect(call?.init?.signal).toBeInstanceOf(AbortSignal);
-    const headers = new Headers(call?.init?.headers);
+    expect(calls.map((c) => c.url)).toEqual(['https://backend.example/api/v1/health/live']);
+    const init = onlyInit(calls);
+    expect(init).toMatchObject({
+      method: 'GET',
+      redirect: 'manual',
+      cache: 'no-store',
+      credentials: 'omit',
+    });
+    expect(init.signal).toBeInstanceOf(AbortSignal);
+    const headers = new Headers(init.headers);
     expect(headers.has('authorization')).toBe(false);
     expect([...headers.keys()]).toEqual(['accept']);
   });

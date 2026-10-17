@@ -74,6 +74,14 @@ export function createLivenessProbeScheduler(
     nextProbeAt = now() + delay;
   }
 
+  /** Not stopped, no probe open, no passive request in flight, and the time has come. */
+  function isDue(): boolean {
+    if (stopped) return false;
+    if (open !== null) return false;
+    if (passiveInFlight > 0) return false;
+    return now() >= nextProbeAt;
+  }
+
   function start(): void {
     const controller = new AbortController();
     open = controller;
@@ -95,9 +103,7 @@ export function createLivenessProbeScheduler(
 
   return {
     tick() {
-      if (stopped || open !== null || passiveInFlight > 0) return;
-      if (now() < nextProbeAt) return;
-      start();
+      if (isDue()) start();
     },
 
     notePassiveObservation() {
