@@ -646,8 +646,8 @@ body {
 
   /* ── Inactivity lock (RT-117, VN-R8) ─────────────────────────────────────
      Overlay level on the scrim, above every workspace layer. The app under
-     it stays mounted and `inert`, so the sale is preserved. Totals render as
-     isolated LTR runs (DESIGN.md RTL composition). */
+     it stays mounted and `inert`, so the sale is preserved. The lock screen's
+     own styles live in session/lock-screen.css (RT-593). */
   /* Layout-neutral wrapper: `inert` still applies to its whole subtree. */
   .session-lock-app {
     display: contents;
@@ -663,48 +663,6 @@ body {
     position: fixed;
     inset: 0;
     z-index: 100;
-  }
-
-  /* RT-161: the lock's own backdrop is opaque — the shared dialog scrim is
-     translucent and would let the sale show through on an unattended till. */
-  .session-lock > .dialog-overlay {
-    background: var(--color-background);
-  }
-
-  .session-lock__summary {
-    display: grid;
-    gap: var(--space-2);
-    margin: 0 0 var(--space-5);
-    padding: var(--space-4);
-    border: 1px solid var(--color-border);
-    border-radius: var(--radius-card);
-    background: var(--color-surface-elevated);
-  }
-
-  .session-lock__summary > div {
-    display: flex;
-    justify-content: space-between;
-    gap: var(--space-3);
-  }
-
-  .session-lock__summary dt {
-    color: var(--color-text-muted);
-    font-size: var(--font-size-sm);
-  }
-
-  .session-lock__summary dd {
-    margin: 0;
-    font-weight: var(--font-weight-bold);
-    font-variant-numeric: tabular-nums;
-  }
-
-  .session-lock__form {
-    display: grid;
-    gap: var(--space-4);
-  }
-
-  .session-lock__form .session-lock__operator {
-    margin: 0;
   }
 
   /* RT-444 — another operator signs in on a locked terminal. A slim notice
@@ -794,12 +752,6 @@ body {
 
   .dialog-panel__body {
     margin-block-end: var(--space-5);
-  }
-
-  .dialog-panel__actions {
-    display: flex;
-    justify-content: flex-end;
-    gap: var(--space-3);
   }
 
   /* ── Status Banner (T034) ────────────────────────────────────────────── */

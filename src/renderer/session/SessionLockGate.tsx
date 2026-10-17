@@ -15,8 +15,9 @@ import { LockScreen } from './LockScreen';
  *
  * The app stays MOUNTED under the lock and is made `inert`, so the exact sale
  * on screen — cart, checkout, entered amounts — is preserved for the same
- * operator. It is also concealed (RT-161): the lock shows totals only, so the
- * sale behind it must not be readable on an unattended till. The operator-session store is untouched (still signed in), so the
+ * operator. It is also concealed (RT-161): the lock shows nothing of the sale
+ * (RT-593, owner decision L3), so the sale behind it must not be readable on an
+ * unattended till. The operator-session store is untouched (still signed in), so the
  * cart/payment reset hook never fires on a lock.
  *
  * RT-113 P2 — main can now END a session on its own (the cashier admission
