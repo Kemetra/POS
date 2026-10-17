@@ -355,6 +355,7 @@ Conditional rows (marked ⏳) depend on the named contract and must not ship bef
 | M-W3 | Blind count hint | «عُدّ النقد في الدرج وأدخله. لا يظهر المبلغ المتوقع قبل تسجيل العدّ.» (shipped) | neutral |
 | **Session and lock** | | | |
 | M-L1 | Locked | «الطرفية مقفلة. أدخل الرقم السري للمتابعة.» | neutral |
+| M-L1b | Locked (manager / admin) | «الطرفية مقفلة. أدخل بيانات الدخول للمتابعة.» | neutral |
 | M-L2 | Sign-out with an open cart | Until held-cart re-attach ships (RT-116 S4): «البيع الحالي لن يظهر بعد تسجيل الخروج. هل تريد تسجيل الخروج؟». After it ships: «سيُحفظ البيع الحالي على هذا الجهاز. هل تريد تسجيل الخروج؟» · «البقاء مسجّلاً» (default) / «تسجيل الخروج» | warning |
 | **Manager → Cashiers** | | | |
 | M-K1 | Roster unreachable | «تعذّر تحميل قائمة الكاشير. تحقق من الاتصال.» with a «إعادة المحاولة» button (owner decision D4 in [19](19-d-m1-cashier-pin-status.md), 2026-10-12; it was «… تحقق من الاتصال ثم أعد المحاولة.») | warning |
