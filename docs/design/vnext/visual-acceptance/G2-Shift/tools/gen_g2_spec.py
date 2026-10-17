@@ -86,7 +86,8 @@ CHECKS = """
 HEADER = """
   <header>
     <h1>الوردية (G-2): الفتح والحالة والحركات النقدية والإغلاق وحالة الوردية للمدير</h1>
-    <p><span class="status">مسودة، بانتظار موافقة المالك</span> · Jira <span class="ltr">RT-658</span> · تغلق الفجوة G-2 في الوثيقة 15</p>
+    <p><span class="status">معتمد من المالك (<span class="ltr">2026-10-17</span>)</span> · Jira <span class="ltr">RT-658</span> (التعليق <span class="ltr">12455</span>) · تغلق الفجوة G-2 في الوثيقة 15</p>
+    <p>وافق المالك على هذه المراجع كما رُسمت، وعلى القرارات G2-D1 حتى G2-D7 كما أوصي بها (Jira <span class="ltr">RT-658</span>، التعليق <span class="ltr">12455</span>). دُمجت في <code>main</code> عبر <span class="ltr">#736</span> (<code>0725cfa</code>).</p>
     <p><b>المرجع السلوكي:</b> شاشات RT-17 على <code>main</code> (<code>src/renderer/v5/shift/</code>) وحالة <code>PK3-ShiftClose</code> (RT-471/RT-445). الشكل على مفردات G-6 (RT-478).
       لا سلوك جديد ولا نص جديد: كل النصوص حرفية من <code>shift-copy.ts</code> و<code>park-copy.ts</code>.</p>
     <p><b>نصوص جديدة بانتظار الموافقة:</b> لا يوجد.</p>
@@ -98,7 +99,7 @@ STYLE = """
   body { margin:0; padding:32px; background:var(--bg); color:var(--text); font-family:'Dubai','Segoe UI',Tahoma,Arial,sans-serif; font-size:15px; line-height:1.7; }
   main { max-inline-size:1180px; margin-inline:auto; display:grid; gap:28px; }
   h1 { margin:0; font-size:26px; } h2 { margin:0 0 8px; font-size:19px; }
-  .status { display:inline-block; padding:2px 12px; border:1px solid #a35a00; border-radius:999px; background:#fdf1e0; color:#7d4500; font-weight:700; }
+  .status { display:inline-block; padding:2px 12px; border:1px solid #0f766e; border-radius:999px; background:#e6f4f1; color:#0b5b55; font-weight:700; }
   section { padding:20px 24px; border:1px solid var(--border); border-radius:14px; background:var(--surface); }
   table { inline-size:100%; border-collapse:collapse; }
   th, td { padding:8px 10px; border-block-end:1px solid var(--border); text-align:start; vertical-align:top; }
@@ -165,7 +166,7 @@ def build(states: list[tuple[str, str]]) -> str:
         section("ما رُسم وما التزم به", f"<ul>{DRAWN}</ul>"),
         section("ما لم يُرسم", f"<ul>{NOT_DRAWN}</ul>"),
         section("النصوص (حرفية من الكتالوج الموجود)", table(["المكان", "النص", "المصدر", "الحالة"], [row(a, b, c, TAKEN) for a, b, c in COPY])),
-        section("قرارات بانتظار المالك", table(["#", "النقطة", "ما رُسم والتوصية"], [row(a, b, c) for a, b, c in DECISIONS])),
+        section("قرارات المالك (معتمدة 2026-10-17، RT-658 التعليق 12455)", table(["#", "النقطة", "ما رُسم والتوصية"], [row(a, b, c) for a, b, c in DECISIONS])),
         section("التباين العالي", f"<ul>{FORCED_NOTES}</ul>"),
         section("الفحوص المنفّذة على الملفات", CHECKS),
     ]
