@@ -5,6 +5,7 @@ import type {
   ForceCloseShiftResponse,
   ListStuckShiftsResponse,
   ReceiptsBridgeAPI,
+  ReceiptsPreviewResponse,
   SalesFindByNumberResponse,
   OperatorBridgeAPI,
   PairingBridgeAPI,
@@ -16,6 +17,7 @@ import type { BannerState } from '../../../../shared/sales/types';
 import { AppRouter } from '../../../router';
 import { useFeatureFlagsStore } from '../../../stores/feature-flags-store';
 import { useOperatorSessionStore } from '../../../stores/operator-session-store';
+import { PREVIEW_SLIP_HTML } from './preview-slip-fixture';
 
 /**
  * RT-498 (VN-S10 S10-1) — DEV-ONLY one-frame harness (`#/dev/one-frame-proof`),
@@ -38,7 +40,8 @@ import { useOperatorSessionStore } from '../../../stores/operator-session-store'
  * `sale` = missing | found | noprint (what `sales.findByNumber` answers: no
  * such sale, a sale whose latest print succeeded, or one that never printed;
  * default missing); `reprint` = ok | fail (what the receipts reprint and
- * preview fakes answer; default ok);
+ * preview fakes answer; default ok); RT-659 `preview` = ok | fail | pending
+ * (the preview alone: a sample slip, a refusal, or never answered; default ok);
  * `shift` = on | off (RT-499: the shift-cashup flag, which decides the manager
  * home's «حالة الوردية» card; default off).
  *
@@ -65,6 +68,7 @@ export interface OneFrameProofParams {
   returns: 'off' | 'on';
   sale: 'missing' | 'found' | 'noprint';
   reprint: 'ok' | 'fail';
+  preview: 'ok' | 'fail' | 'pending';
   shift: 'on' | 'off';
   list: 'ok' | 'unreachable';
   close: 'refused' | 'state_invalid' | 'ok';
@@ -88,6 +92,7 @@ export function readOneFrameProofParams(): OneFrameProofParams {
     returns: oneOf(params.get('returns'), ['off', 'on'], 'off'),
     sale: oneOf(params.get('sale'), ['missing', 'found', 'noprint'], 'missing'),
     reprint: oneOf(params.get('reprint'), ['ok', 'fail'], 'ok'),
+    preview: oneOf(params.get('preview'), ['ok', 'fail', 'pending'], 'ok'),
     shift: oneOf(params.get('shift'), ['on', 'off'], 'off'),
     list: oneOf(params.get('list'), ['ok', 'unreachable'], 'ok'),
     close: oneOf(params.get('close'), ['refused', 'state_invalid', 'ok'], 'refused'),
@@ -168,16 +173,27 @@ function findAnswer(sale: OneFrameProofParams['sale']): SalesFindByNumberRespons
   } as unknown as SalesFindByNumberResponse;
 }
 
-const PREVIEW_HTML =
-  '<div dir="ltr" style="text-align:center"><p><b>POS Pulse</b></p><p>TERM-01-2026-10-15-000042</p><p>POS-03</p></div>';
+function previewAnswer(params: OneFrameProofParams): Promise<ReceiptsPreviewResponse> {
+  if (params.preview === 'pending') return new Promise(() => {});
+  if (params.preview === 'fail' || params.reprint === 'fail') {
+    return Promise.resolve({ kind: 'refused', reason: 'sale_not_found' });
+  }
+  return Promise.resolve({
+    kind: 'ok',
+    preview: {
+      html: PREVIEW_SLIP_HTML,
+      width_chars: 42,
+      bilingual_locale: 'ar-EG-RTL-with-latin-en',
+    },
+  });
+}
 
 /** The receipts fakes: `reprint=fail` refuses the reprint and the preview. */
-function receiptsBridge(reprint: OneFrameProofParams['reprint']): ReceiptsBridgeAPI {
-  const fail = reprint === 'fail';
+function receiptsBridge(params: OneFrameProofParams): ReceiptsBridgeAPI {
   return {
     reprint: () =>
       Promise.resolve(
-        fail
+        params.reprint === 'fail'
           ? { kind: 'refused', reason: 'printer_unavailable' }
           : {
               kind: 'ok',
@@ -187,15 +203,7 @@ function receiptsBridge(reprint: OneFrameProofParams['reprint']): ReceiptsBridge
               render_path: 'escpos_direct',
             },
       ),
-    preview: () =>
-      Promise.resolve(
-        fail
-          ? { kind: 'refused', reason: 'sale_not_found' }
-          : {
-              kind: 'ok',
-              preview: { html: PREVIEW_HTML, width_chars: 42, bilingual_locale: 'ar-EG-RTL' },
-            },
-      ),
+    preview: () => previewAnswer(params),
     retryPrint: () => Promise.resolve({ kind: 'refused', reason: 'printer_unavailable' }),
   } as unknown as ReceiptsBridgeAPI;
 }
@@ -289,7 +297,7 @@ export function installWindowApi(
       refresh: () => Promise.resolve({ kind: 'started' }),
       search: () => Promise.resolve(catalogueSearch(params.search)),
     },
-    receipts: receiptsBridge(params.reprint),
+    receipts: receiptsBridge(params),
     sales: {
       read: () => Promise.resolve({ kind: 'not_found' }),
       findByNumber: () => Promise.resolve(findAnswer(params.sale)),

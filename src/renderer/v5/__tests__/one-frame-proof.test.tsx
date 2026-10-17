@@ -29,6 +29,7 @@ const DEFAULTS: OneFrameProofParams = {
   returns: 'off',
   sale: 'missing',
   reprint: 'ok',
+  preview: 'ok',
   shift: 'off',
   list: 'ok',
   close: 'refused',
@@ -319,6 +320,30 @@ describe('OneFrameProof — the Sales fakes (RT-500)', () => {
         within(main).getByText('تعذّرت إعادة طباعة الإيصال. حاول مرة أخرى.'),
       ).toBeInTheDocument();
     });
+  });
+
+  // RT-659: the preview dialog's three states for the captures.
+  async function openPreview(query: string): Promise<HTMLElement> {
+    const main = await lookup(`sale=found&${query}`);
+    await userEvent.click(await within(main).findByRole('button', { name: 'معاينة الإيصال' }));
+    return screen.findByRole('dialog', { name: 'معاينة الإيصال' });
+  }
+
+  it('preview=ok shows the engine-shaped slip in the dialog', async () => {
+    const dialog = await openPreview('preview=ok');
+    expect(await within(dialog).findByRole('region', { name: 'الإيصال' })).toHaveTextContent(
+      'Sale # TERM-01-2026-10-15-000042',
+    );
+  });
+
+  it('preview=pending keeps the dialog loading', async () => {
+    const dialog = await openPreview('preview=pending');
+    expect(within(dialog).getByRole('status')).toHaveTextContent('جارٍ التحضير');
+  });
+
+  it.each(['preview=fail', 'reprint=fail'])('%s refuses the preview', async (query) => {
+    const dialog = await openPreview(query);
+    expect(await within(dialog).findByText('تعذّرت معاينة الإيصال')).toBeInTheDocument();
   });
 
   it('sale=noprint offers the preview but no reprint (AD-10)', async () => {

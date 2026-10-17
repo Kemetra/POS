@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>RT-659 receipt preview vs references</title>
+<style>
+:root { color-scheme: light; --ink:#0f1d2e; --muted:#53647a; --line:#d8dfe7; --bg:#f7f9fa; }
+body { margin:0; padding:16px; background:var(--bg); color:var(--ink); font:14px/1.5 system-ui, sans-serif; }
+header { position:sticky; top:0; z-index:1; background:var(--bg); padding-block:8px; border-bottom:1px solid var(--line); }
+label { margin-inline-end:16px; }
+section { margin-block:24px; }
+h2 { font-size:15px; margin:0; }
+.d { margin:0 0 8px; color:var(--muted); }
+.pair { display:grid; grid-template-columns:repeat(auto-fit, minmax(320px, 1fr)); gap:12px; }
+figure { margin:0; }
+figcaption { color:var(--muted); font-size:12px; }
+img { width:100%; height:auto; border:1px solid var(--line); }
+</style>
+</head>
+<body>
+<header>
+<strong>RT-659 receipt preview as a V5 Dialog (option A): implementation vs the G-6 addendum</strong><br>
+<span class="d">The references draw the G-6 frame without the RT-542 store history panel, which main now shows above the lookup; the dialog is the comparison. See README.</span><br>
+<label>Width <select id="w"><option value="all">all</option><option>1024</option><option>1280</option></select></label>
+<label>Mode <select id="m"><option value="all">all</option><option value="light">light</option><option value="forced">forced colours</option></select></label>
+</header>
+<section data-w="1024" data-m="light"><h2>Ready · 1024×768 · light</h2><p class="d">preview answered: the engine slip in the «الإيصال» region; «إغلاق» only (option A)</p><div class="pair"><figure><figcaption>Implementation (RT-659)</figcaption><img loading="lazy" src="rt659-Ready-1024x768.png" alt="Implementation (RT-659)"></figure><figure><figcaption>G6P-A-Ready 1024 (owner-approved 2026-10-17)</figcaption><img loading="lazy" src="../../visual-acceptance/G6P-Receipt-Preview/captures/G6P-A-Ready-1024-light.png" alt="G6P-A-Ready 1024 (owner-approved 2026-10-17)"></figure></div></section>
+<section data-w="1024" data-m="forced"><h2>Ready · 1024×768 · forced colours</h2><p class="d">preview answered: the engine slip in the «الإيصال» region; «إغلاق» only (option A)</p><div class="pair"><figure><figcaption>Implementation (RT-659)</figcaption><img loading="lazy" src="rt659-Ready-1024x768-forced.png" alt="Implementation (RT-659)"></figure><figure><figcaption>G6P-A-Ready 1024 (owner-approved 2026-10-17)</figcaption><img loading="lazy" src="../../visual-acceptance/G6P-Receipt-Preview/captures/G6P-A-Ready-1024-forced.png" alt="G6P-A-Ready 1024 (owner-approved 2026-10-17)"></figure></div></section>
+<section data-w="1280" data-m="light"><h2>Ready · 1280×800 · light</h2><p class="d">preview answered: the engine slip in the «الإيصال» region; «إغلاق» only (option A)</p><div class="pair"><figure><figcaption>Implementation (RT-659)</figcaption><img loading="lazy" src="rt659-Ready-1280x800.png" alt="Implementation (RT-659)"></figure><figure><figcaption>G6P-A-Ready 1280 (owner-approved 2026-10-17)</figcaption><img loading="lazy" src="../../visual-acceptance/G6P-Receipt-Preview/captures/G6P-A-Ready-1280-light.png" alt="G6P-A-Ready 1280 (owner-approved 2026-10-17)"></figure></div></section>
+<section data-w="1280" data-m="forced"><h2>Ready · 1280×800 · forced colours</h2><p class="d">preview answered: the engine slip in the «الإيصال» region; «إغلاق» only (option A)</p><div class="pair"><figure><figcaption>Implementation (RT-659)</figcaption><img loading="lazy" src="rt659-Ready-1280x800-forced.png" alt="Implementation (RT-659)"></figure><figure><figcaption>G6P-A-Ready 1280 (owner-approved 2026-10-17)</figcaption><img loading="lazy" src="../../visual-acceptance/G6P-Receipt-Preview/captures/G6P-A-Ready-1280-forced.png" alt="G6P-A-Ready 1280 (owner-approved 2026-10-17)"></figure></div></section>
+<section data-w="1024" data-m="light"><h2>Loading · 1024×768 · light</h2><p class="d">preview not answered yet: «جارٍ التحضير»</p><div class="pair"><figure><figcaption>Implementation (RT-659)</figcaption><img loading="lazy" src="rt659-Loading-1024x768.png" alt="Implementation (RT-659)"></figure><figure><figcaption>G6P-Loading 1024 (owner-approved 2026-10-17)</figcaption><img loading="lazy" src="../../visual-acceptance/G6P-Receipt-Preview/captures/G6P-Loading-1024-light.png" alt="G6P-Loading 1024 (owner-approved 2026-10-17)"></figure></div></section>
+<section data-w="1024" data-m="forced"><h2>Loading · 1024×768 · forced colours</h2><p class="d">preview not answered yet: «جارٍ التحضير»</p><div class="pair"><figure><figcaption>Implementation (RT-659)</figcaption><img loading="lazy" src="rt659-Loading-1024x768-forced.png" alt="Implementation (RT-659)"></figure><figure><figcaption>G6P-Loading 1024 (owner-approved 2026-10-17)</figcaption><img loading="lazy" src="../../visual-acceptance/G6P-Receipt-Preview/captures/G6P-Loading-1024-forced.png" alt="G6P-Loading 1024 (owner-approved 2026-10-17)"></figure></div></section>
+<section data-w="1280" data-m="light"><h2>Loading · 1280×800 · light</h2><p class="d">preview not answered yet: «جارٍ التحضير»</p><div class="pair"><figure><figcaption>Implementation (RT-659)</figcaption><img loading="lazy" src="rt659-Loading-1280x800.png" alt="Implementation (RT-659)"></figure><figure><figcaption>G6P-Loading 1280 (owner-approved 2026-10-17)</figcaption><img loading="lazy" src="../../visual-acceptance/G6P-Receipt-Preview/captures/G6P-Loading-1280-light.png" alt="G6P-Loading 1280 (owner-approved 2026-10-17)"></figure></div></section>
+<section data-w="1280" data-m="forced"><h2>Loading · 1280×800 · forced colours</h2><p class="d">preview not answered yet: «جارٍ التحضير»</p><div class="pair"><figure><figcaption>Implementation (RT-659)</figcaption><img loading="lazy" src="rt659-Loading-1280x800-forced.png" alt="Implementation (RT-659)"></figure><figure><figcaption>G6P-Loading 1280 (owner-approved 2026-10-17)</figcaption><img loading="lazy" src="../../visual-acceptance/G6P-Receipt-Preview/captures/G6P-Loading-1280-forced.png" alt="G6P-Loading 1280 (owner-approved 2026-10-17)"></figure></div></section>
+<section data-w="1024" data-m="light"><h2>Failed · 1024×768 · light</h2><p class="d">preview refused: «تعذّرت معاينة الإيصال»; still closable</p><div class="pair"><figure><figcaption>Implementation (RT-659)</figcaption><img loading="lazy" src="rt659-Failed-1024x768.png" alt="Implementation (RT-659)"></figure><figure><figcaption>G6P-Failed 1024 (owner-approved 2026-10-17)</figcaption><img loading="lazy" src="../../visual-acceptance/G6P-Receipt-Preview/captures/G6P-Failed-1024-light.png" alt="G6P-Failed 1024 (owner-approved 2026-10-17)"></figure></div></section>
+<section data-w="1024" data-m="forced"><h2>Failed · 1024×768 · forced colours</h2><p class="d">preview refused: «تعذّرت معاينة الإيصال»; still closable</p><div class="pair"><figure><figcaption>Implementation (RT-659)</figcaption><img loading="lazy" src="rt659-Failed-1024x768-forced.png" alt="Implementation (RT-659)"></figure><figure><figcaption>G6P-Failed 1024 (owner-approved 2026-10-17)</figcaption><img loading="lazy" src="../../visual-acceptance/G6P-Receipt-Preview/captures/G6P-Failed-1024-forced.png" alt="G6P-Failed 1024 (owner-approved 2026-10-17)"></figure></div></section>
+<section data-w="1280" data-m="light"><h2>Failed · 1280×800 · light</h2><p class="d">preview refused: «تعذّرت معاينة الإيصال»; still closable</p><div class="pair"><figure><figcaption>Implementation (RT-659)</figcaption><img loading="lazy" src="rt659-Failed-1280x800.png" alt="Implementation (RT-659)"></figure><figure><figcaption>G6P-Failed 1280 (owner-approved 2026-10-17)</figcaption><img loading="lazy" src="../../visual-acceptance/G6P-Receipt-Preview/captures/G6P-Failed-1280-light.png" alt="G6P-Failed 1280 (owner-approved 2026-10-17)"></figure></div></section>
+<section data-w="1280" data-m="forced"><h2>Failed · 1280×800 · forced colours</h2><p class="d">preview refused: «تعذّرت معاينة الإيصال»; still closable</p><div class="pair"><figure><figcaption>Implementation (RT-659)</figcaption><img loading="lazy" src="rt659-Failed-1280x800-forced.png" alt="Implementation (RT-659)"></figure><figure><figcaption>G6P-Failed 1280 (owner-approved 2026-10-17)</figcaption><img loading="lazy" src="../../visual-acceptance/G6P-Receipt-Preview/captures/G6P-Failed-1280-forced.png" alt="G6P-Failed 1280 (owner-approved 2026-10-17)"></figure></div></section>
+<script>
+const f = () => { const w = document.getElementById('w').value, m = document.getElementById('m').value;
+  document.querySelectorAll('section').forEach((s) => { s.hidden = (w !== 'all' && s.dataset.w !== w) || (m !== 'all' && s.dataset.m !== m); }); };
+['w', 'm'].forEach((id) => document.getElementById(id).addEventListener('change', f));
+</script>
+</body>
+</html>

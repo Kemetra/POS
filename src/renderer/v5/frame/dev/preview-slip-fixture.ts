@@ -1,0 +1,46 @@
+/**
+ * RT-659 — DEV-ONLY: the receipt engine's `preview` HTML for one sample cash
+ * sale (src/main/receipts/template-engine.ts on main@87238bc), kept verbatim,
+ * the same slip the G-6 addendum draws (G6P-Receipt-Preview/tools/slip-preview.html).
+ * The one-frame harness shows it in the preview dialog so the captures compare
+ * like for like. Only `OneFrameProof` imports it; Vite drops it from production.
+ */
+export const PREVIEW_SLIP_HTML = [
+  '<div class="receipt" dir="rtl">',
+  '<div class="rule">==========================================</div>',
+  '<div class="band" dir="rtl" style="text-align: right">صيدلية الشفاء</div>',
+  '<div class="band" dir="rtl" style="text-align: right">الفرع الرئيسي — شارع التحرير</div>',
+  '<div class="band" dir="ltr" style="text-align: left">Tax ID: 100123456789012</div>',
+  '<div class="rule">------------------------------------------</div>',
+  '<div class="band receipt-emph" dir="ltr" style="text-align: left">Sale # TERM-01-2026-10-15-000042</div>',
+  '<div class="band" dir="ltr" style="text-align: left">Receipt # TERM-01-2026-10-15-000042</div>',
+  '<div class="band" dir="ltr" style="text-align: left">Terminal: POS-03</div>',
+  '<div class="band" dir="rtl" style="text-align: right">Cashier: منى عبد الرحمن</div>',
+  '<div class="band" dir="ltr" style="text-align: left">2026-10-15 10:42</div>',
+  '<div class="rule">==========================================</div>',
+  '<div class="band" dir="rtl" style="text-align: right">العناصر</div>',
+  '<div class="rule">------------------------------------------</div>',
+  '<div class="band" dir="rtl" style="text-align: right">1× Augmentin 625mg box 14 tab</div>',
+  '<div class="band" dir="ltr" style="text-align: left">125.00 EGP</div>',
+  '<div class="band" dir="rtl" style="text-align: right">2× Paracetamol 500mg box 24 tab</div>',
+  '<div class="band" dir="ltr" style="text-align: left">45.50 EGP</div>',
+  '<div class="rule">------------------------------------------</div>',
+  '<div class="band" dir="ltr" style="text-align: left">Subtotal: 170.50 EGP</div>',
+  '<div class="rule">==========================================</div>',
+  '<div class="band" dir="rtl" style="text-align: right">طريقة الدفع</div>',
+  '<div class="rule">------------------------------------------</div>',
+  '<div class="band" dir="ltr" style="text-align: left">نقدًا — Cash   200.00 EGP</div>',
+  '<div class="band" dir="ltr" style="text-align: left">Change due — الباقي   29.50 EGP</div>',
+  '<div class="rule">==========================================</div>',
+  '<div class="band" dir="rtl" style="text-align: right">ضريبة القيمة المضافة</div>',
+  '<div class="rule">------------------------------------------</div>',
+  '<div class="band" dir="ltr" style="text-align: left">Tax ID: 100123456789012</div>',
+  '<div class="band" dir="ltr" style="text-align: left">VAT: 0.00 EGP</div>',
+  '<div class="band" dir="ltr" style="text-align: left">Subtotal (ex. VAT): 170.50 EGP</div>',
+  '<div class="band" dir="ltr" style="text-align: left">Total inc. VAT: 170.50 EGP</div>',
+  '<div class="rule">==========================================</div>',
+  '<div class="band" dir="ltr" style="text-align: center">شكرًا لتعاملكم معنا — Thank you</div>',
+  '<div class="band" dir="ltr" style="text-align: center">www.example.test</div>',
+  '<div class="rule">==========================================</div>',
+  '</div>',
+].join('\n');
