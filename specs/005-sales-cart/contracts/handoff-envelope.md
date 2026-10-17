@@ -111,7 +111,9 @@ The `cart.handoff` bridge handler, given a non-empty cart in state
 3. Verifies every line's `version` matches the client's last-known
    `version` for that line (US3-AS5).
 3a. **RT-28:** verifies every discount placeholder on the cart is *trusted*,
-    meaning written by RT-28 enforcement with a verified approver. A
+    meaning written by RT-28 enforcement with a verified approver (a
+    consumed `cart.discount.manual` approval, or a manager/admin session
+    under D2; RT-114 amendment 2026-10-17). A
     pre-RT-28 placeholder is untrusted even with a non-null
     `attribution_operator_id`. If any is untrusted, refuses with
     `unauthorized_discount`. No outbox row, no envelope, no state change and

@@ -524,9 +524,17 @@ the corresponding gate clearing:
   local-only; no new backend endpoints in 005's scope).
   **RT-28 exception (2026-09-27):** manager-only discounts add two
   Backend-Core dependencies that gate the RT-28 Implementation issue:
-  (1) an authentication-only manager verification contract that creates
-  no session, and (2) audit-catalogue and OpenAPI acceptance of
+  ~~(1) an authentication-only manager verification contract that creates
+  no session, and~~ (2) audit-catalogue and OpenAPI acceptance of
   `cart.discount.manager_authorized`. Neither is defined in this repo.
+  **RT-114 re-check (2026-10-17, RT-28 comment 11979):** dependency (1) is
+  retired. The credential is the terminal-enrolled Manager Approval PIN
+  verified locally (MA-1 RT-438, MA-2 RT-443); approver-eligibility
+  revalidation is RT-114's own work (MA-BC1 RT-492, MA-3). Dependency (2)
+  still applies, but only before POS syncs that category centrally: on
+  `main` the audit sync loop (`src/main/audit/audit-sync.ts`) is not wired
+  into the composition root, and the category is not yet in the POS
+  catalogue (`src/shared/audit/event-shape.ts`).
 - ❌ No payments / receipts / inventory / reports / analytics work begun.
 - ✅ S0–S4 complete and merged to main (T001–T091 done).
 - ✅ S5-a complete and merged to main (T092–T095 done via PR #166).

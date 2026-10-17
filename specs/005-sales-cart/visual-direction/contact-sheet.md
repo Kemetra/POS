@@ -6,7 +6,7 @@
 **Review date:** 2026-05-14
 **Status:** Signed off — see `review-record.md`
 
-> 🔁 **RT-28 amendment (2026-09-27):** Surface 6 now triggers for **every positive manual discount** (no threshold), and its credential is the manager's **identifier + password** (D1a), verified main-side by an authentication-only seam that creates no session. Offline the approval cannot complete, so the discount is refused. See `../spec.md` Amendment + FR-023 (revised). The generic-copy / no-manager-identity policy is unchanged.
+> 🔁 **RT-28 amendment (2026-09-27):** Surface 6 now triggers for **every positive manual discount** (no threshold), and its credential is the manager's **terminal-enrolled Manager Approval PIN** (RT-114 C1, MA-1 RT-438), verified main-side; the discount consumes a single-use `approval_id` for `cart.discount.manual` (RT-114 C7, MA-2 RT-443). Approval works offline within the credential's RT-114 C4 validity window (C5). *(RT-114 amendment, 2026-10-17; superseded:* ~~its credential is the manager's **identifier + password** (D1a), verified main-side by an authentication-only seam that creates no session. Offline the approval cannot complete, so the discount is refused.~~*)* **Open owner decision:** the RT-114 approval bridge offers approvers as an opaque handle plus a display name (C2), and the shipped V5 approval dialogs show that name; the S0 generic-only policy below forbids manager identity on the cashier screen. This amendment does not change the S0 policy; which rule governs Surface 6 for discounts is for the owner. See `../spec.md` Amendment + FR-023 (revised). The generic-copy / no-manager-identity policy is unchanged.
 
 **Constitution version pinned:** v1.5.1
 **Impeccable brief confirmed:** 2026-05-14 (shape brief approved; corrections OQ-1/OQ-4 locked)
@@ -281,8 +281,8 @@ credential in to approve.
 │                                         │
 │  This action needs a manager.           │  ← generic copy; no factor detail
 │                                         │
-│  Manager ID:  [___________________]     │  ← opaque identifier input
-│  Credential:  [___________________]     │  ← manager password (RT-28 D1a;
+│  Approver:    [___________________]     │  ← opaque approver_ref (RT-114)
+│  PIN:         [___________________]     │  ← Manager Approval PIN (RT-114 C1;
 │                                         │    masked, never echoed or logged)
 │  [Cancel]          [Approve]            │
 │           ← both buttons ≥44×44 px      │
@@ -294,11 +294,19 @@ credential in to approve.
 - Manager identity is **never displayed on the cashier screen** —
   not the display name, not the role, not any identifying label.
   The prompt is generically worded regardless of which manager signs in.
-- The credential is the manager's **identifier + password** (RT-28 D1a).
+- *(RT-114 amendment, 2026-10-17)* The credential is the approving
+  manager's **terminal-enrolled Manager Approval PIN** (RT-114 C1, MA-1).
+  It goes through the approval bridge (`approval.request`), is verified
+  main-side, and yields a single-use `approval_id` for
+  `cart.discount.manual` that the discount add consumes (C7, MA-2). The
+  cashier session is unchanged. Approval works offline within the
+  credential's C4 validity window (C5). Any failure shows a generic
+  "approval unavailable" outcome (C3) and the discount is not applied.
+  ~~The credential is the manager's **identifier + password** (RT-28 D1a).
   It is verified main-side by an authentication-only seam that creates no
   backend or local session and leaves the cashier session unchanged.
   Offline the approval cannot complete; the prompt shows a generic
-  "approval unavailable" outcome and the discount is not applied.
+  "approval unavailable" outcome and the discount is not applied.~~
 - On cancel: action is abandoned; no placeholder applied, no audit event.
 - On approve: manager attribution is recorded by the bridge; the audit
   record carries both the cashier (requester) and the manager (approver)
