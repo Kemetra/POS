@@ -1,0 +1,170 @@
+[
+  {
+    "walk": "flow",
+    "what": "the sale-number field has focus on load",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "walk": "flow",
+    "what": "Enter looks the sale up; focus moves to the step heading",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "walk": "flow",
+    "what": "Tab reaches «زيادة بنادول…» (the first enabled stepper)",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "walk": "flow",
+    "what": "Space picks one unit",
+    "ok": true,
+    "detail": "qty=1"
+  },
+  {
+    "walk": "flow",
+    "what": "Tab reaches «احسب مبلغ الاسترداد»",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "walk": "flow",
+    "what": "Enter quotes; focus moves to «ملخص الاسترداد»",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "walk": "flow",
+    "what": "Enter on the summary heading confirms nothing (D3)",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "walk": "flow",
+    "what": "Tab reaches «تأكيد الإرجاع»",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "walk": "flow",
+    "what": "Space confirms; focus moves to «نتيجة المرتجع»",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "walk": "flow",
+    "what": "Tab reaches «افتح الدرج واصرف النقد» before «مرتجع جديد»",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "walk": "flow",
+    "what": "Enter pays out; the region says it was recorded",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "walk": "flow",
+    "what": "Tab reaches «طباعة نسخة من الإيصال», then «مرتجع جديد»",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "walk": "flow",
+    "what": "Tab continues into the journal row actions",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "walk": "manual",
+    "what": "the sale-number field has focus on load",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "walk": "manual",
+    "what": "Enter looks the sale up; focus moves to the step heading",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "walk": "manual",
+    "what": "Tab reaches «زيادة بنادول…» (the first enabled stepper)",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "walk": "manual",
+    "what": "Space picks one unit",
+    "ok": true,
+    "detail": "qty=1"
+  },
+  {
+    "walk": "manual",
+    "what": "Tab reaches «احسب مبلغ الاسترداد»",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "walk": "manual",
+    "what": "Enter quotes; focus moves to «ملخص الاسترداد»",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "walk": "manual",
+    "what": "Enter on the summary heading confirms nothing (D3)",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "walk": "manual",
+    "what": "Tab reaches «تأكيد الإرجاع»",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "walk": "manual",
+    "what": "the drawer did not open: Tab reaches «صرفتُ المبلغ يدويًا»",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "walk": "manual",
+    "what": "the confirmation focuses «إلغاء» first",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "walk": "manual",
+    "what": "«إلغاء» goes back with nothing recorded",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "walk": "journal",
+    "what": "Tab reaches «تحقّق من غير المؤكدة»",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "walk": "journal",
+    "what": "Tab reaches «صرف TERM-01-2026-10-17-000040»",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "walk": "journal",
+    "what": "Enter opens that return's payout; focus on «نتيجة المرتجع»",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "walk": "refusal",
+    "what": "the refusal is an alert; focus stays in the field",
+    "ok": true,
+    "detail": ""
+  }
+]
