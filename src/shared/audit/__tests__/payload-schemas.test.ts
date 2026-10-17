@@ -45,10 +45,32 @@ describe('audit/payload-schemas (T049)', () => {
       'cart.handoff_to_payment',
       'cart.cancel.post_handoff',
       'cart.discount.above_threshold',
+      // RT-608 (RT-28 D3)
+      'cart.discount.manager_authorized',
       'cart.discarded_on_session_end',
     ];
     for (const key of mapKeys) {
       expect(AUDIT_ACTION_CATEGORIES).toContain(key);
+    }
+  });
+
+  it('RT-608: CartDiscountManagerAuthorizedPayload carries ids and the reason code, never a credential', () => {
+    const approved: AuditPayloadMap['cart.discount.manager_authorized'] = {
+      cart_id: 'cart-1',
+      cart_line_id: 'line-1',
+      placeholder_id: 'ph-1',
+      approval_id: 'appr-1',
+      reason_code: 'loyal_customer',
+    };
+    const direct: AuditPayloadMap['cart.discount.manager_authorized'] = {
+      cart_id: 'cart-1',
+      cart_line_id: 'line-1',
+      placeholder_id: 'ph-1',
+    };
+    for (const payload of [approved, direct]) {
+      for (const forbidden of ['pin', 'pin_hash', 'password', 'approver_ref', 'display_name']) {
+        expect(payload).not.toHaveProperty(forbidden);
+      }
     }
   });
 

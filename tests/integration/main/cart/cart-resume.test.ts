@@ -2,6 +2,8 @@
  * RT-440 (PK-2, spec 024 §3.3 / §3.4 / K3 / K4 / R-1 / R-3 / R-6 / R-7) —
  * `cart.previewResume` and `cart.resume` over every migration.
  */
+import { createHash } from 'node:crypto';
+
 import { beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
 import {
@@ -136,11 +138,71 @@ describe('cart.previewResume — revalidation on every resume (K4)', () => {
     expect(preview).toMatchObject({
       kind: 'preview',
       changes: [{ line_id: lineId(IBUP), old_unit_minor: 200, new_unit_minor: 260 }],
-      unavailable: [lineId(AMOX)],
+      unavailable: [{ line_id: lineId(AMOX) }],
     });
     expect(preview.kind === 'preview' && preview.diff_token).toMatch(/^[0-9a-f]{32}$/);
     expect(cartOf(cart)?.parked_at).toBe(T0);
     expect(linesOf(cart).map((l) => l.unit_price_minor)).toEqual([450, 200, 150]);
+  });
+
+  it('names each changed and unavailable line with its stored name and quantity (RT-610)', async () => {
+    const cart = await parkedSale([PARA, [IBUP, 2], [AMOX, 3]]);
+    w.catalogue.set(IBUP, { kind: 'price', unit_price_minor: 260 });
+    w.catalogue.set(AMOX, { kind: 'gone' });
+    const stored = (item: string) =>
+      row<{ line_id: string; display_name: string; quantity: number }>(
+        w,
+        `SELECT line_id, display_name, quantity FROM cart_lines WHERE item_ref = ?`,
+        [item],
+      );
+    const ibup = stored(IBUP);
+    const amox = stored(AMOX);
+    const logsBefore = w.logs.length;
+
+    const preview = w.parks.previewResume({ cart_id: cart });
+    if (preview.kind !== 'preview') throw new Error(`preview refused: ${preview.reason}`);
+
+    expect(preview.changes).toEqual([
+      {
+        line_id: ibup?.line_id,
+        display_name: ibup?.display_name,
+        quantity: 2,
+        old_unit_minor: 200,
+        new_unit_minor: 260,
+      },
+    ]);
+    expect(preview.unavailable).toEqual([
+      { line_id: amox?.line_id, display_name: amox?.display_name, quantity: 3 },
+    ]);
+    expect(ibup?.display_name).not.toBe('');
+    // Product name and quantity only: no item_ref, money totals or identity.
+    expect(Object.keys(preview).sort()).toEqual(['changes', 'diff_token', 'kind', 'unavailable']);
+    expect(JSON.stringify(preview)).not.toContain(IBUP);
+    expect(JSON.stringify(preview)).not.toContain(AMOX);
+    // The names reach the renderer only; the preview logs nothing about them.
+    expect(w.logs.slice(logsBefore).join('\n')).not.toContain(ibup?.display_name ?? '-');
+  });
+
+  it('keeps the diff_token a digest of line ids and prices only (RT-610)', async () => {
+    const cart = await parkedSale([PARA, [IBUP, 2], AMOX]);
+    w.catalogue.set(IBUP, { kind: 'price', unit_price_minor: 260 });
+    w.catalogue.set(AMOX, { kind: 'gone' });
+    const id = (item: string): string =>
+      row<{ line_id: string }>(w, `SELECT line_id FROM cart_lines WHERE item_ref = ?`, [item])
+        ?.line_id ?? '';
+    const shown = { changes: [[id(IBUP), 200, 260]], unavailable: [id(AMOX)] };
+    const expected = createHash('sha256').update(JSON.stringify(shown)).digest('hex').slice(0, 32);
+
+    expect(token(cart)).toBe(expected);
+  });
+
+  it('a preview with nothing to review stays empty', async () => {
+    const cart = await parkedSale([PARA, IBUP]);
+    expect(w.parks.previewResume({ cart_id: cart })).toMatchObject({
+      kind: 'preview',
+      changes: [],
+      unavailable: [],
+    });
   });
 
   it('refuses catalogue_unavailable when the catalogue cannot be read', async () => {

@@ -83,6 +83,8 @@ async function fixture(): Promise<Fixture> {
     clock: advancingClock(),
     // Contract since the §A4 review: snapshot needs the payments record.
     cartPaymentStatus: () => 'none',
+    // RT-608: a cashier's discount needs a consumed manager approval.
+    approvals: { consume: () => ({ kind: 'consumed', approverUserId: 'mgr-approver' }) as const },
   });
   const c = await handlers.create({ idempotency_key: 'k-create' });
   if (c.kind !== 'ok') throw new Error('create failed');
@@ -230,6 +232,7 @@ describe('cart.snapshot — faithful, display-safe projection', () => {
       cart_id: f.cart_id,
       line_id: f.lineIds[0] ?? '',
       placeholder_kind: 'percent_off_below_threshold',
+      approval_id: 'appr-1',
       idempotency_key: 'k-disc',
     });
     expect(added.kind).toBe('ok');

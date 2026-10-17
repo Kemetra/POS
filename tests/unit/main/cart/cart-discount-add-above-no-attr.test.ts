@@ -1,22 +1,14 @@
 /**
- * T060 — cart.discountPlaceholders.add above threshold WITHOUT manager
- *        attribution (S3 contract).
+ * T060 — cart.discountPlaceholders.add on a cashier session WITHOUT manager
+ *        authority (S3 contract, revised by RT-608).
  *
- * When `placeholder_kind` signals an above-threshold discount (e.g.,
- * 'percent_20') and no `attribution_operator_id` is provided, the handler
- * MUST refuse with `reason: 'manager_attribution_required'`.
+ * RT-608 (RT-28, spec 005 FR-023 revised): there is no threshold. Any
+ * discount a cashier adds without a consumed `cart.discount.manual` approval
+ * (`approval_id`) is refused `manager_attribution_required` and writes
+ * nothing. These tests use 'percent_20'; the same refusal for 'percent_5' and
+ * 'percent_1' is in `cart-discount-add-below.test.ts`.
  *
- * This is the "cashier requests above-threshold discount but forgets to
- * trigger manager confirmation" path (spec FR-023).
- *
- * Tests are RED until T069 (discount handler wiring) — currently the
- * handler returns 'not_implemented', not 'manager_attribution_required'.
- * Gate-layer refusals (no session, wrong cart) are GREEN.
- *
- * Convention: 'percent_20' = above-threshold; 'percent_5' = below-threshold.
- * The S3 handler will evaluate this based on the tenant configuration; for
- * test purposes the convention is established in the placeholder_kind string.
- */
+ * Gate-layer refusals (no session, wrong cart) are unchanged. */
 
 import { describe, it, expect, beforeAll, beforeEach } from 'vitest';
 import initSqlJs, { type Database as SqlJsDatabase, type SqlJsStatic } from 'sql.js';

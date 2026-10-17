@@ -88,6 +88,23 @@ describe('preload cart — channel routing', () => {
     );
   });
 
+  it('RT-608: discountPlaceholders.add() forwards a cashier approval_id (and no credential field exists)', async () => {
+    ipcRendererInvoke.mockResolvedValueOnce({ kind: 'refused', reason: 'approval_invalid' });
+    const cart = await importCart();
+    const req = {
+      cart_id: 'c1',
+      line_id: 'l1',
+      placeholder_kind: 'percent_5',
+      idempotency_key: 'k6b',
+      approval_id: 'appr-1',
+    };
+    await cart.discountPlaceholders.add(req);
+    expect(ipcRendererInvoke).toHaveBeenCalledWith(
+      CART_IPC_CHANNELS.DISCOUNT_PLACEHOLDERS_ADD,
+      req,
+    );
+  });
+
   it('discountPlaceholders.remove() invokes ipcRenderer with CART_IPC_CHANNELS.DISCOUNT_PLACEHOLDERS_REMOVE and the request', async () => {
     ipcRendererInvoke.mockResolvedValueOnce({ kind: 'refused', reason: 'not_implemented' });
     const cart = await importCart();

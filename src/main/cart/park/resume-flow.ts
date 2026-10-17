@@ -122,7 +122,7 @@ function applyResume(
       subtotal_minor: change.new_subtotal_minor,
     });
   }
-  for (const line_id of diff.unavailable) {
+  for (const { line_id } of diff.unavailable) {
     deps.store.softRemove({ ...base, line_id, action_id: randomUUID() });
   }
   deps.store.settleTotals({ cart_id, key, at: when });

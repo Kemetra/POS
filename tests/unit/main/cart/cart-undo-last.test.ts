@@ -106,6 +106,8 @@ async function fixture(): Promise<Fixture> {
       auditEmitter,
       cartPaymentStatus: () => 'none',
       clock: opts.clock ?? ((): Date => new Date('2026-10-10T10:00:00.000Z')),
+      // RT-608: a cashier's discount needs a consumed manager approval.
+      approvals: { consume: () => ({ kind: 'consumed', approverUserId: 'mgr-approver' }) as const },
     });
   const handlers = make();
   const c = await handlers.create({ idempotency_key: 'c-1' });
@@ -266,6 +268,7 @@ describe('cart.undoLast — exact inverses (RT-245)', () => {
       cart_id: f.cart_id,
       line_id: a.line_id,
       placeholder_kind: 'percent_5',
+      approval_id: 'appr-1',
       idempotency_key: 'd-1',
     });
     expect(dp.kind).toBe('ok');
@@ -315,7 +318,15 @@ describe('cart.undoLast — exact inverses (RT-245)', () => {
       undo_of_action_id: 'r-1',
       effect: 'restored',
     });
-    expect(auditCount(f.db)).toBe(0);
+    // The undo audits nothing; the one row is the discount's own RT-608
+    // `cart.discount.manager_authorized` authority record.
+    expect(auditCount(f.db)).toBe(1);
+    expect(
+      scalar(
+        f.db,
+        `SELECT COUNT(*) FROM audit_events WHERE action_category <> 'cart.discount.manager_authorized'`,
+      ),
+    ).toBe(0);
   });
 
   it('restoring the only line keeps the cart `editing` and recomputes the subtotal', async () => {
@@ -517,6 +528,7 @@ describe('cart.undoLast — eligibility refusals leave no writes', () => {
       cart_id: f.cart_id,
       line_id: a.line_id,
       placeholder_kind: 'percent_5',
+      approval_id: 'appr-1',
       idempotency_key: 'd-1',
     });
     await expectUnavailable(f, 'a-1');

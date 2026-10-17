@@ -391,7 +391,11 @@ describe('consume — one refusal per binding (RT-443 acceptance)', () => {
 
   it('the exact binding consumes', async () => {
     const id = await approved();
-    expect(consumeWith(id)).toEqual({ kind: 'consumed', approverUserId: MANAGER.userId });
+    expect(consumeWith(id)).toEqual({
+      kind: 'consumed',
+      approverUserId: MANAGER.userId,
+      reasonCode: 'customer_left',
+    });
   });
 
   it('a wrong kind is approval_invalid and stays unconsumed', async () => {

@@ -76,7 +76,8 @@ export const cart: CartBridgeAPI = {
 
   snapshot: (req: CartSnapshotRequest) => ipcRenderer.invoke(CART_IPC_CHANNELS.SNAPSHOT, req),
 
-  // RT-440 (PK-2, spec 024 §3) — Park v1.
+  // RT-440 (PK-2, spec 024 §3) — Park v1. Responses pass through as main built
+  // them (RT-610: `previewResume` lines carry the stored name and quantity).
   parked: {
     park: (req: CartParkRequest) => ipcRenderer.invoke(CART_PARK_IPC_CHANNELS.PARK, req),
     listParked: () => ipcRenderer.invoke(CART_PARK_IPC_CHANNELS.LIST_PARKED),

@@ -161,8 +161,10 @@ function asLinesSetNoteReq(value: unknown): CartLinesSetNoteRequest | null {
 /**
  * Discount placeholder add. Builds a FRESH object with only the contract
  * fields: a renderer-supplied `attribution_operator_id` is deliberately
- * dropped (RT-183), so the renderer can never choose the recorded approving
- * supervisor. Main derives the approver from the authenticated session.
+ * dropped (RT-183, RT-114 C10), so the renderer can never choose the recorded
+ * approving supervisor. RT-608: a cashier carries an `approval_id` from
+ * `approval.request` instead, which main verifies and consumes; when present
+ * it must be a bounded id.
  */
 function asDiscountAddReq(value: unknown): CartDiscountPlaceholdersAddRequest | null {
   if (typeof value !== 'object' || value === null) return null;
@@ -175,12 +177,15 @@ function asDiscountAddReq(value: unknown): CartDiscountPlaceholdersAddRequest | 
   ) {
     return null;
   }
-  return {
+  const req = {
     cart_id: v['cart_id'],
     line_id: v['line_id'],
     placeholder_kind: v['placeholder_kind'],
     idempotency_key: v['idempotency_key'],
   };
+  const approvalId = v['approval_id'];
+  if (approvalId === undefined) return req;
+  return isBoundedId(approvalId) ? { ...req, approval_id: approvalId } : null;
 }
 
 function asDiscountRemoveReq(value: unknown): CartDiscountPlaceholdersRemoveRequest | null {

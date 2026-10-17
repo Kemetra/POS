@@ -6,9 +6,9 @@
  * `contracts/bridge-api.md`, RT-28 revision). The approver is derived in main
  * from the authenticated operator session only:
  *   - manager / admin session → approves its own discount (RT-28 D2);
- *   - cashier session → an above-threshold add is refused
- *     `manager_attribution_required` (fail closed: the main-held RT-114
- *     approval reference does not exist yet), whatever id the renderer sends.
+ *   - cashier session → ANY add (RT-608: no threshold) needs a consumed
+ *     `cart.discount.manual` approval (`approval_id`); without one it is
+ *     refused `manager_attribution_required`, whatever id the renderer sends.
  *
  * A scripted renderer can still put the key on the wire (the preload forwards
  * the object as-is), so these tests smuggle it in and assert it is ignored at
@@ -137,28 +137,18 @@ const discountOutbox = (f: Fixture): Record<string, unknown>[] =>
   );
 
 describe('RT-183 — cashier session cannot assert a supervisor', () => {
-  it('refuses an above-threshold add that names a supervisor, writing nothing', async () => {
-    const f = await newCartWithLine(makeSession('cashier', 'cashier-1'));
-    const res = await f.handlers.discountPlaceholdersAdd(smuggledAdd(f, 'percent_20', 'dp-1'));
+  it.each([['percent_20'], ['percent_5']])(
+    'refuses a %s add that names a supervisor, writing nothing (no threshold)',
+    async (kind) => {
+      const f = await newCartWithLine(makeSession('cashier', 'cashier-1'));
+      const res = await f.handlers.discountPlaceholdersAdd(smuggledAdd(f, kind, 'dp-1'));
 
-    expect(res).toEqual({ kind: 'refused', reason: 'manager_attribution_required' });
-    expect(placeholders(f)).toHaveLength(0);
-    expect(discountOutbox(f)).toHaveLength(0);
-    expect(f.emitFn).not.toHaveBeenCalled();
-  });
-
-  it('does not record a renderer-supplied id on a below-threshold add', async () => {
-    const f = await newCartWithLine(makeSession('cashier', 'cashier-1'));
-    const res = await f.handlers.discountPlaceholdersAdd(smuggledAdd(f, 'percent_5', 'dp-2'));
-
-    expect(res.kind).toBe('ok');
-    const [row] = placeholders(f);
-    expect(row?.['attribution_operator_id']).toBeNull();
-    const [outbox] = discountOutbox(f);
-    expect(outbox?.['acting_operator_id']).toBe('cashier-1');
-    expect(outbox?.['attribution_operator_id']).toBeNull();
-    expect(f.emitFn).not.toHaveBeenCalled();
-  });
+      expect(res).toEqual({ kind: 'refused', reason: 'manager_attribution_required' });
+      expect(placeholders(f)).toHaveLength(0);
+      expect(discountOutbox(f)).toHaveLength(0);
+      expect(f.emitFn).not.toHaveBeenCalled();
+    },
+  );
 });
 
 describe.each(['manager', 'admin'] as const)(
@@ -181,13 +171,13 @@ describe.each(['manager', 'admin'] as const)(
 
       expect(f.emitFn).toHaveBeenCalledOnce();
       const event = f.emitFn.mock.calls[0]?.[0] as AuditEvent;
-      expect(event.action_category).toBe('cart.discount.above_threshold');
+      expect(event.action_category).toBe('cart.discount.manager_authorized');
       expect(event.acting_operator_id).toBe(`${role}-1`);
       expect(event.approving_supervisor_id).toBe(`${role}-1`);
       expect(JSON.stringify(event)).not.toContain(SMUGGLED_SUPERVISOR);
     });
 
-    it('applies an above-threshold add without any attribution field', async () => {
+    it('applies an add without any attribution field', async () => {
       const f = await newCartWithLine(makeSession(role, `${role}-1`));
       const res = await f.handlers.discountPlaceholdersAdd({
         cart_id: f.cart_id,
@@ -237,5 +227,38 @@ describe('RT-183 — IPC parser drops attribution_operator_id', () => {
       idempotency_key: 'k',
     });
     expect(forwarded).not.toHaveProperty('attribution_operator_id');
+  });
+
+  it('RT-608: forwards a bounded approval_id and refuses a malformed one', async () => {
+    const registered = new Map<string, (e: IpcMainInvokeEvent, ...a: unknown[]) => unknown>();
+    const ipcMain = {
+      handle: (channel: string, fn: (e: IpcMainInvokeEvent, ...a: unknown[]) => unknown) => {
+        registered.set(channel, fn);
+      },
+    } as unknown as IpcMain;
+    const bridge = new CartBridgeHandlers({
+      getCurrentSession: () => null,
+      getTerminalId: () => null,
+    });
+    const spy = vi.spyOn(bridge, 'discountPlaceholdersAdd');
+    registerCartHandlers(ipcMain, { handlers: bridge });
+    const handler = registered.get(CART_IPC_CHANNELS.DISCOUNT_PLACEHOLDERS_ADD);
+    if (handler === undefined) throw new Error('missing DISCOUNT_PLACEHOLDERS_ADD');
+    const base = {
+      cart_id: 'c',
+      line_id: 'l',
+      placeholder_kind: 'percent_20',
+      idempotency_key: 'k',
+    };
+
+    await handler({} as IpcMainInvokeEvent, { ...base, approval_id: 'appr-1' });
+    expect(spy.mock.calls[0]?.[0]).toEqual({ ...base, approval_id: 'appr-1' });
+
+    for (const bad of [42, '', 'has space', 'x'.repeat(129), { id: 'appr' }]) {
+      await expect(
+        handler({} as IpcMainInvokeEvent, { ...base, approval_id: bad }),
+      ).resolves.toMatchObject({ kind: 'refused' });
+    }
+    expect(spy).toHaveBeenCalledOnce();
   });
 });

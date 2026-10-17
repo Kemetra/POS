@@ -13,7 +13,7 @@
  */
 import { createHash } from 'node:crypto';
 
-import type { ResumePriceChange } from '../../../shared/cart/park-types.js';
+import type { ResumePriceChange, ResumeUnavailableLine } from '../../../shared/cart/park-types.js';
 import { computeLineSubtotal, LineSubtotalError } from '../line-subtotal.js';
 
 /** The current local price of an item, as the catalogue read model answers it. */
@@ -27,6 +27,7 @@ export type PriceLookup = (tenantId: string, itemRef: string) => PriceAnswer;
 export interface ParkedLine {
   line_id: string;
   item_ref: string;
+  display_name: string;
   quantity: number;
   unit_price_minor: number;
 }
@@ -38,7 +39,7 @@ export interface PlannedReprice extends ResumePriceChange {
 
 export interface ResumeDiff {
   changes: PlannedReprice[];
-  unavailable: string[];
+  unavailable: ResumeUnavailableLine[];
   diff_token: string;
 }
 
@@ -46,11 +47,18 @@ export type ResumeDiffResult =
   | { kind: 'diff'; diff: ResumeDiff }
   | { kind: 'catalogue_unavailable' };
 
-/** Opaque digest of what the cashier is shown: the changes and the removals. */
-function tokenOf(changes: readonly ResumePriceChange[], unavailable: readonly string[]): string {
+/**
+ * Opaque digest of what the cashier accepts: the price changes and the
+ * removals, by line id. The name and quantity are display only (RT-610) and
+ * stay out of it, so the token is the same as before they were shown.
+ */
+function tokenOf(
+  changes: readonly ResumePriceChange[],
+  unavailable: readonly ResumeUnavailableLine[],
+): string {
   const shown = {
     changes: changes.map((c) => [c.line_id, c.old_unit_minor, c.new_unit_minor]),
-    unavailable,
+    unavailable: unavailable.map((u) => u.line_id),
   };
   return createHash('sha256').update(JSON.stringify(shown)).digest('hex').slice(0, 32);
 }
@@ -73,12 +81,16 @@ export function computeResumeDiff(
 ): ResumeDiffResult {
   const ordered = [...lines].sort((a, b) => a.line_id.localeCompare(b.line_id));
   const changes: PlannedReprice[] = [];
-  const unavailable: string[] = [];
+  const unavailable: ResumeUnavailableLine[] = [];
   for (const line of ordered) {
     const answer = lookup(tenantId, line.item_ref);
     if (answer.kind === 'unavailable') return { kind: 'catalogue_unavailable' };
     if (answer.kind === 'gone') {
-      unavailable.push(line.line_id);
+      unavailable.push({
+        line_id: line.line_id,
+        display_name: line.display_name,
+        quantity: line.quantity,
+      });
       continue;
     }
     if (answer.unit_price_minor === line.unit_price_minor) continue;
@@ -86,6 +98,8 @@ export function computeResumeDiff(
     if (subtotal === null) return { kind: 'catalogue_unavailable' };
     changes.push({
       line_id: line.line_id,
+      display_name: line.display_name,
+      quantity: line.quantity,
       old_unit_minor: line.unit_price_minor,
       new_unit_minor: answer.unit_price_minor,
       new_subtotal_minor: subtotal,

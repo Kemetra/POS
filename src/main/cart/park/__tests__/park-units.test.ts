@@ -50,6 +50,7 @@ describe('hashRequest (R-7)', () => {
 const line = (line_id: string, item_ref: string, unit: number, quantity = 1) => ({
   line_id,
   item_ref,
+  display_name: `Product ${item_ref}`,
   quantity,
   unit_price_minor: unit,
 });
@@ -73,9 +74,16 @@ describe('computeResumeDiff (§3.3)', () => {
     if (result.kind !== 'diff') throw new Error('expected a diff');
     expect(result.diff).toMatchObject({
       changes: [
-        { line_id: 'l2', old_unit_minor: 100, new_unit_minor: 120, new_subtotal_minor: 360 },
+        {
+          line_id: 'l2',
+          display_name: 'Product A',
+          quantity: 3,
+          old_unit_minor: 100,
+          new_unit_minor: 120,
+          new_subtotal_minor: 360,
+        },
       ],
-      unavailable: ['l1'],
+      unavailable: [{ line_id: 'l1', display_name: 'Product B', quantity: 1 }],
     });
     expect(result.diff.diff_token).toMatch(/^[0-9a-f]{32}$/);
   });
