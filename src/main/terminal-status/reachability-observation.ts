@@ -39,9 +39,11 @@ const BACKEND_CORE_4XX: ReadonlySet<number> = new Set([401, 403, 404, 409, 422])
 export function classifyObservation(observation: ReachabilityObservation): ObservationClass {
   if (observation.kind === 'transport_fault') return 'transport_fault';
   const { status } = observation;
-  if (status >= 200 && status < 300) return 'reachable';
+  const statusClass = Math.floor(status / 100);
+  if (statusClass === 2) return 'reachable';
   if (BACKEND_CORE_4XX.has(status)) return 'reachable';
-  if (status === 429 || (status >= 500 && status < 600)) return 'server_failure';
+  if (statusClass === 5) return 'server_failure';
+  if (status === 429) return 'server_failure';
   return 'ignored';
 }
 

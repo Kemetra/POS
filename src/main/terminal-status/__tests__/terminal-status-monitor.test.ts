@@ -16,6 +16,7 @@ import {
   TERMINAL_STATUS_TRANSITION_LOG,
   createTerminalStatusMonitor,
   logTerminalStatusTransition,
+  type ConnectionStateCode,
   type ConnectionTransition,
   type ReachabilityObservation,
 } from '../terminal-status-monitor.js';
@@ -151,110 +152,142 @@ describe('RT-601 TerminalStatusMonitor — K = 2 to leave online', () => {
   });
 });
 
-describe('RT-601 TerminalStatusMonitor — 5 s recovery hold', () => {
-  function offline() {
-    const h = online();
-    h.monitor.observe(FAULT);
-    h.monitor.observe(FAULT);
-    h.transitions.length = 0;
-    return h;
+/** A step: an observation, or a number of milliseconds to advance before a tick. */
+type Step = ReachabilityObservation | number;
+
+/** Drive a monitor to `offline` (two faults) and clear the recorded transitions. */
+function offline() {
+  const h = online();
+  h.monitor.observe(FAULT);
+  h.monitor.observe(FAULT);
+  h.transitions.length = 0;
+  return h;
+}
+
+const START = { online, offline } as const;
+
+interface Scenario {
+  name: string;
+  from: keyof typeof START;
+  steps: Step[];
+  expected: ConnectionStateCode;
+}
+
+function play(scenario: Scenario): ReturnType<typeof harness> {
+  const h = START[scenario.from]();
+  for (const step of scenario.steps) {
+    if (typeof step === 'number') {
+      h.advance(step);
+      h.monitor.tick();
+    } else {
+      h.monitor.observe(step);
+    }
   }
+  return h;
+}
 
-  it('a qualifying answer while offline does not show online at once', () => {
-    const { monitor, transitions } = offline();
-    monitor.observe(OK);
-    expect(monitor.snapshot().connection).toBe('offline');
-    expect(transitions).toEqual([]);
+describe('RT-601 TerminalStatusMonitor — 5 s recovery hold', () => {
+  it.each<Scenario>([
+    {
+      name: 'an answer while offline does not show online at once',
+      from: 'offline',
+      steps: [OK],
+      expected: 'offline',
+    },
+    {
+      name: 'the hold has not elapsed at 4.999 s',
+      from: 'offline',
+      steps: [OK, 4_999],
+      expected: 'offline',
+    },
+    {
+      name: 'online once the hold has elapsed (on tick)',
+      from: 'offline',
+      steps: [OK, 4_999, 1],
+      expected: 'online',
+    },
+    {
+      name: 'a later answer inside the hold does not restart it early',
+      from: 'offline',
+      steps: [OK, 4_000, OK],
+      expected: 'offline',
+    },
+    {
+      name: 'a bad observation during the hold cancels it',
+      from: 'offline',
+      steps: [OK, 2_000, FAULT, 4_000],
+      expected: 'offline',
+    },
+    {
+      name: 'degraded holds after an answer',
+      from: 'online',
+      steps: [EDGE_521, EDGE_521, OK],
+      expected: 'degraded',
+    },
+    {
+      name: 'degraded → online also waits for the hold',
+      from: 'online',
+      steps: [EDGE_521, EDGE_521, OK, 5_000],
+      expected: 'online',
+    },
+  ])('$name', (scenario) => {
+    expect(play(scenario).monitor.snapshot().connection).toBe(scenario.expected);
   });
 
-  it('records the contact during the hold', () => {
-    const { monitor, advance } = offline();
-    advance(1_000);
-    monitor.observe(OK);
-    expect(monitor.snapshot().lastContactAt).toBe('2026-10-17T12:00:01.000Z');
+  it('a later answer after the hold (no tick in between) also completes it', () => {
+    const h = offline();
+    h.monitor.observe(OK);
+    h.advance(5_000);
+    h.monitor.observe(OK);
+    expect(h.transitions).toEqual([{ from: 'offline', to: 'online' }]);
   });
 
-  it('becomes online once the hold has elapsed (on tick)', () => {
-    const { monitor, transitions, advance } = offline();
-    monitor.observe(OK);
-    advance(4_999);
-    monitor.tick();
-    expect(monitor.snapshot().connection).toBe('offline');
-    advance(1);
-    monitor.tick();
-    expect(monitor.snapshot().connection).toBe('online');
-    expect(transitions).toEqual([{ from: 'offline', to: 'online' }]);
-  });
-
-  it('becomes online on a later answer after the hold', () => {
-    const { monitor, advance } = offline();
-    monitor.observe(OK);
-    advance(5_000);
-    monitor.observe(OK);
-    expect(monitor.snapshot().connection).toBe('online');
-  });
-
-  it('a bad observation during the hold cancels it', () => {
-    const { monitor, advance } = offline();
-    monitor.observe(OK);
-    advance(2_000);
-    monitor.observe(FAULT);
-    advance(4_000);
-    monitor.tick();
-    expect(monitor.snapshot().connection).toBe('offline');
-  });
-
-  it('degraded → online also waits for the hold', () => {
-    const { monitor, advance } = online();
-    monitor.observe(EDGE_521);
-    monitor.observe(EDGE_521);
-    monitor.observe(OK);
-    expect(monitor.snapshot().connection).toBe('degraded');
-    advance(5_000);
-    monitor.tick();
-    expect(monitor.snapshot().connection).toBe('online');
+  it('records the contact during the hold, and reports the recovery once', () => {
+    const h = play({ name: '', from: 'offline', steps: [1_000, OK, 5_000], expected: 'online' });
+    expect(h.monitor.snapshot().lastContactAt).toBe('2026-10-17T12:00:01.000Z');
+    expect(h.transitions).toEqual([{ from: 'offline', to: 'online' }]);
   });
 });
 
 describe('RT-601 TerminalStatusMonitor — freshness window W', () => {
-  it('online with no qualifying answer for W → checking (no inertia)', () => {
-    const { monitor, transitions, advance } = online();
-    advance(29_999);
-    monitor.tick();
-    expect(monitor.snapshot().connection).toBe('online');
-    advance(1);
-    monitor.tick();
-    expect(monitor.snapshot().connection).toBe('checking');
-    expect(transitions).toEqual([{ from: 'online', to: 'checking' }]);
+  it.each<Scenario>([
+    {
+      name: 'online is still fresh just inside W',
+      from: 'online',
+      steps: [29_999],
+      expected: 'online',
+    },
+    {
+      name: 'online with no answer for W → checking (no inertia)',
+      from: 'online',
+      steps: [30_000],
+      expected: 'checking',
+    },
+    {
+      name: 'a single fault does not keep online fresh',
+      from: 'online',
+      steps: [25_000, FAULT, 5_000],
+      expected: 'checking',
+    },
+    {
+      name: 'offline with no evidence for W → checking',
+      from: 'offline',
+      steps: [30_000],
+      expected: 'checking',
+    },
+    {
+      name: 'continued faults keep offline',
+      from: 'offline',
+      steps: [20_000, FAULT, 20_000],
+      expected: 'offline',
+    },
+  ])('$name', (scenario) => {
+    expect(play(scenario).monitor.snapshot().connection).toBe(scenario.expected);
   });
 
-  it('a single fault does not keep online fresh: W counts from the last contact', () => {
-    const { monitor, advance } = online();
-    advance(25_000);
-    monitor.observe(FAULT);
-    advance(5_000);
-    monitor.tick();
-    expect(monitor.snapshot().connection).toBe('checking');
-  });
-
-  it('offline with no evidence for W → checking', () => {
-    const { monitor, advance } = online();
-    monitor.observe(FAULT);
-    monitor.observe(FAULT);
-    advance(30_000);
-    monitor.tick();
-    expect(monitor.snapshot().connection).toBe('checking');
-  });
-
-  it('continued faults keep offline', () => {
-    const { monitor, advance } = online();
-    monitor.observe(FAULT);
-    monitor.observe(FAULT);
-    advance(20_000);
-    monitor.observe(FAULT);
-    advance(20_000);
-    monitor.tick();
-    expect(monitor.snapshot().connection).toBe('offline');
+  it('logs the expiry as online → checking', () => {
+    const h = play({ name: '', from: 'online', steps: [30_000], expected: 'checking' });
+    expect(h.transitions).toEqual([{ from: 'online', to: 'checking' }]);
   });
 
   it('expiry is also applied when the snapshot is read', () => {

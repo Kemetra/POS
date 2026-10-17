@@ -41,64 +41,55 @@ describe('RT-601 classifyObservation', () => {
   });
 });
 
+/** Run one call through the seam; returns what the observer saw and the outcome. */
+async function observeOnce(
+  inner: FetchLike,
+  observer?: (o: ReachabilityObservation) => void,
+  init?: RequestInit,
+): Promise<{ seen: ReachabilityObservation[]; outcome: PromiseSettledResult<Response> }> {
+  const seen: ReachabilityObservation[] = [];
+  const observed = withReachabilityObservation(inner, observer ?? ((o) => seen.push(o)));
+  const [outcome] = await Promise.allSettled([observed('https://backend.example/x', init)]);
+  return { seen, outcome };
+}
+
+const throwingObserver = (): void => {
+  throw new Error('observer boom');
+};
+
 describe('RT-601 withReachabilityObservation — observe only', () => {
-  it('returns the very same response object and reports its status', async () => {
+  it('returns the very same response object, unread, and reports its status', async () => {
     const response = new Response('{"ok":true}', { status: 201 });
     const inner = vi.fn<FetchLike>(() => Promise.resolve(response));
-    const seen: ReachabilityObservation[] = [];
-    const observed = withReachabilityObservation(inner, (o) => seen.push(o));
-
     const init: RequestInit = { method: 'POST', body: 'x' };
-    const got = await observed('https://backend.example/api/pos/v1/sales', init);
 
-    expect(got).toBe(response);
-    expect(got.bodyUsed).toBe(false);
-    expect(inner).toHaveBeenCalledWith('https://backend.example/api/pos/v1/sales', init);
+    const { seen, outcome } = await observeOnce(inner, undefined, init);
+
+    expect(outcome).toEqual({ status: 'fulfilled', value: response });
+    expect(response.bodyUsed).toBe(false);
+    expect(inner).toHaveBeenCalledWith('https://backend.example/x', init);
     expect(seen).toEqual([{ kind: 'answer', status: 201 }]);
   });
 
-  it('rethrows the very same rejection and reports a transport fault', async () => {
-    const boom = new TypeError('fetch failed');
-    const seen: ReachabilityObservation[] = [];
-    const observed = withReachabilityObservation(
-      () => Promise.reject(boom),
-      (o) => seen.push(o),
-    );
-    await expect(observed('https://backend.example/x')).rejects.toBe(boom);
-    expect(seen).toEqual([{ kind: 'transport_fault' }]);
-  });
-
-  it('a timeout abort is a transport fault', async () => {
-    const abort = new DOMException('The operation was aborted due to timeout', 'TimeoutError');
-    const seen: ReachabilityObservation[] = [];
-    const observed = withReachabilityObservation(
-      () => Promise.reject(abort),
-      (o) => seen.push(o),
-    );
-    await expect(observed('https://backend.example/x')).rejects.toBe(abort);
+  it.each([
+    ['a network failure', new TypeError('fetch failed')],
+    ['a timeout abort', new DOMException('aborted due to timeout', 'TimeoutError')],
+  ])('%s: rethrows the very same rejection and reports a transport fault', async (_n, err) => {
+    const { seen, outcome } = await observeOnce(() => Promise.reject(err));
+    expect(outcome).toEqual({ status: 'rejected', reason: err });
     expect(seen).toEqual([{ kind: 'transport_fault' }]);
   });
 
   it('a throwing observer never breaks an answered call', async () => {
     const response = new Response(null, { status: 200 });
-    const observed = withReachabilityObservation(
-      () => Promise.resolve(response),
-      () => {
-        throw new Error('observer boom');
-      },
-    );
-    await expect(observed('https://backend.example/x')).resolves.toBe(response);
+    const { outcome } = await observeOnce(() => Promise.resolve(response), throwingObserver);
+    expect(outcome).toEqual({ status: 'fulfilled', value: response });
   });
 
   it('a throwing observer never replaces the transport rejection', async () => {
     const boom = new TypeError('fetch failed');
-    const observed = withReachabilityObservation(
-      () => Promise.reject(boom),
-      () => {
-        throw new Error('observer boom');
-      },
-    );
-    await expect(observed('https://backend.example/x')).rejects.toBe(boom);
+    const { outcome } = await observeOnce(() => Promise.reject(boom), throwingObserver);
+    expect(outcome).toEqual({ status: 'rejected', reason: boom });
   });
 
   it('reports nothing about the request: no URL, host or header reaches the observer', async () => {
@@ -155,29 +146,26 @@ describe('RT-601 — a missing credential or a terminal change never feeds trans
     return { client, seen, inner };
   }
 
-  it('no operator token: the client answers no_connection, but nothing is observed', async () => {
-    const { client, seen, inner } = observedClient({ getOperatorToken: () => null });
-    await expect(client.postSale(PAYLOAD)).resolves.toEqual({ kind: 'no_connection' });
-    expect(inner).not.toHaveBeenCalled();
-    expect(seen).toEqual([]);
-  });
-
-  it('no device token: no_connection, nothing observed', async () => {
-    const { client, seen, inner } = observedClient({
-      getDeviceToken: () => Promise.resolve(null),
-    });
-    await expect(client.postSaleAsCashier(PAYLOAD, 'user-1')).resolves.toEqual({
-      kind: 'no_connection',
-    });
-    expect(inner).not.toHaveBeenCalled();
-    expect(seen).toEqual([]);
-  });
-
-  it('terminal changed before the send: no_connection, nothing observed', async () => {
-    const { client, seen, inner } = observedClient({ currentTerminalId: () => 'term-2' });
-    await expect(client.postSaleAsCashier(PAYLOAD, 'user-1')).resolves.toEqual({
-      kind: 'no_connection',
-    });
+  type Client = ReturnType<typeof observedClient>['client'];
+  it.each([
+    {
+      name: 'no operator token',
+      overrides: { getOperatorToken: () => null },
+      send: (c: Client) => c.postSale(PAYLOAD),
+    },
+    {
+      name: 'no device token',
+      overrides: { getDeviceToken: () => Promise.resolve(null) },
+      send: (c: Client) => c.postSaleAsCashier(PAYLOAD, 'user-1'),
+    },
+    {
+      name: 'terminal changed before the send',
+      overrides: { currentTerminalId: () => 'term-2' },
+      send: (c: Client) => c.postSaleAsCashier(PAYLOAD, 'user-1'),
+    },
+  ])('$name: the client answers no_connection, but nothing is observed', async (c) => {
+    const { client, seen, inner } = observedClient(c.overrides);
+    await expect(c.send(client)).resolves.toEqual({ kind: 'no_connection' });
     expect(inner).not.toHaveBeenCalled();
     expect(seen).toEqual([]);
   });
