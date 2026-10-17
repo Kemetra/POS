@@ -77,11 +77,12 @@ def page(title: str, width: int, body: str, label: str) -> str:
 """
 
 
+def aria_current(key: str) -> str:
+    return ' aria-current="page"' if key == "returns" else ""
+
+
 def nav() -> str:
-    links = "".join(
-        f'<li><a href="#"{" aria-current=\"page\"" if key == "returns" else ""}>{label}</a></li>'
-        for key, label in NAV
-    )
+    links = "".join(f'<li><a href="#"{aria_current(key)}>{label}</a></li>' for key, label in NAV)
     return (
         '<nav class="nav" aria-label="التنقل الرئيسي">'
         f'<div class="brand"><i aria-hidden="true">{icon("cross")}</i><span class="ltr">POS Pulse</span></div>'
