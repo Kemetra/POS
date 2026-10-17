@@ -47,9 +47,13 @@ export interface LockScreenProps {
 /** 004 cashier PIN format — same bounds as the sign-in PinPad (4–6 digits). */
 const PIN_FORMAT = new RegExp(`^\\d{${String(PIN_MIN_LENGTH)},${String(PIN_MAX_LENGTH)}}$`);
 
-/** M-L1 (doc 15 §5): «الطرفية مقفلة. أدخل الرقم السري للمتابعة.» */
+/**
+ * M-L1 (doc 15 §5): «الطرفية مقفلة. أدخل الرقم السري للمتابعة.» (cashier);
+ * M-L1b: «الطرفية مقفلة. أدخل بيانات الدخول للمتابعة.» (manager/admin).
+ */
 const LOCK_TITLE = 'الطرفية مقفلة';
-const LOCK_PROMPT = 'أدخل الرقم السري للمتابعة.';
+const LOCK_PROMPT_PIN = 'أدخل الرقم السري للمتابعة.';
+const LOCK_PROMPT_CREDENTIALS = 'أدخل بيانات الدخول للمتابعة.';
 
 function refusalMessage(category: RefusalCategory): string {
   if (category === 'rate_limited') return 'محاولات كثيرة. انتظر قليلاً ثم حاول مرة أخرى.';
@@ -167,7 +171,7 @@ export function LockScreen({
             </h2>
           </div>
           <p id={descId} className="session-lock__prompt">
-            {LOCK_PROMPT}
+            {isCashier ? LOCK_PROMPT_PIN : LOCK_PROMPT_CREDENTIALS}
           </p>
           <form
             className="session-lock__form"

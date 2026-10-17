@@ -91,6 +91,14 @@ describe('RT-593 lock is V5, not 007', () => {
     expect(document.querySelector('.dialog-panel, .dialog-overlay')).toBeNull();
   });
 
+  it.each(['manager', 'admin'] as const)('shows M-L1b to a %s, not the PIN prompt', (role) => {
+    renderLock({ ...LOCKED, role });
+    // M-L1b «الطرفية مقفلة. أدخل بيانات الدخول للمتابعة.» — same title, role-specific prompt.
+    const dialog = screen.getByRole('dialog', { name: 'الطرفية مقفلة' });
+    expect(dialog).toHaveAccessibleDescription('أدخل بيانات الدخول للمتابعة.');
+    expect(dialog).not.toHaveTextContent('أدخل الرقم السري للمتابعة.');
+  });
+
   it('uses V5 button vocabulary and keeps the switch-operator button', () => {
     renderLock(LOCKED, vi.fn());
     const unlock = screen.getByRole('button', { name: 'فتح القفل' });
