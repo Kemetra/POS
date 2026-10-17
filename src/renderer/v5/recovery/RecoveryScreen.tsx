@@ -183,12 +183,20 @@ function Num({ children }: Readonly<{ children: string | number }>): JSX.Element
 }
 
 /** formatCheckoutMoney's output inside a sentence: «1,250.00 EGP», «−5.00 EGP». */
-const MONEY_RUN = /(\u2212?[\d,]+\.\d{2} EGP)/;
+const MONEY_RUN = /\u2212?[\d,]+\.\d{2} EGP/;
 
-/** An outcome sentence with each amount isolated, so bidi never reads «EGP 50.00». */
+/** An outcome sentence with its amount isolated, so bidi never reads «EGP 50.00». */
 function Outcome({ message }: Readonly<{ message: string }>): JSX.Element {
-  const parts = message.split(MONEY_RUN);
-  return <>{parts.map((part, i) => (i % 2 === 1 ? <Num key={i}>{part}</Num> : part))}</>;
+  const run = MONEY_RUN.exec(message);
+  if (run === null) return <>{message}</>;
+  const end = run.index + run[0].length;
+  return (
+    <>
+      {message.slice(0, run.index)}
+      <Num>{run[0]}</Num>
+      {message.slice(end)}
+    </>
+  );
 }
 
 /** One fact; `text` sets a word (a name) in the body face, not the tabular one. */
