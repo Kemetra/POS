@@ -24,8 +24,8 @@ import { describe, expect, it } from 'vitest';
  *
  * The check is static and conservative: a control whose ancestors live in
  * another file (a prop rendered by a child) fails until a rule names it.
- * Known offenders are listed below with the issue that owns the fix; a test
- * pins that each one still fails, so the list cannot go stale silently.
+ * There is no known-offender list: RT-670 sized the last one (the void
+ * attention banner link), so every control must pass.
  */
 
 const RENDERER = resolve(__dirname, '../..');
@@ -37,20 +37,6 @@ const CONTEXT_SIZED: ReadonlySet<string> = new Set(['v5-live-btn']);
 
 /** The v5 Dialog panel's classes (foundation/Dialog.tsx). */
 const DIALOG_CLASSES = ['v5-dialog', 'v5-live-dialog'];
-
-/**
- * Known undersized controls, marked known-failing (RT-652 acceptance: never
- * skipped silently). Remove an entry once its fix lands; the pin test fails
- * when an entry passes.
- */
-const KNOWN_UNDERSIZED: ReadonlyArray<{ file: string; reason: string }> = [
-  {
-    file: 'src/renderer/v5/void/SaleVoidNotice.tsx',
-    reason:
-      'RT-670: the void attention banner link «v5-live-btn v5-live-btn--primary» has no ' +
-      'size rule in .v5-void-banner',
-  },
-];
 
 // ── files ───────────────────────────────────────────────────────────────
 
@@ -395,14 +381,7 @@ describe('RT-652 touch-target guard — context-sized V5 buttons', () => {
     );
   });
 
-  it('every v5-live-btn outside a v5 Dialog has a 44px size rule (known offenders aside)', () => {
-    const known = new Set(KNOWN_UNDERSIZED.map((k) => k.file));
-    const offenders = PRODUCTION_TSX.filter((s) => !known.has(repoPath(s))).flatMap(undersized);
-    expect(offenders).toEqual([]);
-  });
-
-  it.each(KNOWN_UNDERSIZED)('known-failing: $file is still undersized — $reason', ({ file }) => {
-    // When this fails, the fix landed (RT-670): delete the entry from KNOWN_UNDERSIZED.
-    expect(undersized(readSource(join(REPO, file))).length).toBeGreaterThan(0);
+  it('every v5-live-btn outside a v5 Dialog has a 44px size rule', () => {
+    expect(PRODUCTION_TSX.flatMap(undersized)).toEqual([]);
   });
 });
