@@ -25,27 +25,45 @@ function rule(selector: string): string {
   return match?.[1] ?? '';
 }
 
-describe('022 T029 — Button: primary / secondary / destructive treatment', () => {
+/**
+ * RT-652: the 007 `.btn` primitive left `tailwind.css`. The property T029
+ * defends (button intents resolve through the token layer) now holds for the
+ * V5 button vocabulary that replaced it.
+ */
+const v5Css = (path: string): string => readFileSync(resolve(STYLES_DIR, '..', path), 'utf-8');
+
+function v5Rule(path: string, selector: string): string {
+  const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return v5Css(path).match(new RegExp(`${escaped}\\s*\\{([^}]*)\\}`))?.[1] ?? '';
+}
+
+describe('022 T029 — Button: primary / secondary / destructive treatment (V5, RT-652)', () => {
   it('primary is a token-driven FILL (FR-4: teal may fill large primary actions)', () => {
-    const body = rule('.btn--primary');
-    expect(body).toMatch(/background-color:\s*var\(--color-primary\)/);
+    const body = v5Rule('v5/shift/shift.css', '.v5-shift-btn--primary');
+    expect(body).toMatch(/background(?:-color)?:\s*var\(--color-primary\)/);
     expect(body).toMatch(/color:\s*var\(--color-primary-on\)/);
     // No literal may pin the fill — the retune must reach it.
     expect(body).not.toMatch(/#[0-9a-fA-F]{3,8}/);
   });
 
   it('destructive is visually separated and NEVER carries the primary treatment (FR-17)', () => {
-    const body = rule('.btn--destructive');
-    expect(body).toMatch(/background-color:\s*var\(--color-danger\)/);
+    const body = v5Rule('v5/sale/live-sale.css', '.v5-live-btn--danger');
+    expect(body).toMatch(/background(?:-color)?:\s*var\(--color-danger\)/);
     // The decisive check: destructive must not borrow the primary token.
     expect(body).not.toMatch(/var\(--color-primary/);
     expect(body).not.toMatch(/#[0-9a-fA-F]{3,8}/);
   });
 
   it('secondary is a quiet surface treatment, not a second filled primary (FR-14/FR-38)', () => {
-    const body = rule('.btn--secondary');
-    expect(body).toMatch(/background-color:\s*var\(--color-surface\)/);
-    expect(body).not.toMatch(/background-color:\s*var\(--color-primary\)/);
+    const body = v5Rule('v5/shift/shift.css', '.v5-shift-btn');
+    expect(body).toMatch(/background(?:-color)?:\s*var\(--color-surface\)/);
+    expect(body).not.toMatch(/background(?:-color)?:\s*var\(--color-primary\)/);
+  });
+
+  it('the 007 .btn intents are gone from tailwind.css', () => {
+    for (const selector of ['.btn--primary', '.btn--secondary', '.btn--destructive']) {
+      expect(rule(selector)).toBe('');
+    }
   });
 });
 

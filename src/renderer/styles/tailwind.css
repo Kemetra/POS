@@ -280,17 +280,6 @@
   --color-overlay-scrim: var(--color-overlay-scrim);
 }
 
-/* ─── Keyframes ─────────────────────────────────────────────────────────── */
-
-@keyframes spin {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
-}
-
 /* ─── Base ──────────────────────────────────────────────────────────────── */
 
 *,
@@ -339,103 +328,6 @@ body {
 }
 
 @layer components {
-  /* ── Button ─────────────────────────────────────────────────────────── */
-
-  .btn {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: var(--space-2);
-    padding-inline: var(--space-3);
-    border: 1px solid transparent;
-    border-radius: var(--radius-control);
-    font-family: var(--font-family-sans);
-    font-size: var(--font-size-sm);
-    font-weight: var(--font-weight-semibold);
-    line-height: 1;
-    letter-spacing: -0.005em;
-    white-space: nowrap;
-    cursor: pointer;
-    text-decoration: none;
-    transition:
-      background-color 120ms ease-out,
-      border-color 120ms ease-out,
-      color 120ms ease-out,
-      box-shadow 120ms ease-out;
-  }
-
-  .btn:disabled,
-  .btn[aria-disabled='true'] {
-    opacity: 0.5;
-    cursor: not-allowed;
-    pointer-events: none;
-  }
-
-  /* Size modifiers — 44px min-height satisfies touch-target NFR */
-  .btn--md {
-    block-size: 44px;
-    padding-inline: 14px;
-    font-size: 0.875rem; /* 14px */
-  }
-
-  .btn--lg {
-    block-size: 52px;
-    padding-inline: 18px;
-    font-size: 0.9375rem; /* 15px */
-  }
-
-  /* Intent modifiers */
-  .btn--primary {
-    background-color: var(--color-primary);
-    border-color: var(--color-primary);
-    color: var(--color-primary-on);
-  }
-
-  .btn--primary:hover:not(:disabled):not([aria-disabled='true']) {
-    background-color: var(--color-primary-emphasis);
-    border-color: var(--color-primary-emphasis);
-  }
-
-  .btn--primary:focus-visible {
-    box-shadow: 0 0 0 4px color-mix(in srgb, var(--color-primary) 18%, transparent);
-  }
-
-  .btn--secondary {
-    background-color: var(--color-surface);
-    border-color: var(--color-border-strong);
-    color: var(--color-text);
-  }
-
-  .btn--secondary:hover:not(:disabled):not([aria-disabled='true']) {
-    border-color: color-mix(in srgb, var(--color-primary) 50%, transparent);
-    color: var(--color-primary);
-  }
-
-  .btn--ghost {
-    background-color: transparent;
-    border-color: transparent;
-    color: var(--color-text);
-  }
-
-  .btn--ghost:hover:not(:disabled):not([aria-disabled='true']) {
-    background-color: var(--color-surface-elevated);
-  }
-
-  .btn--destructive {
-    background-color: var(--color-danger);
-    border-color: var(--color-danger);
-    color: var(--color-danger-on);
-  }
-
-  .btn--destructive:hover:not(:disabled):not([aria-disabled='true']) {
-    background-color: var(--color-danger-emphasis);
-    border-color: var(--color-danger-emphasis);
-  }
-
-  .btn--destructive:focus-visible {
-    box-shadow: 0 0 0 4px color-mix(in srgb, var(--color-danger) 18%, transparent);
-  }
-
   /* ── Screen Too Small ────────────────────────────────────────────────── */
 
   /* RT-313: the notice now shows on short viewports (height < 600px). It grows
@@ -537,19 +429,6 @@ body {
     font-weight: var(--font-weight-semibold);
     color: var(--color-text);
     margin-block-end: var(--space-1);
-  }
-
-  /* ── Button spinner (T030) ───────────────────────────────────────────── */
-
-  .btn__spinner {
-    display: inline-block;
-    inline-size: 16px;
-    block-size: 16px;
-    border: 2px solid currentColor;
-    border-inline-end-color: transparent;
-    border-radius: var(--radius-pill);
-    animation: spin var(--duration-3, 220ms) linear infinite;
-    flex-shrink: 0;
   }
 
   /* ── Input field wrapper (T032) ──────────────────────────────────────── */
@@ -902,13 +781,6 @@ body {
     .dialog-overlay {
       transition: none;
       animation: none;
-    }
-
-    /* Spinner */
-    .btn__spinner {
-      animation: none;
-      border-color: currentColor;
-      border-inline-end-color: transparent;
     }
   }
 

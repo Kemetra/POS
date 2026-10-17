@@ -8,7 +8,7 @@
  *   reprint gating, aria-busy and the banner_state feed unchanged.
  *
  * The legacy `.shift-closed-banner`, `.printer-failure-banner` and `.v4-row`
- * rules leave tailwind.css; `.btn` stays (ReauthDialog still uses it).
+ * rules leave tailwind.css. (`.btn` left too, in RT-652.)
  */
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
@@ -150,8 +150,8 @@ describe('legacy banner CSS retired from tailwind.css', () => {
     expect(css).not.toContain(rule);
   });
 
-  it('keeps .btn, which ReauthDialog still uses', () => {
-    expect(css).toMatch(/\.btn\s*\{/);
+  it('RT-652: .btn is gone too (ReauthDialog moved to the V5 shift button)', () => {
+    expect(css).not.toMatch(/\.btn\s*\{/);
   });
 });
 
