@@ -55,6 +55,9 @@ import { useOperatorSessionStore } from '../../../stores/operator-session-store'
  * RT-605 adds `closed` = none | shift (`shift` signs in through the real
  * store path with a forced-close notice, so the shift-closed banner shows
  * until it is dismissed; default none).
+ *
+ * RT-652 adds `list=reauth` (a `reauth_required` refusal, so the stuck-shifts
+ * page shows the re-auth notice).
  */
 
 export interface OneFrameProofParams {
@@ -66,7 +69,7 @@ export interface OneFrameProofParams {
   sale: 'missing' | 'found' | 'noprint';
   reprint: 'ok' | 'fail';
   shift: 'on' | 'off';
-  list: 'ok' | 'unreachable';
+  list: 'ok' | 'unreachable' | 'reauth';
   close: 'refused' | 'state_invalid' | 'ok';
   payments: 'on' | 'off';
   search: 'none' | 'results';
@@ -89,7 +92,7 @@ export function readOneFrameProofParams(): OneFrameProofParams {
     sale: oneOf(params.get('sale'), ['missing', 'found', 'noprint'], 'missing'),
     reprint: oneOf(params.get('reprint'), ['ok', 'fail'], 'ok'),
     shift: oneOf(params.get('shift'), ['on', 'off'], 'off'),
-    list: oneOf(params.get('list'), ['ok', 'unreachable'], 'ok'),
+    list: oneOf(params.get('list'), ['ok', 'unreachable', 'reauth'], 'ok'),
     close: oneOf(params.get('close'), ['refused', 'state_invalid', 'ok'], 'refused'),
     payments: oneOf(params.get('payments'), ['on', 'off'], 'on'),
     search: oneOf(params.get('search'), ['none', 'results'], 'none'),
@@ -108,6 +111,7 @@ const PAIRED: Extract<PairingStatus, { kind: 'paired' }> = {
 
 function stuckShifts(params: OneFrameProofParams): ListStuckShiftsResponse {
   if (params.list === 'unreachable') return { kind: 'refused', category: 'no_connection' };
+  if (params.list === 'reauth') return { kind: 'refused', category: 'reauth_required' };
   if (params.shifts === 'none') return { kind: 'stuck_shifts', shifts: [] };
   return {
     kind: 'stuck_shifts',

@@ -14,7 +14,9 @@ import '../../v5/shift/shift.css';
  *
  * `ReauthRequiredNotice` is the inline warning on the surface where the action
  * failed: the owner-approved copy and ONE action, «تسجيل الدخول». No generic
- * retry, no English fallback, never the raw category (UX-12).
+ * retry, no English fallback, never the raw category (UX-12). RT-652: its
+ * button is the V5 shift primary (`v5-shift-btn`, 44px on its own), not the
+ * retired 007 `.btn`.
  *
  * `ReauthDialog` opens on the same surface, so the manager keeps their place
  * and what they typed. It renders through the one v5 Dialog (UX-11): focus on
@@ -31,7 +33,7 @@ export function ReauthRequiredNotice({
   return (
     <div data-testid="reauth-required" role="alert" dir="rtl" lang="ar">
       <p>{SIGN_IN_REFUSAL_COPY.reauth_required}</p>
-      <button type="button" className="btn btn--primary btn--md" onClick={onSignIn}>
+      <button type="button" className="v5-shift-btn v5-shift-btn--primary" onClick={onSignIn}>
         {REAUTH_COPY.action}
       </button>
     </div>
