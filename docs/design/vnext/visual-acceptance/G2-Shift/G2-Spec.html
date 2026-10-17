@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>RT-658 G-2 · الوردية · مرجع مقترح</title>
+<style>
+  :root { --primary:#0f766e; --text:#0f1d2e; --muted:#53647a; --border:#d8dfe7; --bg:#f7f9fa; --surface:#fff; }
+  body { margin:0; padding:32px; background:var(--bg); color:var(--text); font-family:'Dubai','Segoe UI',Tahoma,Arial,sans-serif; font-size:15px; line-height:1.7; }
+  main { max-inline-size:1180px; margin-inline:auto; display:grid; gap:28px; }
+  h1 { margin:0; font-size:26px; } h2 { margin:0 0 8px; font-size:19px; }
+  .status { display:inline-block; padding:2px 12px; border:1px solid #a35a00; border-radius:999px; background:#fdf1e0; color:#7d4500; font-weight:700; }
+  section { padding:20px 24px; border:1px solid var(--border); border-radius:14px; background:var(--surface); }
+  table { inline-size:100%; border-collapse:collapse; }
+  th, td { padding:8px 10px; border-block-end:1px solid var(--border); text-align:start; vertical-align:top; }
+  th { color:var(--muted); font-weight:600; }
+  .ltr { direction:ltr; unicode-bidi:isolate; }
+  code { font-family:ui-monospace,Consolas,monospace; font-size:13px; direction:ltr; unicode-bidi:isolate; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(270px,1fr)); gap:16px; }
+  figure { margin:0; display:grid; gap:6px; }
+  figure img { inline-size:100%; border:1px solid var(--border); border-radius:8px; }
+  figcaption { color:var(--muted); font-size:13px; }
+  a { color:var(--primary); }
+  ul { margin:0; padding-inline-start:20px; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>الوردية (G-2): الفتح والحالة والحركات النقدية والإغلاق وحالة الوردية للمدير</h1>
+    <p><span class="status">مسودة، بانتظار موافقة المالك</span> · Jira <span class="ltr">RT-658</span> · تغلق الفجوة G-2 في الوثيقة 15</p>
+    <p><b>المرجع السلوكي:</b> شاشات RT-17 على <code>main</code> (<code>src/renderer/v5/shift/</code>) وحالة <code>PK3-ShiftClose</code> (RT-471/RT-445). الشكل على مفردات G-6 (RT-478).
+      لا سلوك جديد ولا نص جديد: كل النصوص حرفية من <code>shift-copy.ts</code> و<code>park-copy.ts</code>.</p>
+    <p><b>نصوص جديدة بانتظار الموافقة:</b> لا يوجد.</p>
+  </header>
+  <section>
+    <h2>الحالات (20 حالة × 1024×768 و1280×800)</h2>
+    <div class="grid"><figure><img src="captures/G2-Open-1280-light.png" alt=""><figcaption>1 · فتح وردية</figcaption></figure><figure><img src="captures/G2-OpenInvalid-1024-light.png" alt=""><figcaption>2 · فتح وردية: مبلغ غير صالح</figcaption></figure><figure><img src="captures/G2-Opened-1280-light.png" alt=""><figcaption>3 · فُتحت الوردية</figcaption></figure><figure><img src="captures/G2-Status-1024-light.png" alt=""><figcaption>4 · وردية مفتوحة: الملخص والإغلاق</figcaption></figure><figure><img src="captures/G2-PayIn-1280-light.png" alt=""><figcaption>5 · إيداع نقدي</figcaption></figure><figure><img src="captures/G2-PayOut-1024-light.png" alt=""><figcaption>6 · سحب نقدي</figcaption></figure><figure><img src="captures/G2-PayOutRefused-1280-light.png" alt=""><figcaption>7 · سحب نقدي غير مقبول</figcaption></figure><figure><img src="captures/G2-Recorded-1024-light.png" alt=""><figcaption>8 · سُجّل الإيداع</figcaption></figure><figure><img src="captures/G2-CloseCount-1280-light.png" alt=""><figcaption>9 · إغلاق الوردية: العدّ قبل التسجيل</figcaption></figure><figure><img src="captures/G2-CloseApproval-1024-light.png" alt=""><figcaption>10 · إغلاق الوردية: موافقة المدير</figcaption></figure><figure><img src="captures/G2-Closed-1280-light.png" alt=""><figcaption>11 · أُغلقت الوردية</figcaption></figure><figure><img src="captures/G2-ClosedApproved-1024-light.png" alt=""><figcaption>12 · أُغلقت الوردية بفرق معتمد</figcaption></figure><figure><img src="captures/G2-ParkedBlocked-1280-light.png" alt=""><figcaption>13 · إغلاق الوردية مرفوض: مبيعات معلّقة</figcaption></figure><figure><img src="captures/G2-Unavailable-1024-light.png" alt=""><figcaption>14 · تعذّرت قراءة حالة الوردية</figcaption></figure><figure><img src="captures/G2-MgrOpen-1280-light.png" alt=""><figcaption>15 · حالة الوردية: وردية مفتوحة</figcaption></figure><figure><img src="captures/G2-MgrNoShift-1024-light.png" alt=""><figcaption>16 · حالة الوردية: لا توجد وردية</figcaption></figure><figure><img src="captures/G2-MgrStranded-1280-light.png" alt=""><figcaption>17 · حالة الوردية: سجلات من إقران سابق</figcaption></figure><figure><img src="captures/G2-MgrPinSaved-1024-light.png" alt=""><figcaption>18 · حُفظ الرقم السري</figcaption></figure><figure><img src="captures/G2-MgrPinError-1280-light.png" alt=""><figcaption>19 · الرقمان غير متطابقين</figcaption></figure><figure><img src="captures/G2-MgrUnavailable-1024-light.png" alt=""><figcaption>20 · تعذّرت قراءة حالة الوردية (المدير)</figcaption></figure></div><p>الصور تتناوب بين 1280 و1024 للاختصار. لكل حالة ملفان <code>G2-&lt;State&gt;-1024.html</code> و<code>-1280.html</code> والصور في <code>captures/</code> (فاتح وتباين عالٍ لكل عرض). الحالات 1–14 للكاشير (<code>/app/shift</code>) و15–20 للمدير (<code>/app/shift/manager</code>).</p><div class="grid"><figure><img src="captures/G2-CloseApproval-1280-forced.png" alt=""><figcaption>إغلاق الوردية: موافقة المدير · تباين عالٍ</figcaption></figure><figure><img src="captures/G2-ParkedBlocked-1280-forced.png" alt=""><figcaption>إغلاق الوردية مرفوض: مبيعات معلّقة · تباين عالٍ</figcaption></figure><figure><img src="captures/G2-MgrStranded-1280-forced.png" alt=""><figcaption>حالة الوردية: سجلات من إقران سابق · تباين عالٍ</figcaption></figure></div>
+  </section>
+  <section>
+    <h2>ما رُسم وما التزم به</h2>
+    <ul>
+      <li><b>مفردات G-6:</b> رأس الصفحة <code>.screen-head</code> (عنوان h1 بلا شريط غائر)، والبطاقات <code>.panel</code> برأس <code>.panel-head</code>، والنوافذ <code>.dialog</code> فوق ستار، والإشعارات برمز وجملة. تُستبدل بها <code>.v5-shift-titlebar</code> و<code>v5-shift-panel</code> و<code>v5-shift-facts</code>.</li>
+      <li><b>الخط:</b> كل كلمة عربية، ومنها التاريخ «17 أكتوبر، 08:05»، بخط Dubai. المبالغ وحدها (والأعداد، G2-D2) LTR بخط mono وأرقام جدولية، وكذلك حقل المبلغ.</li>
+      <li><b>العدّ الأعمى:</b> لا يظهر المبلغ المتوقع في أي حالة؛ فرق العدّ يظهر بعد الإغلاق المعتمد فقط.</li>
+      <li><b>الإغلاق مع مبيعات معلّقة:</b> النص والعدد والزر ومكان الإشعار (بين الحقل وزر الإغلاق) كما في <code>PK3-ShiftClose</code>؛ الجديد فقط أن الشاشة كاملة (الملخص بجانبها) ورأس G-6.</li>
+      <li><b>الأدوار:</b> صفحة الكاشير بإطار الكاشير («نقطة البيع» وحدها)، وصفحة المدير بإطار المدير الكامل.</li>
+      <li><b>لا سلوك جديد:</b> لا حقل ولا نداء ولا قدرة جديدة؛ قواعد الوردية والحساب والجسر خارج النطاق.</li>
+</ul>
+  </section>
+  <section>
+    <h2>ما لم يُرسم</h2>
+    <ul>
+      <li>«جارٍ تحميل حالة الوردية…» و«جارٍ تحميل المديرين…»: سطر نصي واحد في مكان البطاقة، بلا حالة مرسومة.</li>
+      <li>شريط «لا توجد وردية مفتوحة…» في الإطار (<code>ShiftNotice</code>): جزء من الإطار وليس من صفحة الوردية، وخارج RT-658.</li>
+      <li>بقية أسباب الرفض (مثل <code>drawer_activity_pending</code> و<code>approver_invalid</code>): تظهر بنصها الحرفي في مكان الرفض المرسوم نفسه.</li>
+</ul>
+  </section>
+  <section>
+    <h2>النصوص (حرفية من الكتالوج الموجود)</h2>
+    <table><thead><tr><th>المكان</th><th>النص</th><th>المصدر</th><th>الحالة</th></tr></thead><tbody><tr><td>عنوان صفحة الكاشير</td><td>«الوردية»</td><td><code>SHIFT_COPY.title</code></td><td>مأخوذ حرفيًا</td></tr><tr><td>عنوان صفحة المدير</td><td>«حالة الوردية»</td><td><code>SHIFT_COPY.managerTitle</code></td><td>مأخوذ حرفيًا</td></tr><tr><td>بطاقة الفتح</td><td>«فتح وردية» · «مبلغ الافتتاح في الدرج» · «فتح الوردية»</td><td><code>openHeading</code> · <code>floatLabel</code> · <code>openCommit</code></td><td>مأخوذ حرفيًا</td></tr><tr><td>مبلغ غير صالح</td><td>«أدخل مبلغًا صحيحًا بخانتين عشريتين على الأكثر.»</td><td><code>invalidAmount</code></td><td>مأخوذ حرفيًا</td></tr><tr><td>بعد الفتح</td><td>«فُتحت الوردية.» + «الذهاب إلى البيع»</td><td><code>opened</code> · <code>goToSale</code></td><td>مأخوذ حرفيًا</td></tr><tr><td>بطاقة الملخص</td><td>«وردية مفتوحة منذ ‹التاريخ›» · «مبلغ الافتتاح» · «إجمالي الإيداعات» · «إجمالي السحوبات»</td><td><code>openSince</code> · <code>floatRow</code> · <code>payInsRow</code> · <code>payOutsRow</code>؛ التاريخ من <code>formatHumanDateTime</code></td><td>مأخوذ حرفيًا</td></tr><tr><td>الحركات</td><td>«إيداع نقدي» · «سحب نقدي» · «المبلغ» · «السبب» · «ملاحظة (اختياري، دون بيانات شخصية)» · «إلغاء» · «تسجيل»</td><td><code>payIn</code> · <code>payOut</code> · <code>amountLabel</code> · <code>reasonLabel</code> · <code>noteLabel</code> · <code>cancel</code> · <code>record</code></td><td>مأخوذ حرفيًا</td></tr><tr><td>أسباب الحركة</td><td>«إيداع بنكي» · «تزويد الفكة» · «مصروف نثري» · «أخرى»</td><td><code>MOVEMENT_REASON_LABELS</code></td><td>مأخوذ حرفيًا</td></tr><tr><td>سحب مرفوض</td><td>«لم يُقبل السحب، ولم يُسجَّل شيء. راجع المدير.»</td><td><code>pay_out_not_accepted</code></td><td>مأخوذ حرفيًا</td></tr><tr><td>بعد الحركة</td><td>«سُجّل الإيداع.» / «سُجّل السحب.»</td><td><code>recordedIn</code> · <code>recordedOut</code></td><td>مأخوذ حرفيًا</td></tr><tr><td>بطاقة الإغلاق</td><td>«إغلاق الوردية» · «عُدّ النقد في الدرج وأدخله. لا يظهر المبلغ المتوقع قبل تسجيل العدّ.» · «النقد المعدود في الدرج» · «تسجيل العدّ وإغلاق الوردية»</td><td><code>closeHeading</code> · <code>blindHint</code> · <code>countLabel</code> · <code>closeCommit</code></td><td>مأخوذ حرفيًا</td></tr><tr><td>موافقة المدير</td><td>«موافقة المدير» · «لا يُغلق هذا العدّ إلا بموافقة مدير مسجَّل على هذا الجهاز، برقمه السري.» · «المدير» · «الرقم السري للمدير» · «اعتماد وإغلاق»</td><td><code>approvalTitle</code> · <code>approvalBody</code> · <code>managerLegend</code> · <code>pinLabel</code> · <code>approveCommit</code></td><td>مأخوذ حرفيًا</td></tr><tr><td>بعد الإغلاق</td><td>«أُغلقت الوردية.» · «فرق العدّ المعتمد: ‹المبلغ›» (للإغلاق المعتمد فقط)</td><td><code>closed</code> · <code>varianceLabel</code></td><td>مأخوذ حرفيًا</td></tr><tr><td>الإغلاق مع مبيعات معلّقة</td><td>«توجد مبيعات معلّقة على هذا الجهاز. استأنفها أو اطلب من المدير إلغاءها ثم أغلق الوردية.» · «3 مبيعات معلّقة على هذا الجهاز» · «عرض مبيعاتي المعلّقة»</td><td><code>parked_sales_present</code> · <code>terminalParkedCount</code> · <code>PARK_COPY.showMyParked</code> (كما في PK3-ShiftClose)</td><td>مأخوذ حرفيًا</td></tr><tr><td>تعذّرت القراءة</td><td>«تعذّر تنفيذ الطلب على هذا الجهاز. حاول مرة أخرى.» + «إعادة المحاولة»</td><td><code>unavailable</code> · <code>retry</code></td><td>مأخوذ حرفيًا</td></tr><tr><td>بطاقة الحالة</td><td>«حالة الوردية على هذا الجهاز» · «تحديث» · «لا توجد وردية مفتوحة.»</td><td><code>statusHeading</code> · <code>refresh</code> · <code>noOpenShift</code></td><td>مأخوذ حرفيًا</td></tr><tr><td>مجموعات العدد</td><td>«وقائع الوردية غير المؤكَّدة على الخادم» (بانتظار الإرسال · بانتظار إعادة المحاولة · متوقفة · بانتظار مسار المدير) · «خارج إقران هذا الجهاز» (وقائع غير مرسلة · ورديات مفتوحة) · «نشاط درج لم يكتمل» (صرف مرتجعات · مبيعات لم تكتمل) · «محاولات مرفوضة في الوردية المفتوحة (منذ آخر تشغيل)» (سحب غير مقبول · إغلاق بفرق دون موافقة · موافقة مدير غير مقبولة)</td><td><code>queue*</code> · <code>stranded*</code> · <code>pending*</code> · <code>probe*</code></td><td>مأخوذ حرفيًا</td></tr><tr><td>تنبيه الإقران السابق</td><td>«تنبيه: على هذا الجهاز سجلات وردية من إقران سابق تعذّر إرسالها. قبل إلغاء ترخيص أي جهاز أو إعادة تعيينه، يجب إغلاق الوردية المفتوحة وتفريغ طابور المزامنة.»</td><td><code>strandedWarning</code></td><td>مأخوذ حرفيًا</td></tr><tr><td>الرقم السري للمدير</td><td>«الرقم السري للمدير على هذا الجهاز» · «يُستخدم لاعتماد فرق العدّ…» · «الرقم السري الجديد (6 إلى 8 أرقام)» · «تأكيد الرقم السري» · «الرقم السري الحالي (عند التغيير فقط)» · «حفظ الرقم السري»</td><td><code>enrollHeading</code> · <code>enrollHint</code> · <code>newPinLabel</code> · <code>confirmPinLabel</code> · <code>currentPinLabel</code> · <code>enrollCommit</code></td><td>مأخوذ حرفيًا</td></tr><tr><td>نتيجة الحفظ</td><td>«حُفظ الرقم السري لهذا الجهاز.» · «الرقمان غير متطابقين.»</td><td><code>enrolled</code> · <code>pinMismatch</code></td><td>مأخوذ حرفيًا</td></tr></tbody></table>
+  </section>
+  <section>
+    <h2>قرارات بانتظار المالك</h2>
+    <table><thead><tr><th>#</th><th>النقطة</th><th>ما رُسم والتوصية</th></tr></thead><tbody><tr><td>G2-D1</td><td>حالات زائدة على قائمة المهمة</td><td>رُسمت أيضًا موافقة المدير (CloseApproval) والإغلاق بفرق معتمد (ClosedApproved) وتعذّر القراءة (Unavailable، MgrUnavailable) وحفظ الرقم السري (MgrPinSaved، MgrPinError)، لأنها جزء من المسار نفسه على <code>main</code>. <b>التوصية:</b> تُعتمد ضمن G-2.</td></tr><tr><td>G2-D2</td><td>الأعداد في صفحة المدير</td><td>المهمة تقول «المبالغ وحدها LTR بأرقام جدولية». الأعداد (طابور المزامنة والمحاولات) كميات، وDESIGN.md يجعل الكميات LTR جدولية أيضًا، فرُسمت كذلك. <b>التوصية:</b> كما رُسمت؛ والتواريخ والكلمات العربية بخط Dubai دائمًا.</td></tr><tr><td>G2-D3</td><td>تخطيط شاشة الكاشير</td><td>بلا وردية: بطاقة الفتح وحدها. مع وردية: بطاقة الملخص وبطاقة الإغلاق جنبًا إلى جنب (كما هي الأعمدة اليوم)، والمبلغ المتوقع لا يظهر في أي حالة. <b>التوصية:</b> كما رُسم.</td></tr><tr><td>G2-D4</td><td>بعد الإغلاق</td><td>يبقى إشعار «أُغلقت الوردية.» فوق بطاقة الفتح، لأن الشاشة على <code>main</code> تعيد قراءة الحالة فتعرض نموذج الفتح. <b>التوصية:</b> كما رُسم، بلا سلوك جديد.</td></tr><tr><td>G2-D5</td><td>التنقل في صفحة المدير</td><td>«لوحة المتابعة» هي العنصر الحالي، لأن الصفحة تُفتح من بطاقة «حالة الوردية» فيها (كما في الورديات العالقة في G-6). <b>التوصية:</b> كما رُسم.</td></tr><tr><td>G2-D6</td><td>نص «الذهاب إلى البيع»</td><td>رابط على <code>main</code>، ورُسم كزر داخل إشعار النجاح (نمط إجراء الإشعار في G-6). <b>التوصية:</b> كما رُسم.</td></tr><tr><td>G2-D7</td><td>سطر الرفض</td><td><code>ShiftAlert</code> اليوم فقرة <code>role=alert</code> بلا رمز؛ ترسمه المراجع بتشريح الإشعار (رمز تحذير + جملة) في المكان نفسه. <b>التوصية:</b> كما رُسم.</td></tr></tbody></table>
+  </section>
+  <section>
+    <h2>التباين العالي</h2>
+    <ul>
+      <li>كل حد (البطاقة، الزر، الحقل، القائمة، الشارة) يصبح حدًّا بلون النص؛ وحدّ التحذير 2 بكسل.</li>
+      <li>الأزرار المعطّلة بلون <code>GrayText</code>، وحلقة التركيز <code>Highlight</code>، والعنصر الحالي في التنقل <code>Highlight</code>.</li>
+      <li>العدد غير الصفري في صفحة المدير شارة بإطار، لا لون فقط.</li>
+</ul>
+  </section>
+  <section>
+    <h2>الفحوص المنفّذة على الملفات</h2>
+    
+    <p>أُنتجت الصور وفُحصت بـ<code>tools/capture_g2.cjs</code> (نفس فحوص G-3 وG-6 وPK-3 في <code>../tools/capture-refs.cjs</code>): الاحتواء داخل الإطار، لا تدفق أفقي،
+      لا نص أصغر من 12 بكسل، لا هدف أصغر من 44×44، لا اسم مقصوص، لا عنصر قابل للتركيز خلف النافذة، وaxe-core بلا مخالفات على الإطار.
+      النتيجة: 40 ملفًا، صفر إخفاق. تُولَّد الملفات من <code>tools/gen_g2.py</code> وهذه الصفحة من <code>tools/gen_g2_spec.py</code>.</p>
+
+  </section>
+</main>
+</body>
+</html>
