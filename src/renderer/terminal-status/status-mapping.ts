@@ -1,4 +1,6 @@
 import type { TerminalStatusSnapshot } from '../../shared/terminal-status/types';
+import type { ArabicPluralForms } from '../../shared/formatters/arabic-plural';
+import { countedParts, countedText } from './counted-copy';
 import { STATUS_COPY } from './status-copy';
 
 /**
@@ -22,7 +24,7 @@ export interface IndicatorRow {
   readonly tone: IndicatorTone;
   /** Copy before the count (the whole text when there is no count). */
   readonly before: string;
-  /** Rendered as an isolated LTR run with Western digits. */
+  /** Rendered as an isolated LTR run with Western digits; null for 1 and 2 (words). */
   readonly count: number | null;
   readonly after: string;
 }
@@ -40,13 +42,14 @@ function textRow(tone: IndicatorTone, text: string): IndicatorRow {
   return { tone, before: text, count: null, after: '' };
 }
 
-function countRow(copy: { before: string; after: string }, count: number): IndicatorRow {
-  return { tone: 'info', before: copy.before, count, after: copy.after };
+/** RT-646: the count-aware sentence for `count` (doc 15 §5.1). */
+function countRow(forms: ArabicPluralForms, count: number): IndicatorRow {
+  return { tone: 'info', ...countedParts(count, forms) };
 }
 
 /** The row as one string (tests, and anywhere a plain name is needed). */
 export function rowText(row: IndicatorRow): string {
-  return `${row.before}${row.count === null ? '' : String(row.count)}${row.after}`;
+  return countedText(row);
 }
 
 /** When the oldest pending sale was queued (ms), or null with nothing pending. */

@@ -116,7 +116,7 @@ describe('sync-attention banner M-O3 (U2)', () => {
     expect(banner).not.toBeNull();
     expect(banner).toHaveAttribute('data-tone', 'danger');
     expect(banner).toHaveAttribute('role', 'alert');
-    expect(banner).toHaveTextContent('تعذّر إرسال 2 عمليات. راجع المدير.');
+    expect(banner).toHaveTextContent('تعذّر إرسال عمليتين. راجع المدير.');
     expect(within(banner as HTMLElement).queryByRole('button')).toBeNull();
   });
 
@@ -125,6 +125,14 @@ describe('sync-attention banner M-O3 (U2)', () => {
     await renderAt();
     const num = attentionBanner()?.querySelector('[dir="ltr"]');
     expect(num).toHaveTextContent(/^12$/);
+    expect(attentionBanner()).toHaveTextContent('تعذّر إرسال 12 عملية. راجع المدير.');
+  });
+
+  it('writes 1 as a word, with no number run (RT-646)', async () => {
+    installApi(snap('online', { deadLetter: 1 }));
+    await renderAt();
+    expect(attentionBanner()).toHaveTextContent('تعذّر إرسال عملية واحدة. راجع المدير.');
+    expect(attentionBanner()?.querySelector('[dir="ltr"]')).toBeNull();
   });
 
   it('shows when the oldest pending sale is older than 24 h', async () => {
@@ -143,7 +151,7 @@ describe('sync-attention banner M-O3 (U2)', () => {
       vi.advanceTimersByTime(60_001);
       await Promise.resolve();
     });
-    expect(attentionBanner()).toHaveTextContent('تعذّر إرسال 1 عمليات. راجع المدير.');
+    expect(attentionBanner()).toHaveTextContent('تعذّر إرسال عملية واحدة. راجع المدير.');
     expect(api.getStatus).toHaveBeenCalledTimes(1);
   });
 

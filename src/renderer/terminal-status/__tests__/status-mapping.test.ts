@@ -101,21 +101,21 @@ describe('mapTerminalStatus — doc 24 §4.1 (U2…U7)', () => {
       snapshot: snap('degraded', pending(2)),
       rule: 'U3',
       connection: OFFLINE,
-      sync: 'info · 2 عمليات بانتظار الإرسال',
+      sync: 'info · عمليتان بانتظار الإرسال',
     },
     {
       label: 'U4 online, pending, not paused → S16',
       snapshot: snap('online', pending(4)),
       rule: 'U4',
       connection: ONLINE,
-      sync: 'info · جارٍ إرسال 4 عملية…',
+      sync: 'info · جارٍ إرسال 4 عمليات…',
     },
     {
       label: 'U5 online, pending, paused → M-O2 (D-6-6)',
       snapshot: snap('online', { ...pending(2), paused: 'no_operator_credential' }),
       rule: 'U5',
       connection: ONLINE,
-      sync: 'info · 2 عمليات بانتظار الإرسال',
+      sync: 'info · عمليتان بانتظار الإرسال',
     },
     {
       label: 'U6 online, nothing pending → M-O4',
@@ -136,7 +136,7 @@ describe('mapTerminalStatus — doc 24 §4.1 (U2…U7)', () => {
       snapshot: snap('checking', pending(1)),
       rule: 'U7',
       connection: CHECKING,
-      sync: 'info · 1 عمليات بانتظار الإرسال',
+      sync: 'info · عملية واحدة بانتظار الإرسال',
     },
   ];
 
@@ -187,6 +187,18 @@ describe('mapTerminalStatus — doc 24 §4.1 (U2…U7)', () => {
     expect(view.sync).toBeNull();
   });
 
+  it('uses the count-aware form for 1 and 2: words, no separate number (RT-646)', () => {
+    const one = mapTerminalStatus(snap('online', pending(1)), NOW).sync;
+    expect(one).toEqual({
+      tone: 'info',
+      before: 'جارٍ إرسال عملية واحدة…',
+      count: null,
+      after: '',
+    });
+    const two = mapTerminalStatus(snap('offline', pending(2)), NOW).sync;
+    expect(two === null ? null : rowText(two)).toBe('عمليتان بانتظار الإرسال');
+  });
+
   it('carries the count as a separate number, so it can be isolated LTR with Western digits', () => {
     const view = mapTerminalStatus(snap('online', pending(12)), NOW);
     expect(view.sync?.count).toBe(12);
@@ -233,13 +245,8 @@ describe('status copy — verbatim from the frozen sources', () => {
     'utf8',
   );
 
-  it('M-O4 «متصل» and M-O2 match doc 15', () => {
+  it('M-O4 «متصل» matches doc 15 (M-O2 and S16 are checked against §5.1 in counted-copy)', () => {
     expect(doc15).toContain(`| M-O4 | Healthy indicator | «${STATUS_COPY.online}»`);
-    expect(doc15).toContain(`«‹n›${STATUS_COPY.waiting.after}»`);
-  });
-
-  it('S16 matches doc 15', () => {
-    expect(doc15).toContain(`«${STATUS_COPY.sending.before}N${STATUS_COPY.sending.after}»`);
   });
 
   it('the U2, U3, checking and printer strings match doc 24', () => {
