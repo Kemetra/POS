@@ -11,9 +11,9 @@
 
 import { beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import initSqlJs, { type Database as SqlJsDatabase, type SqlJsStatic } from 'sql.js';
-import { readFileSync } from 'fs';
-import path from 'path';
-import { fileURLToPath } from 'url';
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 import { bindBannerStateProjector } from '../../../../src/main/sales/banner-state-projector.js';
 import { makeSqlJsHandle } from '../cart/__helpers__/sql-js-handle.js';

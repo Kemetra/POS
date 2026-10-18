@@ -90,8 +90,8 @@ export function buildTree(source: SourceText): YamlNode {
   const stack: YamlNode[] = [root];
   for (const line of toLines(source)) {
     const node = toNode(line);
-    while (!isParentOf(stack[stack.length - 1] as YamlNode, node)) stack.pop();
-    (stack[stack.length - 1] as YamlNode).children.push(node);
+    while (!isParentOf(stack.at(-1) as YamlNode, node)) stack.pop();
+    (stack.at(-1) as YamlNode).children.push(node);
     stack.push(node);
   }
   return root;

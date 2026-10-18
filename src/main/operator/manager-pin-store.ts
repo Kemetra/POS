@@ -488,11 +488,6 @@ export function createManagerPinStore(deps: ManagerPinStoreDeps): ManagerPinStor
       : (db.prepare(SELECT_BY_USER) as Get).get(...scopeParams(scope), target.userId.toLowerCase());
   }
 
-  function revokeReasonOf(row: StoredRow, requesterUserId: string | null): ManagerPinRevokeReason {
-    if (requesterUserId === null) return 'ineligible';
-    return row.user_id === requesterUserId.toLowerCase() ? 'self' : 'other_manager';
-  }
-
   function revokeOne(input: RevokeManagerPinInput): RevokeManagerPinOutcome {
     const { scope } = input;
     const row = targetRow(input);
@@ -565,4 +560,9 @@ export function purgeOtherTerminalManagerPinRecords(
   }
   const stmt = db.prepare('DELETE FROM manager_pin_records WHERE terminal_id <> ?') as Run;
   return stmt.run(currentTerminalId).changes;
+}
+
+function revokeReasonOf(row: StoredRow, requesterUserId: string | null): ManagerPinRevokeReason {
+  if (requesterUserId === null) return 'ineligible';
+  return row.user_id === requesterUserId.toLowerCase() ? 'self' : 'other_manager';
 }

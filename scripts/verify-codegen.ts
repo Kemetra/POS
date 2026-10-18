@@ -14,10 +14,10 @@
  * itself, not for verify).
  */
 
-import { mkdtempSync, readFileSync, rmSync, existsSync } from 'fs';
-import os from 'os';
-import path from 'path';
-import { fileURLToPath } from 'url';
+import { mkdtempSync, readFileSync, rmSync, existsSync } from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { generateApiTypes } from './codegen-api.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -146,8 +146,10 @@ async function main(): Promise<void> {
 
 const invokedAsScript = process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1];
 if (invokedAsScript) {
-  main().catch((err: unknown) => {
+  try {
+    await main();
+  } catch (err: unknown) {
     console.error('[verify-codegen] failed:', err);
     process.exit(1);
-  });
+  }
 }

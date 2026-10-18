@@ -264,10 +264,11 @@ export function createSalesBridge(deps: SalesBridgeDependencies): SalesBridge {
   // vestigial for unsubscribe symmetry; uniqueness avoids two subscriptions
   // sharing a token). Overridable via deps.newSubscriptionToken.
   let subscriptionSeq = 0;
-  const nextToken = (): string =>
-    deps.newSubscriptionToken !== undefined
-      ? deps.newSubscriptionToken()
-      : `sub-${String((subscriptionSeq += 1))}`;
+  const nextToken = (): string => {
+    if (deps.newSubscriptionToken !== undefined) return deps.newSubscriptionToken();
+    subscriptionSeq += 1;
+    return `sub-${String(subscriptionSeq)}`;
+  };
 
   // The admitted sale with its latest print / drawer projections.
   const okSale = (

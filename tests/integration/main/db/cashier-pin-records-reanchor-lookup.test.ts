@@ -1,8 +1,8 @@
 import { describe, expect, it, beforeAll } from 'vitest';
 import initSqlJs, { type Database as SqlJsDatabase, type SqlJsStatic } from 'sql.js';
-import { readFileSync } from 'fs';
-import path from 'path';
-import { fileURLToPath } from 'url';
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 /**
  * 017-offline-pin-reanchor T040 — offline-unlock lookup survives the 0036 re-key.

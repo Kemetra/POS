@@ -1,4 +1,4 @@
-import path from 'path';
+import path from 'node:path';
 
 import { SchemaAheadError, runMigrations } from '../db/migrate.js';
 import type { MigrationFile, MigrationsDb } from '../db/migrate.js';

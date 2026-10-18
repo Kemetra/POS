@@ -535,7 +535,7 @@ export function createOfflineGrantStore(deps: OfflineGrantStoreDeps): OfflineGra
   /** F3 (10893): a throwing logger never escapes, and never aborts a write. */
   function log(level: 'info' | 'warn', fields: Record<string, string | number>): void {
     try {
-      deps.logger?.[level](fields, String(fields['event']).replace(/\./g, ' '));
+      deps.logger?.[level](fields, String(fields['event']).replaceAll(/\./g, ' '));
     } catch {
       // Logging is best-effort.
     }
@@ -704,10 +704,6 @@ export function createOfflineGrantStore(deps: OfflineGrantStoreDeps): OfflineGra
 
   // ── invalidation ──
 
-  function assertReason(reason: unknown): void {
-    if (!isReason(reason)) throw new OfflineGrantStoreError('invalid_input');
-  }
-
   /**
    * Invalidate one row (inside the caller's transaction). A readable grant is
    * re-sealed with the reason, or deleted when the re-seal fails. A row that
@@ -788,7 +784,7 @@ export function createOfflineGrantStore(deps: OfflineGrantStoreDeps): OfflineGra
     type Row = OfflineGrantScope & { user_id: string; sealed_body: unknown };
     for (const row of stmt(SELECT_ALL_ROWS).all() as Row[]) {
       const body = openGrantBody(row.sealed_body);
-      if (body === null || body.invalidated !== null) continue;
+      if (body?.invalidated !== null) continue;
       if (!bodyBelongsTo(body, row, row.user_id)) continue;
       out.push({
         tenant_id: row.tenant_id,
@@ -966,4 +962,8 @@ export function createOfflineGrantStore(deps: OfflineGrantStoreDeps): OfflineGra
       }
     },
   };
+}
+
+function assertReason(reason: unknown): void {
+  if (!isReason(reason)) throw new OfflineGrantStoreError('invalid_input');
 }

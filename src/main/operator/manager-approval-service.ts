@@ -473,10 +473,10 @@ export function createManagerApprovalService(
       usedByItsApprover(row, input),
     ].every(Boolean);
   }
+}
 
-  /** RT-441: a recovery approval is used only by the manager who gave it. */
-  function usedByItsApprover(row: ApprovalRow, input: ConsumeApprovalInput): boolean {
-    if (!isRecoveryKind(input.actionKind)) return true;
-    return row.approver_user_id === input.session.manager_user_id?.toLowerCase();
-  }
+/** RT-441: a recovery approval is used only by the manager who gave it. */
+function usedByItsApprover(row: ApprovalRow, input: ConsumeApprovalInput): boolean {
+  if (!isRecoveryKind(input.actionKind)) return true;
+  return row.approver_user_id === input.session.manager_user_id?.toLowerCase();
 }

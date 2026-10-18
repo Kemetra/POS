@@ -9,9 +9,9 @@
 
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import initSqlJs, { type Database as SqlJsDatabase, type SqlJsStatic } from 'sql.js';
-import { readFileSync } from 'fs';
-import path from 'path';
-import { fileURLToPath } from 'url';
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 import { createPrintDispatcher } from '../../../src/main/receipts/print-dispatcher.js';
 import { createPrintPipeline } from '../../../src/main/receipts/print-pipeline.js';

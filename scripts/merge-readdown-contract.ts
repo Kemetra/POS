@@ -46,7 +46,7 @@ function mergeBag(
   readDownBag: ComponentBag | undefined,
 ): ComponentBag | undefined {
   if (readDownBag === undefined) return snapshotBag;
-  const merged: ComponentBag = { ...(snapshotBag ?? {}) };
+  const merged: ComponentBag = { ...snapshotBag };
   for (const [name, def] of Object.entries(readDownBag)) {
     if (name in merged) continue; // collision → keep snapshot's, skip read-down's
     merged[name] = def;
@@ -82,9 +82,9 @@ export function mergeReadDown(snapshot: OpenApiDoc, readDown: OpenApiDoc): OpenA
 
 // --- CLI driver (runs only when invoked directly) ---------------------------
 
-import { readFileSync, writeFileSync } from 'fs';
-import path from 'path';
-import { fileURLToPath } from 'url';
+import { readFileSync, writeFileSync } from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 // js-yaml ships no bundled types and @types/js-yaml is not a dependency; type the
 // one function we use at the import boundary so the parse is type-safe downstream.
 import jsYaml from 'js-yaml';

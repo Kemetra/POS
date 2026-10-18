@@ -134,9 +134,12 @@ const TENDER_LABELS: Record<SalesTenderType, string> = {
 
 function compose(payload: ReceiptPayload): Band[] {
   const bands: Band[] = [];
-  const rule = (char: RuleBand['char']): void => void bands.push({ kind: 'rule', char });
-  const text = (t: string, align: BandAlign, emphasis = false): void =>
-    void bands.push({ kind: 'text', text: t, align, emphasis });
+  const rule = (char: RuleBand['char']): void => {
+    bands.push({ kind: 'rule', char });
+  };
+  const text = (t: string, align: BandAlign, emphasis = false): void => {
+    bands.push({ kind: 'text', text: t, align, emphasis });
+  };
 
   // Duplicate-copy marker band — topmost, reprint_duplicate only (§(b)).
   if (payload.variant === 'reprint_duplicate') {
@@ -238,10 +241,10 @@ function composeTender(
 
 function escapeHtml(s: string): string {
   return s
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
+    .replaceAll(/&/g, '&amp;')
+    .replaceAll(/</g, '&lt;')
+    .replaceAll(/>/g, '&gt;')
+    .replaceAll(/"/g, '&quot;');
 }
 
 /** CSS `text-align` per band alignment (rtl bands sit on the right edge). */

@@ -9,8 +9,8 @@ import {
   session,
 } from 'electron';
 import * as Sentry from '@sentry/electron/main';
-import path from 'path';
-import { fileURLToPath, pathToFileURL } from 'url';
+import path from 'node:path';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { createSenderGuardedIpcMain } from './ipc/sender-guard.js';
 import { createSessionLockGuardedIpcMain } from './ipc/session-lock-guard.js';
 import { createRecoveryModeGuardedIpcMain } from './ipc/recovery-mode-guard.js';
@@ -153,7 +153,10 @@ import {
 } from './shift-cashup/compose-shift-cashup.js';
 import { registerShiftCashupIpc } from './ipc/shift-cashup.js';
 import { createManagerCredentialAudit } from './operator/manager-credential-audit.js';
-import { createManagerPinStore } from './operator/manager-pin-store.js';
+import {
+  createManagerPinStore,
+  purgeOtherTerminalManagerPinRecords,
+} from './operator/manager-pin-store.js';
 import { createManagerApprovalService } from './operator/manager-approval-service.js';
 import { registerManagerApprovalHandlers } from './ipc/manager-approval.js';
 import { postHandoffCancelApprovalResolver } from './cart/post-handoff-approval.js';
@@ -261,7 +264,6 @@ import {
 } from './app/device-revocation-flow.js';
 import { createRevocationRecheck } from './app/revocation-recheck.js';
 import { purgeOtherTerminalPinRecords } from './operator/pin-records-purge.js';
-import { purgeOtherTerminalManagerPinRecords } from './operator/manager-pin-store.js';
 import { managerIdentityOf } from './operator/manager-pin-enrollment.js';
 import { PAIRING_PUSH_CHANNELS, type PairingRecheckResult } from '../shared/pairing-types.js';
 import { createJwtHolder } from './operator/jwt-holder.js';
@@ -820,7 +822,7 @@ singleInstanceReady
     const getAppConfig = (): AppConfig => {
       const cfg: AppConfig = {};
       // 005 cart / 006 payments / 008 saleFinalization / 009 productSearch /
-      // RT-103 voucherTender / RT-15 returns — all six flags default false (fail-closed).
+      // RT-103 voucherTender / RT-15 returns / RT-700 cardTender — every flag defaults false (fail-closed).
       // RT-162: parsing lives in `app/feature-flags.ts` (one truthy parser,
       // unchanged semantics). Re-parsed per call, as before; the PAYMENTS-
       // without-SALE_FINALIZATION profile never reaches here (refused at startup).
@@ -1702,11 +1704,15 @@ singleInstanceReady
     });
     const paymentsSubscribe = createPaymentsSubscribeHandler(paymentsReadDeps);
     const paymentsRead = createPaymentsReadHandler(paymentsReadDeps);
+    // RT-700 (P-26-1) — card is refused in main while the flag is off; read
+    // per call, like `getAppConfig`, so main and the renderer see one value.
+    const isCardTenderEnabled = (): boolean => parseFeatureFlags(process.env).cardTender;
     const tenderApply = createTenderApplyHandler({
       ...paymentsWriteDeps,
       tenderLineFsm,
       uuid: paymentsUuid,
       logger: mainLogger,
+      isCardTenderEnabled,
     });
     const tenderReverse = createTenderReverseHandler({
       ...paymentsWriteDeps,
@@ -1750,6 +1756,7 @@ singleInstanceReady
             tenderLineFsm,
             uuid: paymentsUuid,
             logger: mainLogger,
+            isCardTenderEnabled,
           }),
           confirm: createPaymentsConfirmHandler({
             ...scoped,

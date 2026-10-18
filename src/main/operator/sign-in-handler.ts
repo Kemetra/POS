@@ -790,6 +790,6 @@ export class CashierSignInHandler {
 
   /** T081 — named log site for lockout state transitions (no credential data — PR-1). */
   private logInfo(event: string): void {
-    this.deps.logger?.info({ event }, event.replace(/\./g, ' '));
+    this.deps.logger?.info({ event }, event.replaceAll(/\./g, ' '));
   }
 }

@@ -31,7 +31,7 @@
  * the audit emitter's key-name scan.
  */
 
-import type { PrintPipeline, PrintPipelineResult } from './print-pipeline.js';
+import type { PrintAdapterResult, PrintPipeline } from './print-pipeline.js';
 import type {
   PrintEventsRepository,
   PrintEventRow,
@@ -91,7 +91,7 @@ export interface PrintDispatcher {
   dispatchFirstPrint(
     payload: ReceiptPayload,
     ctx: PrintDispatchContext,
-  ): Promise<{ result: PrintPipelineResult; print_event_id: string; printed_at: string }>;
+  ): Promise<{ result: PrintAdapterResult; print_event_id: string; printed_at: string }>;
 
   /**
    * Dispatch a retry-after-failure attempt (T250-T252). Writes a
@@ -106,7 +106,7 @@ export interface PrintDispatcher {
     payload: ReceiptPayload,
     ctx: PrintDispatchContext,
     previousFailedPrintEventIds: string[],
-  ): Promise<{ result: PrintPipelineResult; print_event_id: string; printed_at: string }>;
+  ): Promise<{ result: PrintAdapterResult; print_event_id: string; printed_at: string }>;
 
   /**
    * Dispatch a reprint (T400 / Slice 5). Writes a `purpose='reprint'` row with
@@ -121,7 +121,7 @@ export interface PrintDispatcher {
     payload: ReceiptPayload,
     ctx: PrintDispatchContext,
     opts: { duplicateCopySequenceNumber: number; sellingOperatorId: string },
-  ): Promise<{ result: PrintPipelineResult; print_event_id: string; printed_at: string }>;
+  ): Promise<{ result: PrintAdapterResult; print_event_id: string; printed_at: string }>;
 }
 
 const NOOP_LOGGER: PrintDispatchLogger = {
@@ -182,7 +182,7 @@ export function createPrintDispatcher(deps: PrintDispatcherDependencies): PrintD
        *  reprint's dual-operator attribution). Never slip content (T242). */
       successAuditExtra?: Readonly<Record<string, unknown>>;
     },
-  ): Promise<{ result: PrintPipelineResult; print_event_id: string; printed_at: string }> {
+  ): Promise<{ result: PrintAdapterResult; print_event_id: string; printed_at: string }> {
     const result = await pipeline.render(payload);
     const print_event_id = deps.newPrintEventId();
     const created_at = now();
@@ -259,7 +259,7 @@ export function createPrintDispatcher(deps: PrintDispatcherDependencies): PrintD
     async dispatchFirstPrint(
       payload: ReceiptPayload,
       ctx: PrintDispatchContext,
-    ): Promise<{ result: PrintPipelineResult; print_event_id: string; printed_at: string }> {
+    ): Promise<{ result: PrintAdapterResult; print_event_id: string; printed_at: string }> {
       return record(payload, ctx, {
         purpose: 'first_print',
         successCategory: 'sale.receipt.printed',
@@ -271,7 +271,7 @@ export function createPrintDispatcher(deps: PrintDispatcherDependencies): PrintD
       payload: ReceiptPayload,
       ctx: PrintDispatchContext,
       previousFailedPrintEventIds: string[],
-    ): Promise<{ result: PrintPipelineResult; print_event_id: string; printed_at: string }> {
+    ): Promise<{ result: PrintAdapterResult; print_event_id: string; printed_at: string }> {
       return record(payload, ctx, {
         purpose: 'retry_after_failure',
         successCategory: 'sale.receipt.print_retried_success',
@@ -283,7 +283,7 @@ export function createPrintDispatcher(deps: PrintDispatcherDependencies): PrintD
       payload: ReceiptPayload,
       ctx: PrintDispatchContext,
       opts: { duplicateCopySequenceNumber: number; sellingOperatorId: string },
-    ): Promise<{ result: PrintPipelineResult; print_event_id: string; printed_at: string }> {
+    ): Promise<{ result: PrintAdapterResult; print_event_id: string; printed_at: string }> {
       return record(payload, ctx, {
         purpose: 'reprint',
         successCategory: 'sale.receipt.reprinted',

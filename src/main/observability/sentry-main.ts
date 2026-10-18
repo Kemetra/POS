@@ -49,9 +49,7 @@ export type Integration = Extract<ElectronMainOptions['integrations'], unknown[]
 /** `IPCMode.Classic`. The enum's runtime module loads `electron`, so it is typed only. */
 const IPC_MODE_CLASSIC = 1 as IPCMode;
 
-export interface SentryInitFn {
-  (options: ElectronMainOptions): void;
-}
+export type SentryInitFn = (options: ElectronMainOptions) => void;
 
 export interface InitSentryMainLogger {
   warn(fields: Record<string, unknown>, msg: string): void;

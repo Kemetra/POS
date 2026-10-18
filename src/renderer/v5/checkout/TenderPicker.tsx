@@ -14,6 +14,11 @@ import type { IconName } from '../../icons/registry';
  * its slot, disabled, with the reason «غير متاحة حاليًا» as text, sunken rather
  * than faded (RT-103). A disabled tile is not in the tab order.
  *
+ * RT-700 (P-26-1, OD-26-1 option A): card is out of the pilot (RT-536 D4).
+ * Unless `cardEnabled`, the card tile is not rendered at all; main refuses a
+ * card `tender.apply` on its own read of the same flag. With it on, the three
+ * tiles above are drawn unchanged.
+ *
  * A radiogroup of buttons, as before: the method is chosen by activating a tile
  * (Enter / Space / click); arrow keys are not bound (freeze 15 §3.5 keeps wave 1
  * keyless). The selected tile carries a check glyph and `aria-checked`, so the
@@ -31,6 +36,8 @@ export interface TenderPickerProps {
   selectedTender?: TenderKind | null;
   /** RT-103: whether the voucher may be chosen. Fail-closed default (pilot rule). */
   voucherEnabled?: boolean;
+  /** RT-700: whether the card tile is rendered. Fail-closed default (pilot rule). */
+  cardEnabled?: boolean;
 }
 
 interface Tile {
@@ -72,11 +79,14 @@ export function TenderPicker({
   onTenderSelect,
   selectedTender = null,
   voucherEnabled = false,
+  cardEnabled = false,
 }: Readonly<TenderPickerProps>): JSX.Element | null {
   // Route guard: no envelope, nothing to pay.
   if (envelope === null) return null;
 
-  const tiles: readonly Tile[] = [CASH, CARD, voucherTile(voucherEnabled)];
+  const tiles: readonly Tile[] = cardEnabled
+    ? [CASH, CARD, voucherTile(voucherEnabled)]
+    : [CASH, voucherTile(voucherEnabled)];
 
   return (
     <section

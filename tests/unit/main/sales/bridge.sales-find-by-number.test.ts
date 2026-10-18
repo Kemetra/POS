@@ -14,9 +14,9 @@
 
 import { beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import initSqlJs, { type Database as SqlJsDatabase, type SqlJsStatic } from 'sql.js';
-import { readFileSync } from 'fs';
-import path from 'path';
-import { fileURLToPath } from 'url';
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 import { createSalesBridge } from '../../../../src/main/sales/sales-bridge.js';
 import { bindSalesRepository } from '../../../../src/main/sales/repositories/sales.repository.js';

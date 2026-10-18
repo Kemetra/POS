@@ -199,6 +199,7 @@ beforeEach(() => {
   });
   usePaymentStore.getState().mount(ENVELOPE);
   useFeatureFlagsStore.getState().hydrate({
+    cardTender: true,
     cart: true,
     payments: true,
     saleFinalization: true,

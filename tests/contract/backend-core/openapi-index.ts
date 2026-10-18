@@ -285,7 +285,7 @@ const PARAM = /\{[^{}]+\}/g;
 export function pathMatchesTemplate(pair: PathPair): boolean {
   const pattern = pair.template
     .split(PARAM)
-    .map((literal) => literal.replace(REGEX_SPECIAL, '\\$&'))
+    .map((literal) => literal.replace(REGEX_SPECIAL, String.raw`\$&`))
     .join('[^/]+');
   return new RegExp(`^${pattern}$`).test(pair.concrete);
 }

@@ -95,6 +95,8 @@ export const REFUSAL_REASONS = [
   'invalid_input',
   'non_cash_overpayment_refused',
   'tender_not_yet_supported',
+  // RT-700 (P-26-1): a card tender while `POS_PULSE_FEATURE_CARD_TENDER` is off.
+  'card_tender_disabled',
   'line_not_applied',
   'dependency_unavailable',
   // Voucher refusals — typed Slice-3 for forward use; Slice-4 wires the validate / redeem paths.

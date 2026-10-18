@@ -15,9 +15,9 @@
 
 import { describe, it, expect, vi, beforeAll } from 'vitest';
 import initSqlJs, { type Database as SqlJsDatabase, type SqlJsStatic } from 'sql.js';
-import { readFileSync } from 'fs';
-import path from 'path';
-import { fileURLToPath } from 'url';
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import type { IpcMain, IpcMainInvokeEvent } from 'electron';
 
 import { CartBridgeHandlers } from '../../../../src/main/cart/cart-bridge.js';

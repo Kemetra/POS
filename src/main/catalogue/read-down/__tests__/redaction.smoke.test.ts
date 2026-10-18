@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { PassThrough } from 'stream';
+import { PassThrough } from 'node:stream';
 import { describe, expect, it } from 'vitest';
 import pino, { type Logger } from 'pino';
 
