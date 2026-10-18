@@ -76,7 +76,7 @@ describe('the frame nav on an active-sale route', () => {
     signIn('manager');
     renderAt('/app/cart');
     const nav = screen.getByRole('navigation', { name: 'التنقل الرئيسي' });
-    for (const name of ['لوحة المتابعة', 'نقطة البيع', 'المبيعات', 'المرتجعات', 'الإعدادات']) {
+    for (const name of ['لوحة المتابعة', 'نقطة البيع', 'المبيعات', 'المرتجعات', 'المخزون']) {
       expect(within(nav).getByRole('link', { name })).toHaveTextContent(name);
     }
     expect(within(nav).getByRole('link', { name: 'نقطة البيع' })).toHaveAttribute(

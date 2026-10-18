@@ -69,9 +69,16 @@ export function isNavEntryCurrent(entry: V5NavEntry, pathname: string): boolean 
  */
 const CASHIER_NAV: ReadonlySet<ShellNavEntryId> = new Set<ShellNavEntryId>(['cart']);
 
-/** Same rule as the legacy rail (unrestricted entries, or the role is allowed), plus OD-6. */
+/**
+ * RT-701 (P-26-4, D8) — entries no role sees: Audit and Settings are empty
+ * pages. Navigation only: their routes and guards (incl. RT-597) are unchanged.
+ */
+const HIDDEN_NAV: ReadonlySet<ShellNavEntryId> = new Set<ShellNavEntryId>(['audit', 'settings']);
+
+/** Same rule as the legacy rail (unrestricted entries, or the role is allowed), plus OD-6 and D8. */
 export function visibleNavEntries(role: Role | undefined): ReadonlyArray<V5NavEntry> {
   return v5NavEntries.filter((entry) => {
+    if (HIDDEN_NAV.has(entry.id)) return false;
     if (role === 'cashier' && !CASHIER_NAV.has(entry.id)) return false;
     return entry.allow === undefined || (role !== undefined && entry.allow.includes(role));
   });

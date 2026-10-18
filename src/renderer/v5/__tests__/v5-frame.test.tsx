@@ -11,7 +11,7 @@ import { useOperatorSessionStore } from '../../stores/operator-session-store';
 import type { Role } from '../../../shared/operator/role';
 import { V5Frame } from '../frame/V5Frame';
 import { Dialog } from '../foundation/Dialog';
-import { V5_SALE_PATH, v5NavEntries } from '../frame/nav-model';
+import { V5_SALE_PATH, v5NavEntries, visibleNavEntries } from '../frame/nav-model';
 import { V5OperationalNotices } from '../frame/V5OperationalNotices';
 import { useDrawerNoticeStore } from '../../ui/receipts/drawer-notice-store';
 import { useFeatureFlagsStore } from '../../stores/feature-flags-store';
@@ -122,11 +122,14 @@ describe('V5Frame — the one application frame for v5 screens', () => {
     expect(screen.queryByRole('button', { name: /theme|السمة|المظهر/i })).not.toBeInTheDocument();
   });
 
-  it('shows every entry to a manager; non-Sale entries keep their existing routes', () => {
+  // RT-701 (D8): Audit and Settings are hidden for every role, so five remain.
+  it('shows a manager every entry but Audit and Settings; entries keep their existing routes', () => {
     signIn('manager');
     renderFrame();
     const nav = screen.getByRole('navigation', { name: 'التنقل الرئيسي' });
-    expect(within(nav).getAllByRole('link')).toHaveLength(7);
+    expect(within(nav).getAllByRole('link')).toHaveLength(5);
+    expect(within(nav).queryByRole('link', { name: 'سجل المراجعة' })).not.toBeInTheDocument();
+    expect(within(nav).queryByRole('link', { name: 'الإعدادات' })).not.toBeInTheDocument();
     expect(within(nav).getByRole('link', { name: 'المرتجعات' })).toHaveAttribute(
       'href',
       '/app/returns',
@@ -152,7 +155,7 @@ describe('V5Frame — the one application frame for v5 screens', () => {
     expect(screen.queryByTestId('v5-frame-operator')).not.toBeInTheDocument();
     expect(
       within(screen.getByRole('navigation', { name: 'التنقل الرئيسي' })).queryAllByRole('link'),
-    ).toHaveLength(5);
+    ).toHaveLength(4);
   });
 
   it('renders a notices slot above the screen when given one', () => {
@@ -417,6 +420,29 @@ describe('v5 nav model', () => {
       'settings',
     ]);
     expect(v5NavEntries.find((e) => e.id === 'cart')?.path).toBe(V5_SALE_PATH);
+  });
+
+  // RT-701 (P-26-4, D8): Audit and Settings are empty pages, so no role sees
+  // them in the nav. Navigation only: their routes and guards are unchanged.
+  it.each(['cashier', 'manager', 'admin', undefined] as const)(
+    'never shows Audit or Settings (role: %s)',
+    (role) => {
+      const ids = visibleNavEntries(role).map((e) => e.id);
+      expect(ids).not.toContain('audit');
+      expect(ids).not.toContain('settings');
+    },
+  );
+
+  it('keeps the manager and admin nav otherwise unchanged', () => {
+    for (const role of ['manager', 'admin'] as const) {
+      expect(visibleNavEntries(role).map((e) => e.id)).toEqual([
+        'dashboard',
+        'cart',
+        'sales',
+        'returns',
+        'inventory',
+      ]);
+    }
   });
 });
 
