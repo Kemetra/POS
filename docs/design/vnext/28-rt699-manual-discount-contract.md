@@ -50,7 +50,7 @@ Status key:
 | OD-28-1 | Discount kind | (A) percent only; (B) fixed amount only; (C) both, one per line | **Open — owner decision.** Recommended: **C**. Pharmacy tills use both "10%" and "5 EGP off". |
 | OD-28-2 | Percent precision and range | (A) whole percent 1–100; (B) basis points 1–10000 | **Open — owner decision.** Recommended: **A**, whole percent 1–100. It is simpler to key in and explain. |
 | OD-28-3 | Rounding of a percent discount to minor units | (A) round half up; (B) floor (in the store's favour); (C) ceiling (in the customer's favour) | **Open — owner decision.** Recommended: **A**, round half up on the discount amount, computed once per line on the line gross (§3.2). |
-| OD-28-4 | Maximum discount | (A) up to 100% (a free line is allowed); (B) a cap below 100% set by policy; (C) a tenant cap that is configurable later | **Open — owner decision.** Recommended: **A** for the pilot, with the hard floor of net ≥ 0 always enforced. A policy cap is a Policy & Permissions item. |
+| OD-28-4 | Maximum discount | (A) up to 100% (a free line is allowed); (B) a cap below 100% set by policy; (C) a tenant cap that is configurable later | **Open — owner decision.** Recommended: **A** for the pilot, with the hard floor of net ≥ 0 always enforced. A policy cap is a Policy & Permissions item. **Constraint:** checkout on `main` cannot complete a zero total. Settle needs an applied tender, and cash entry refuses a tender when the balance is 0. So with A, either I1/I2 add a zero-tender completion path, or main refuses a discount that would make the **cart** total 0, even though a single free line stays allowed. Recommended for the pilot: refuse a zero cart total. |
 | OD-28-5 | Scope | (A) per-line only for the pilot; (B) per-line and whole-sale | **Selected — recommended option (A), owner may revisit.** Storage, the approval binding and FR-023 Q2 are already per-line. Whole-sale scope needs an allocation rule across lines (money) and a new approval subject, so it is deferred (§3.4). |
 | OD-28-6 | Stacking | (A) at most one manual discount per line; (B) several | **Selected — recommended option (A), owner may revisit.** To change a discount, remove it (D4) and add again with approval. |
 | OD-28-7 | A quantity change on a discounted line | (A) refused until the discount is removed; (B) the discount is dropped automatically, with a notice; (C) a percent discount re-applies and an amount discount stays | **Selected — recommended option (A), owner may revisit.** The approved amount must stay equal to the applied amount (RT-114 binding). Option C would change a manager-approved amount with no new approval. |
@@ -126,7 +126,16 @@ For a line with `gross = quantity × unit_price_minor` (from `computeLineSubtota
   `amount_minor`, `placeholder_id`, `reason_code`, `authority_source` = `cashier_approval` |
   `manager_session`, `approver_role`, `approver_operator_id`). This is a JSON shape, with no DDL.
   It is frozen at finalize from the placeholder and its `cart.discount.manager_authorized` audit
-  row, so the capture builder has a durable source for every §6 fact. `sales.subtotal_minor`
+  row, so the capture builder has a durable source for every §6 fact. **`approver_role` has no
+  durable source today on the cashier path.** `manager_approvals` stores only `approver_user_id`,
+  the PIN record stores no role, and the audit row's session is the cashier's. I1 must therefore
+  write `approver_role` into the `cart.discount.manager_authorized` payload at add time:
+  - manager path: the session role;
+  - cashier path: the approver's role as main resolves it when the approval is granted or
+    consumed.
+
+  If that needs a column on `manager_approvals`, it is a migration and needs owner authorization;
+  otherwise the field is dropped from the contract. `sales.subtotal_minor`
   keeps meaning **the amount charged before tax**, which is the net. The implementation slice
   must state this naming explicitly, because the name says "subtotal" while the value is net.
 - Tenders must sum to the net total, as they sum to `subtotal_minor` today.
@@ -168,6 +177,12 @@ then, customer-facing fiscal use stays blocked, as it is today.
    the approval in the add's transaction, and writes the placeholder, outbox and audit rows. The
    reason is the one bound to the approval at request time. If the add also sends a
    `reason_code`, it must equal the approval's reason, or the add is refused `approval_invalid`.
+   **Replay identity:** the reason is part of the add's idempotency identity. I1 stores the
+   resolved `reason_code` (and the token, already stored) in the outbox payload, and
+   `isSameDiscountAddReplay` compares it. Today the replay check runs first and compares only
+   cart, line and kind. A retry under the same key with a different reason is then refused
+   `idempotency_payload_mismatch`. It does not return success while the audit keeps the original
+   reason.
 6. The line shows the discount row and the new net. The approver's display name is shown (O2).
 
 ### 4.2 Manager or admin, direct (D2)
@@ -253,6 +268,13 @@ Options for Backend-Core (OD-28-12):
   this. POS never calls ERPNext.
 - **DEP-4, Backend-Core sale history and returns:** the sale detail and the return quote must show
   and refund the net. Under C-A this follows from `lineAmount` = net, but it needs verifying.
+- **POS returns lookup (in slice I4, not a dependency):**
+  - `src/main/returns/returns-verify.ts` (`snapshotKeys`) matches the server's `lineAmount`
+    against the frozen gross `line_subtotal_minor`.
+  - A discounted sale's server line is net, so `isExpectedSale` would reject every discounted
+    sale at return lookup.
+  - I4 changes the key to use the frozen `discount` net when present, and adds a
+    discounted-return test.
 
 ## 7. Refusals and audit
 
@@ -307,6 +329,12 @@ Audit:
   including attribution (contract-conformance test against the re-pinned `sales.yaml`);
 - a manager-direct add with a missing or unknown `reason_code` is refused, and a cashier add
   whose `reason_code` differs from the approval's is refused;
+- an idempotent retry with the same key and a different `reason_code` is refused
+  `idempotency_payload_mismatch`;
+- `approver_role` is frozen correctly on both paths, after a restart between add and finalize;
+- a discount that would make the cart total 0 is refused (or completes through the zero-tender
+  path, per OD-28-4);
+- after I4, a return lookup on a discounted sale matches and quotes the net;
 
 **Renderer:**
 
@@ -325,12 +353,12 @@ Audit:
 |---|---|---|---|---|
 | **P1** | Planning close-out | POS | The owner answers OD-28-1…4, 9 (list), 10 and 11. Amend spec 005 FR-023 / FR-024 and `specs/005-sales-cart/contracts/handoff-envelope.md` to point at this contract. | This doc |
 | **D1** | Docs / design references | POS | The «خصم» sheet (kind, value, reason, preview), the approval prompt reuse, the line discount row, the remove action, the two new refusals, and the receipt rows, at 1024 and 1280. The Arabic copy table is owner-approved. | P1 |
-| **I1** | Implementation | POS | The shared pure discount function, token parse, envelope totals, payment amount due, approval `amountMinor`, the add request's `reason_code` (§4.2), the two new refusals, and the audit payload fields. No UI. | P1 |
+| **I1** | Implementation | POS | The shared pure discount function, token parse, envelope totals, payment amount due, approval `amountMinor`, the add request's `reason_code` (§4.2) and its place in replay identity, the durable `approver_role` (§3.3), the zero-cart-total rule (OD-28-4), the two new refusals, and the audit payload fields. No UI. | P1 |
 | **I2** | Implementation | POS | The renderer control and flows (§4), on D1's references. | I1, D1 |
 | **I3** | Implementation | POS | Sale `lines_json` discount (with attribution), receipt rows, and the sync hold for discounted sales behind the capability switch (held pending, never dead-lettered, until DEP-1). | I1 |
 | **BC-1** | Contract-first, then Implementation | Backend-Core | DEP-1 (capture `discount`, RT-105 invariant), DEP-2 (audit catalogue), DEP-4 (history and returns). | OD-28-12 |
 | **CN-1** | Implementation | ERPNext-Connector | DEP-3, the line discount posting. | BC-1 |
-| **I4** | Implementation | POS | Re-pin `sales.yaml`, send C-A, and turn the capability switch on, so held sales drain. | BC-1 |
+| **I4** | Implementation | POS | Re-pin `sales.yaml`, send C-A, turn the capability switch on so held sales drain, and change the returns lookup key (`returns-verify.ts`) to the discounted net, with a test. | BC-1 |
 
 Pilot path: P1 → D1 → I1 → I2 → I3 gives a working till discount whose sales stay **unsynced**
 until BC-1 → I4. If the pilot needs synced discounted sales, BC-1 is on the critical path. That is
