@@ -38,6 +38,20 @@ There are four entry points that carry an amount from the renderer. All four use
 
 The UI guard claims only a **burst that ends in Enter**. It does not cover hand-typed digits, a paste, a scanner set up without an Enter suffix, or a slow wedge that the burst detector does not see. This is the gap D-F2 closed for cash received. Main is the only layer that sees every path.
 
+### 1.4 The precedent: how RT-437 (PR #652) closed D-F2
+
+| RT-437 element | What it did | For shift amounts |
+|---|---|---|
+| Pure shared rule | `src/shared/payments/cash-bound.ts`: `maxCashReceivedMinor`, `isCashAmountWithinBound`, imported by main and the renderer | **Carries over** as `src/shared/shift-cashup/amount-bound.ts` (§3.2) |
+| Placement | FSM cash branch, inside the apply transaction, before any `lines.insert` or outbox write | **Carries over in kind**: service checks before any `repo.record*` (§3.3) |
+| Rule shape | `amount ≤ max(cap, remaining)` | **Differs**: flat caps, because the analogous term (the expected cash) is hidden by the blind count (§3.1) |
+| Refusal | `cash_amount_out_of_range` added to `REFUSAL_REASONS` | **Carries over**: `amount_out_of_range` added to `SHIFT_CASHUP_REFUSALS` (§3.4) |
+| Copy | M-P29 «المبلغ أكبر من الحد المسموح للنقدية. راجع المبلغ.», pre-check plus main refusal, amount kept, field refocused, never «حاول مجددًا» | **Carries over**, with a new catalog row (§3.5) |
+| Log | a new dedicated `warn` line, `tender.apply.cash_out_of_range`, with the attempt id and no amount | **Differs**: the existing `info` line `shift_cashup:refused {op, reason}` already logs every shift refusal without the amount. OD-278-8 asks whether to add a `warn` line |
+| Audit | none (D-F2 decision 4) | **Carries over**: none (§3.6) |
+| Change-preview suppression | the ledger stopped previewing change for an out-of-range amount | **Not needed**: the shift screens preview nothing derived from the amount |
+| Fix-off proof | with the checks disabled, the new tests fail | **Carries over** (§5) |
+
 ## 2. Risk, by damage
 
 Committed shift facts are immutable. A mistake is corrected only by a compensating event ([Shift & Cash Management](https://rahmaqanater.atlassian.net/wiki/spaces/RETAIL/pages/24674305) lines 1592–1625), and each count is a durable Count Attempt.
@@ -72,7 +86,7 @@ Committed shift facts are immutable. A mistake is corrected only by a compensati
 |---|---|---|---|
 | EAN-13 (Egypt, prefix 622) | about 6.2×10¹² EGP | refused | refused |
 | UPC-A (12 digits) | ≥ about 10¹⁰ EGP with a leading 0, ≥ 10¹¹ otherwise | refused | refused |
-| EAN-8 | ≥ 10⁷ EGP (≥ 10⁶ with one leading 0) | refused | refused, unless two or more leading zeros |
+| EAN-8 | ≥ 10⁷ EGP (≥ 10⁶ with one leading 0) | refused, unless three or more leading zeros | refused, unless two or more leading zeros |
 | UPC-E (8 digits, leading 0) | ≥ 10⁶ EGP unless more leading zeros | refused, unless three or more leading zeros | refused, unless two or more leading zeros |
 
 No cap catches every code, because a code with many leading zeros reads as a small number. RT-239 stays the first line of defence. These caps are the backstop that keeps an absurd amount from being **recorded**, whatever path it came from.
@@ -101,6 +115,7 @@ Putting the count check in `planClose` covers both close entry points with one l
 
 - **Service:** a new `ShiftCashupRefusalReason`, `'amount_out_of_range'`, thrown as `ShiftCashupRefusedError`. Nothing is written, so a corrected retry is evaluated again.
 - **Bridge:** a new renderer refusal, `'amount_out_of_range'`, added to `SHIFT_CASHUP_REFUSALS` in `src/shared/shift-cashup/types.ts` and mapped one-to-one in `SERVICE_REFUSALS` (`shift-cashup-bridge.ts`). This is an additive IPC value. Main and the renderer ship in the same build. `REFUSAL_COPY` in `shift-copy.ts` is an exhaustive `Record`, so the compiler forces the copy row.
+- **Consumers checked** (`grep SHIFT_CASHUP_REFUSALS|ShiftCashupRefusal` on `main@d63ee893`): the two exhaustive maps `SERVICE_REFUSALS` and `REFUSAL_COPY`, and the pass-through types in `V5ShiftRoute.tsx`. There is no runtime validator: `src/preload/shift-cashup.ts` and `src/renderer/v5/shift/shift-bridge.ts` pass the reason through. An unknown reason would only fall back to the generic line in `shiftRefusalMessage`.
 - **Alternative (no contract change):** map the new service reason to the existing `invalid_input`. This was rejected because that line, «البيانات غير صالحة. راجع المبلغ والسبب والملاحظة.», sends the cashier to the reason and the note, and gives no hint that the amount is implausible.
 - The refusal names a closed reason, never a value or the bound (P7). The existing `shift_cashup:refused {op, reason}` info line already logs it without the amount.
 
@@ -130,7 +145,7 @@ Each decision has a recommended option, listed first.
 | OD-278-5 | Refusal | **New `amount_out_of_range`** service reason and renderer refusal (additive IPC) | map to the existing `invalid_input` and its generic copy (no contract change) |
 | OD-278-6 | Arabic copy | **«المبلغ أكبر من الحد المسموح لهذه العملية. راجع المبلغ. لم يُسجَّل شيء.»** as a new doc 15 §5 row, plus a G-2 addendum note | the owner's own wording; reuse M-P29 verbatim (it says «للنقدية», which fits less well for a count) |
 | OD-278-7 | Who enforces | **Main enforces; the renderer pre-checks** with the same shared rule | main only (the cashier sees the refusal only after the round trip) |
-| OD-278-8 | Audit | **None**; the existing `shift_cashup:refused` log line without the amount | a fraud-signal audit category (sync contract, GATED) |
+| OD-278-8 | Audit and log | **No audit event; keep the existing `info` line `shift_cashup:refused {op, reason}`**, which has no amount | add a dedicated `warn` line like RT-437's `tender.apply.cash_out_of_range` (still no amount); a fraud-signal audit category (sync contract, GATED) |
 | OD-278-9 | Doc correction | **Correct "about 10¹⁵ EGP" to "2⁵³ − 1 minor, about 9.0×10¹³ EGP"** in doc 16 §1, in the implementation slice | leave doc 16 as historical |
 
 ## 5. Follow-up slices
