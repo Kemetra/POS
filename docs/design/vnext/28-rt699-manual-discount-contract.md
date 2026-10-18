@@ -55,7 +55,7 @@ Status key:
 | OD-28-6 | Stacking | (A) at most one manual discount per line; (B) several | **Selected — recommended option (A), owner may revisit.** To change a discount, remove it (D4) and add again with approval. |
 | OD-28-7 | A quantity change on a discounted line | (A) refused until the discount is removed; (B) the discount is dropped automatically, with a notice; (C) a percent discount re-applies and an amount discount stays | **Selected — recommended option (A), owner may revisit.** The approved amount must stay equal to the applied amount (RT-114 binding). Option C would change a manager-approved amount with no new approval. |
 | OD-28-8 | Where the value is stored | (A) encoded in the existing `placeholder_kind` token, with no schema change (D5 holds); (B) new typed columns, which is a migration and revisits D5 | **Selected — recommended option (A), owner may revisit.** See §3.1. The token is already inside the approval subject ref, so the approval binds the value with no new binding code. |
-| OD-28-9 | Reason code | (A) required on both paths, from a closed list; (B) optional | **Selected — recommended (A), owner may revisit.** The **list contents are Open, an owner or policy decision.** Today the reason is carried only on the cashier path (from the approval). |
+| OD-28-9 | Reason code | (A) required on both paths, from a closed list; (B) optional | **Selected — recommended (A), owner may revisit.** The **list contents are Open, an owner or policy decision.** Today the reason is carried only on the cashier path (from the approval), and the add parser drops every other key. (A) therefore needs a validated `reason_code` on the add request for the direct path (§4.2). |
 | OD-28-10 | Discount and VAT | Is the discount applied before VAT (VAT on net) or after? | **Open — owner decision, deferred with VAT.** VAT is not implemented (`total_tax_minor = 0`). Nothing here sets a tax rule. §3.5 states only that the shape does not block either order. |
 | OD-28-11 | Receipt wording and fiscal display | Arabic labels and whether the receipt must show gross, discount and net per line | **Open — owner decision.** Recommended layout in §5. The fiscal requirements (Egyptian e-receipt) belong to 008-v2. |
 | OD-28-12 | Capture shape in Backend-Core | §6 options C-A, C-B, C-C | **Open — dependency (Backend-Core).** Recommended to Backend-Core: **C-A**. |
@@ -123,7 +123,10 @@ For a line with `gross = quantity × unit_price_minor` (from `computeLineSubtota
 
   With no discount, net = gross, so every existing sale and test is unchanged.
 - Sale: each `lines_json` entry gains an optional `discount` object (`kind`, `value`,
-  `amount_minor`, `placeholder_id`). This is a JSON shape, with no DDL. `sales.subtotal_minor`
+  `amount_minor`, `placeholder_id`, `reason_code`, `authority_source` = `cashier_approval` |
+  `manager_session`, `approver_role`, `approver_operator_id`). This is a JSON shape, with no DDL.
+  It is frozen at finalize from the placeholder and its `cart.discount.manager_authorized` audit
+  row, so the capture builder has a durable source for every §6 fact. `sales.subtotal_minor`
   keeps meaning **the amount charged before tax**, which is the net. The implementation slice
   must state this naming explicitly, because the name says "subtotal" while the value is net.
 - Tenders must sum to the net total, as they sum to `subtotal_minor` today.
@@ -162,13 +165,20 @@ then, customer-facing fiscal use stays blocked, as it is today.
    window (O3).
 5. The renderer calls `cart.discountPlaceholders.add` with **only** `cart_id`, `line_id`,
    `placeholder_kind`, `idempotency_key` and `approval_id`. Main recomputes the amount, consumes
-   the approval in the add's transaction, and writes the placeholder, outbox and audit rows.
+   the approval in the add's transaction, and writes the placeholder, outbox and audit rows. The
+   reason is the one bound to the approval at request time. If the add also sends a
+   `reason_code`, it must equal the approval's reason, or the add is refused `approval_invalid`.
 6. The line shows the discount row and the new net. The approver's display name is shown (O2).
 
 ### 4.2 Manager or admin, direct (D2)
 
 Steps 1–2 are the same. There is no approval prompt. The add carries no `approval_id`. Main
 records the session operator as the approver. The reason code is still required (OD-28-9 A).
+There is no approval to carry it, so `CartDiscountPlaceholdersAddRequest` gains an optional
+`reason_code`, and the IPC parser stops dropping it. Main validates it against the closed list
+(OD-28-9) and refuses a missing or unknown value with `invalid_payload`. The reason is a code, not
+free text, so no PII crosses the bridge. This is a POS-internal bridge change (slice I1, with a
+§A4 re-check).
 
 ### 4.3 Remove (D4)
 
@@ -210,7 +220,10 @@ What the POS Sale **must be able to carry** to Backend-Core, whatever the final 
 Options for Backend-Core (OD-28-12):
 
 - **C-A (recommended): an additive optional `discount` object on `CaptureSaleLine`**
-  (`kind`, `value`, `amount`, `reasonCode`), with `lineAmount` = **net**. The RT-105 invariant
+  (`kind`, `value`, `amount`, `reasonCode`, `authoritySource` = `cashier_approval` |
+  `manager_session`, `approverRole`), with `lineAmount` = **net**. How the approver's identity
+  is sent (for example a user ref under Backend-Core's RT-224 attribution rules) is part of
+  DEP-1. The RT-105 invariant
   becomes `lineAmount = unitPrice × quantity − discount.amount` when `discount` is present, and is
   unchanged when it is absent. This keeps `posTotal = Σ lineAmount`, so the returns and
   credit-reversal rules (`returnTotal = Σ lineAmount`) refund the net with no change. The change
@@ -225,9 +238,13 @@ Options for Backend-Core (OD-28-12):
 
 - **DEP-1, Backend-Core:** the capture contract change above (a `sales.yaml` minor version), the
   DB columns and the RT-105 validator. **Until it ships, POS must not sync a discounted sale.**
-  Recommended guard: the capture builder dead-letters a discounted sale with a named reason, the
-  same as `TenderNotSendableError`, rather than send a fabricated line. Alternatively, keep the
-  POS UI behind a flag until DEP-1 lands (choice in slice P3).
+  Recommended guard: **hold, do not dead-letter.** A dead letter is terminal: the engine's
+  `markDeadLetter` path, used for `TenderNotSendableError`, removes the sale from every later
+  drain, so it would never sync after DEP-1. Instead, while a POS capability switch says
+  Backend-Core cannot accept discounts, the drain skips discounted sales and leaves them pending.
+  The sync status shows them as held, with a named reason. I4 turns the switch on, and the held
+  sales then drain normally with no requeue step. Alternatively, keep the POS UI behind a flag
+  until DEP-1 lands (choice in slice P1).
 - **DEP-2, Backend-Core:** the audit catalogue and OpenAPI accept
   `cart.discount.manager_authorized`. This is already a named RT-608 gate. The payload gains
   `kind`, `value` and `amount_minor`.
@@ -285,8 +302,11 @@ Audit:
 - a quantity change on a discounted line and a second discount are both refused;
 - the Sale `lines_json` carries the discount, and the receipt payload shows the discount row and
   the net total;
-- the capture builder dead-letters a discounted sale until DEP-1, then sends C-A once DEP-1 ships
-  (contract-conformance test against the re-pinned `sales.yaml`).
+- with the capability switch off, a discounted sale is held (still pending, never
+  dead-lettered, shown as held). With the switch on, the same stored sale drains and sends C-A,
+  including attribution (contract-conformance test against the re-pinned `sales.yaml`);
+- a manager-direct add with a missing or unknown `reason_code` is refused, and a cashier add
+  whose `reason_code` differs from the approval's is refused;
 
 **Renderer:**
 
@@ -297,7 +317,7 @@ Audit:
 - refusals use the catalogue copy;
 - Arabic-only copy, keyboard and focus, 1024 and 1280.
 
-**Contract:** a §A4 bridge re-check note covers the new token rule and any envelope field.
+**Contract:** a §A4 bridge re-check note covers the new token rule, the add request's `reason_code` and any envelope field.
 
 ## 9. Bounded follow-up slices
 
@@ -305,12 +325,12 @@ Audit:
 |---|---|---|---|---|
 | **P1** | Planning close-out | POS | The owner answers OD-28-1…4, 9 (list), 10 and 11. Amend spec 005 FR-023 / FR-024 and `specs/005-sales-cart/contracts/handoff-envelope.md` to point at this contract. | This doc |
 | **D1** | Docs / design references | POS | The «خصم» sheet (kind, value, reason, preview), the approval prompt reuse, the line discount row, the remove action, the two new refusals, and the receipt rows, at 1024 and 1280. The Arabic copy table is owner-approved. | P1 |
-| **I1** | Implementation | POS | The shared pure discount function, token parse, envelope totals, payment amount due, approval `amountMinor`, the two new refusals, and the audit payload fields. No UI. | P1 |
+| **I1** | Implementation | POS | The shared pure discount function, token parse, envelope totals, payment amount due, approval `amountMinor`, the add request's `reason_code` (§4.2), the two new refusals, and the audit payload fields. No UI. | P1 |
 | **I2** | Implementation | POS | The renderer control and flows (§4), on D1's references. | I1, D1 |
-| **I3** | Implementation | POS | Sale `lines_json` discount, receipt rows, and the capture builder guard (dead-letter until DEP-1). | I1 |
+| **I3** | Implementation | POS | Sale `lines_json` discount (with attribution), receipt rows, and the sync hold for discounted sales behind the capability switch (held pending, never dead-lettered, until DEP-1). | I1 |
 | **BC-1** | Contract-first, then Implementation | Backend-Core | DEP-1 (capture `discount`, RT-105 invariant), DEP-2 (audit catalogue), DEP-4 (history and returns). | OD-28-12 |
 | **CN-1** | Implementation | ERPNext-Connector | DEP-3, the line discount posting. | BC-1 |
-| **I4** | Implementation | POS | Re-pin `sales.yaml`, send C-A, and remove the dead-letter guard. | BC-1 |
+| **I4** | Implementation | POS | Re-pin `sales.yaml`, send C-A, and turn the capability switch on, so held sales drain. | BC-1 |
 
 Pilot path: P1 → D1 → I1 → I2 → I3 gives a working till discount whose sales stay **unsynced**
 until BC-1 → I4. If the pilot needs synced discounted sales, BC-1 is on the critical path. That is
