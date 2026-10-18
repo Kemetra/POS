@@ -203,29 +203,26 @@ describe('RT-700 — card-tender flag off (default): main refuses a card tender'
     ).toEqual({ kind: 'refused', reason: 'no_session' });
   });
 
-  it('cash is unchanged: a cash tender applies with the flag off', async () => {
+  it.each([
+    [
+      'cash applies (with change due)',
+      { tender_type: 'cash', amount_applied_minor: 2000, idempotency_key: 'k-cash' },
+      { kind: 'ok', change_due_minor: 500 },
+    ],
+    [
+      'voucher applies through V-A',
+      {
+        tender_type: 'internal_voucher',
+        amount_applied_minor: 1000,
+        voucher_code: 'VOUCHER-1',
+        idempotency_key: 'k-voucher',
+      },
+      { kind: 'ok' },
+    ],
+  ])('other tenders are unchanged with the flag off: %s', async (_name, request, expected) => {
     const s = build({ cardTender: false });
     const attempt = await startAttempt(s);
-    const r = await s.apply({
-      payment_attempt_id: attempt,
-      tender_type: 'cash',
-      amount_applied_minor: 2000,
-      idempotency_key: 'k-cash',
-    });
-    expect(r).toMatchObject({ kind: 'ok', change_due_minor: 500 });
-  });
-
-  it('voucher is unchanged: a voucher tender applies through V-A with the flag off', async () => {
-    const s = build({ cardTender: false });
-    const attempt = await startAttempt(s);
-    const r = await s.apply({
-      payment_attempt_id: attempt,
-      tender_type: 'internal_voucher',
-      amount_applied_minor: 1000,
-      voucher_code: 'VOUCHER-1',
-      idempotency_key: 'k-voucher',
-    });
-    expect(r).toMatchObject({ kind: 'ok' });
+    expect(await s.apply({ payment_attempt_id: attempt, ...request })).toMatchObject(expected);
   });
 
   it('fails closed when the flag reader is not wired', async () => {
