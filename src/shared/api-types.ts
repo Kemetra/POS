@@ -13035,18 +13035,22 @@ export interface components {
              */
             terminal_name: string;
         };
-        /**
-         * TerminalPairErrorResponse
-         * @description Failure envelope for POST /api/v1/terminals/pair. The code discriminates the recoverable failure modes (INVALID_CODE, EXPIRED_CODE, ALREADY_PAIRED, BRANCH_MISMATCH, RATE_LIMITED). message is logged but never shown verbatim - UI uses its own message family.
-         */
+        /** @description Canonical error envelope shared with `auth.openapi.yaml`, `outbox.openapi.yaml`, `catalog/unknown-items.yaml`, `pos-payments/vouchers.yaml`, and the other backend contracts. The `error.code` enum is the closed set documented per-operation above. */
         TerminalPairErrorResponse: {
-            /**
-             * Code
-             * @enum {string}
-             */
-            code: "INVALID_CODE" | "EXPIRED_CODE" | "ALREADY_PAIRED" | "BRANCH_MISMATCH" | "RATE_LIMITED";
-            /** Message */
-            message: string;
+            error: {
+                /**
+                 * @description Stable machine-readable error code.
+                 * @enum {string}
+                 */
+                code: "INVALID_CODE" | "EXPIRED_CODE" | "ALREADY_PAIRED" | "BRANCH_MISMATCH" | "REPLACEMENT_BLOCKED" | "RATE_LIMITED" | "validation_failure";
+                /** @description Human-readable summary; no sensitive data. */
+                message: string;
+                /**
+                 * Format: uuid
+                 * @description Server-assigned correlation id.
+                 */
+                request_id?: string | null;
+            };
         };
         /**
          * TerminalPairRequest
