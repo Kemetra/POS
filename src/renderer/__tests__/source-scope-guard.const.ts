@@ -243,3 +243,33 @@ export const RT_306_PAIRING_TOKEN_BINDING_BRANCH_PREFIX = 'claude/rt-306-' as co
 export const RT_306_PAIRING_TOKEN_BINDING_EXEMPT_PREFIXES = [
   'src/main/pairing/',
 ] as const satisfies readonly ForbiddenPathPrefix[];
+
+/**
+ * `bot/backend-core-repin` is the contracts-repin bot's PR branch (RT-676,
+ * `.github/workflows/contracts-repin.yml`). A repin that adds a pairing error
+ * code turns the drift guard in
+ * `src/main/pairing/__tests__/failure-mapping.test.ts` red until a human lists
+ * the new code there (first case: terminal-pairing 1.2.0 `REPLACEMENT_BLOCKED`,
+ * whose dedicated mapping is RT-591).
+ *
+ * Authority: owner decision (option A, "narrow exemption"), 2026-10-18, for
+ * Kemetra/POS#755, citing RT-676 and RT-591.
+ *
+ * Exemption is narrow, and deliberately not a prefix exemption: exactly ONE
+ * file, on exactly ONE branch (exact name, no `startsWith`). No other
+ * `src/main/pairing/` path, and every forbidden prefix stays blocked for every
+ * other file and branch. Narrowness is asserted by
+ * `source-scope-guard-rt676.test.ts`.
+ */
+export const RT_676_REPIN_BRANCH = 'bot/backend-core-repin' as const;
+export const RT_676_REPIN_EXEMPT_FILES = [
+  'src/main/pairing/__tests__/failure-mapping.test.ts',
+] as const satisfies readonly string[];
+
+/** True when `file` is the one file the RT-676 exemption allows on `branch`. */
+export function isRt676ExemptFile(branch: string, file: string): boolean {
+  return (
+    branch === RT_676_REPIN_BRANCH &&
+    (RT_676_REPIN_EXEMPT_FILES as readonly string[]).includes(file)
+  );
+}
