@@ -31,6 +31,7 @@ import {
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const SNAPSHOT = 'contracts/backend-core';
 const PIN_FILE = `${SNAPSHOT}/PIN`;
+const OPENAPI_DIR = `${SNAPSHOT}/openapi`;
 const BRANCH = 'bot/backend-core-repin';
 const BOT_LOGIN = 'kemetra-contracts-bot[bot]';
 // GitHub links this noreply address to the App's bot account, so the commits show
@@ -117,6 +118,23 @@ function ensureBreakLabel(): void {
     '--description',
     'Backend-Core contract repin broke POS conformance',
   ]);
+}
+
+/**
+ * The PIN the bot branch already carries when its vendored contract files equal the
+ * working tree's, else null (no branch yet, or it differs). Lets a daily run skip
+ * the commit and force-push, which would re-trigger CI and stale reviews for nothing.
+ */
+function publishedPinIfIdentical(): ContractsPin | null {
+  try {
+    git(['fetch', '--depth=1', 'origin', BRANCH]);
+  } catch {
+    return null;
+  }
+  // Staged so files the repin added (untracked) are compared too.
+  git(['add', '--', SNAPSHOT]);
+  const differing = git(['diff', '--cached', '--name-only', 'FETCH_HEAD', '--', OPENAPI_DIR]);
+  return differing.trim() === '' ? parsePin(git(['show', `FETCH_HEAD:${PIN_FILE}`])) : null;
 }
 
 function commitAndPush(after: ContractsPin): void {
@@ -250,8 +268,11 @@ function main(): void {
     commentOnce(after);
     return;
   }
-  commitAndPush(after);
-  upsertPr({ before, after, diff, failed: conformance === 'fail' });
+  const published = publishedPinIfIdentical();
+  if (published === null) commitAndPush(after);
+  else process.stdout.write('Bot branch already carries these contracts; not pushing.\n');
+  // Describe what the branch actually holds, so title and body never disagree with it.
+  upsertPr({ before, after: published ?? after, diff, failed: conformance === 'fail' });
   const files = diff.changed.length + diff.added.length + diff.removed.length;
   process.stdout.write(`Repin PR synced (${String(files)} file(s)).\n`);
 }

@@ -292,7 +292,8 @@ export function renderRepinPrBody(args: RepinPrBodyArgs): string {
   ].join('\n');
 }
 
-const ANSI_ESCAPE = new RegExp(`${String.fromCharCode(27)}\[[0-9;]*m`, 'g');
+// ESC, then `[` (as a one-member class), then colour parameters.
+const ANSI_ESCAPE = new RegExp(`${String.fromCodePoint(27)}[[][0-9;]*m`, 'g');
 const SUMMARY_MAX_CHARS = 4000;
 
 /** The tail of a test run's output, colour codes stripped, small enough for a PR body. */
