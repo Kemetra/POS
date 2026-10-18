@@ -24,7 +24,7 @@
 
 The shift's expected cash is **not** damaged: it uses net cash, received minus change (RT-160 D-3).
 
-**RT-17's bound does not catch F-02.** `maxShiftAmountMinor('EGP')` allows 15 integer digits, about 10¹⁵ EGP. The F-02 amount is about 6.2×10¹² EGP, well inside it. A storage-derived bound protects the wire format, not the cashier. D-F2 therefore needs an **operational** maximum.
+**RT-17's bound does not catch F-02.** `maxShiftAmountMinor('EGP')` is `min(10¹⁷ − 1, 2⁵³ − 1)` minor, so 2⁵³ − 1 minor, about 9.0×10¹³ EGP. (This doc first said "15 integer digits, about 10¹⁵ EGP"; corrected by RT-278 S1, OD-278-9.) The F-02 amount is about 6.2×10¹² EGP, well inside it. A storage-derived bound protects the wire format, not the cashier. D-F2 therefore needs an **operational** maximum.
 
 ## 2. Recommendation (as approved: a currency maximum)
 

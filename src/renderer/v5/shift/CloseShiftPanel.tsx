@@ -1,13 +1,16 @@
 import { useEffect, useRef, useState, type JSX, type RefObject } from 'react';
 import { useNavigate } from 'react-router-dom';
 
+import { isShiftAmountWithinBound } from '../../../shared/shift-cashup/amount-bound';
 import type { ShiftCashupBridgeAPI, ShiftCloseResponse } from '../../../shared/shift-cashup/types';
 import { ManagerApprovalDialog } from './ManagerApprovalDialog';
 import { callShift, useSingleFlight } from './shift-bridge';
 import { SHIFT_COPY, shiftRefusalMessage } from './shift-copy';
 import { parseShiftAmount } from './shift-format';
 import {
+  amountOutOfRange,
   invalidEntry,
+  refusalEntry,
   refusedCall,
   ShiftAmountField,
   ShiftCard,
@@ -37,7 +40,9 @@ type Closed = Extract<ShiftCloseResponse, { kind: 'closed' }>;
  * answers the close with its id and time only. A count that does not match
  * is refused `variance_approval_required`; the manager approval step then
  * retries the same count with a listed manager and their PIN, and only that
- * approved close returns the variance (shown after the commit).
+ * approved close returns the variance (shown after the commit). RT-278 S1: a
+ * count above main's flat cap is not sent; the cap depends on nothing hidden,
+ * so the pre-check reveals nothing about the expected cash.
  */
 export function CloseShiftPanel(props: Props): JSX.Element {
   const [count, setCount] = useState('');
@@ -47,6 +52,7 @@ export function CloseShiftPanel(props: Props): JSX.Element {
   const [approving, setApproving] = useState<number | null>(null);
   const { busy, run } = useSingleFlight();
   const commitRef = useRef<HTMLButtonElement>(null);
+  const countRef = useRef<HTMLInputElement>(null);
   useFocusBackAfterApproval(approving, commitRef);
 
   const closed = (answer: Closed): void => {
@@ -56,21 +62,32 @@ export function CloseShiftPanel(props: Props): JSX.Element {
     });
   };
 
+  /** The amount itself is wrong: say so under the field and give it focus back. */
+  const rejectAmount = (next: FieldError): void => {
+    setError(next);
+    countRef.current?.focus();
+  };
+
   const submit = (): void => {
     const countedCashMinor = parseShiftAmount(count);
     if (countedCashMinor === null) {
       setError(invalidEntry(SHIFT_COPY.invalidAmount));
       return;
     }
-    setError(null);
     setParked(null);
+    if (!isShiftAmountWithinBound('counted_cash', countedCashMinor, props.currencyCode)) {
+      rejectAmount(amountOutOfRange());
+      return;
+    }
+    setError(null);
     run(async () => {
       const answer = await callShift(() => props.bridge.close({ countedCashMinor }));
       if (answer.kind === 'closed') closed(answer);
       else if (answer.reason === 'variance_approval_required') setApproving(countedCashMinor);
       else if (answer.reason === 'parked_sales_present')
         setParked({ count: answer.parkedCount ?? null });
-      else setError(refusedCall(shiftRefusalMessage(answer.reason)));
+      else if (answer.reason === 'amount_out_of_range') rejectAmount(refusalEntry(answer.reason));
+      else setError(refusalEntry(answer.reason));
     });
   };
 
@@ -82,6 +99,7 @@ export function CloseShiftPanel(props: Props): JSX.Element {
         value={count}
         onChange={setCount}
         error={error}
+        inputRef={countRef}
       />
       {parked !== null && <ParkedSalesBlock count={parked.count} />}
       <div className="v5-shift-commit">

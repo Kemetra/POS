@@ -1,7 +1,8 @@
-import { useState, type JSX } from 'react';
+import { useRef, useState, type JSX } from 'react';
 import { Link } from 'react-router-dom';
 
 import type { Role } from '../../../shared/operator/role';
+import { isShiftAmountWithinBound } from '../../../shared/shift-cashup/amount-bound';
 import type {
   ShiftCashupBridgeAPI,
   ShiftCashupRefusal,
@@ -13,8 +14,9 @@ import { callShift, useShiftStatus, useSingleFlight } from './shift-bridge';
 import { SHIFT_COPY, shiftRefusalMessage } from './shift-copy';
 import { parseShiftAmount } from './shift-format';
 import {
+  amountOutOfRange,
   invalidEntry,
-  refusedCall,
+  refusalEntry,
   ShiftAmountField,
   ShiftCard,
   ShiftMoney,
@@ -179,6 +181,13 @@ function OpenShiftPanel(
   const [value, setValue] = useState('');
   const [error, setError] = useState<FieldError | null>(null);
   const { busy, run } = useSingleFlight();
+  const fieldRef = useRef<HTMLInputElement>(null);
+
+  /** The amount itself is wrong: say so under the field and give it focus back. */
+  const rejectAmount = (next: FieldError): void => {
+    setError(next);
+    fieldRef.current?.focus();
+  };
 
   const submit = (): void => {
     const openingFloatMinor = parseShiftAmount(value);
@@ -186,11 +195,18 @@ function OpenShiftPanel(
       setError(invalidEntry(SHIFT_COPY.invalidAmount));
       return;
     }
+    // RT-278 S1: the flat cap main enforces. No shift is open, so no shift
+    // currency is known yet; the product captures EGP only (as CashEntry).
+    if (!isShiftAmountWithinBound('opening_float', openingFloatMinor, 'EGP')) {
+      rejectAmount(amountOutOfRange());
+      return;
+    }
     setError(null);
     run(async () => {
       const answer = await callShift(() => props.bridge.open({ openingFloatMinor }));
       if (answer.kind === 'opened') props.onOpened();
-      else setError(refusedCall(shiftRefusalMessage(answer.reason)));
+      else if (answer.reason === 'amount_out_of_range') rejectAmount(refusalEntry(answer.reason));
+      else setError(refusalEntry(answer.reason));
     });
   };
 
@@ -201,6 +217,7 @@ function OpenShiftPanel(
         value={value}
         onChange={setValue}
         error={error}
+        inputRef={fieldRef}
       />
       <div className="v5-shift-commit">
         <button
@@ -284,6 +301,7 @@ function OpenShift(
         <CashMovementDialog
           bridge={props.bridge}
           kind={movement}
+          currencyCode={open.currencyCode}
           onDismiss={() => {
             setMovement(null);
           }}

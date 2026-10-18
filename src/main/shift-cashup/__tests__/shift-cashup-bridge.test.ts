@@ -518,3 +518,44 @@ describe('status: nothing that reveals the expected cash, no users.id', () => {
     await expect(bridge.status()).resolves.toMatchObject({ status: { openShift: null } });
   });
 });
+
+describe('RT-278 S1 — an implausible shift amount (scanner digits)', () => {
+  /** F-02: the 13-digit barcode 6221000000011 read as major units. */
+  const F02_MINOR = 622_100_000_001_100;
+
+  function expectLoggedWithoutAmount(op: string): void {
+    expect(logger.info).toHaveBeenCalledWith(
+      { op, reason: 'amount_out_of_range' },
+      SHIFT_CASHUP_REFUSED_LOG,
+    );
+    const logged = JSON.stringify([...logger.info.mock.calls, ...logger.warn.mock.calls]);
+    expect(logged).not.toContain(String(F02_MINOR));
+  }
+
+  it('answers an implausible float as amount_out_of_range, one-to-one, logging no amount', async () => {
+    await expect(bridge.open({ openingFloatMinor: F02_MINOR })).resolves.toStrictEqual(
+      refused('amount_out_of_range'),
+    );
+    expectLoggedWithoutAmount('open');
+  });
+
+  it('answers an implausible pay-in as amount_out_of_range, logging no amount', async () => {
+    await openShift();
+    await expect(
+      bridge.payIn({ amountMinor: F02_MINOR, reasonCode: 'other' }),
+    ).resolves.toStrictEqual(refused('amount_out_of_range'));
+    expectLoggedWithoutAmount('payIn');
+  });
+
+  it('answers an implausible count as amount_out_of_range, even with an approver, and checks no PIN', async () => {
+    await openShift();
+    const close = bridge.close({
+      countedCashMinor: F02_MINOR,
+      approver: { managerRef: MANAGER_REF, managerPin: MANAGER_PIN },
+    });
+    await expect(close).resolves.toStrictEqual(refused('amount_out_of_range'));
+    expect(harness.state.verifyCalls).toEqual([]);
+    expectLoggedWithoutAmount('close');
+    expect(factCounts(db)).toMatchObject({ shift_cashup_closes: 0 });
+  });
+});
