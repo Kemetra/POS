@@ -576,7 +576,7 @@ Motion explains a change; it never owns the meaning (UX-06). POS is predominantl
 | Signal | 150ms | `--motion-flash`, `--motion-notice-in` | scan-row flash, a local notice or state acknowledgement |
 | Continuity | 220ms | `--motion-dialog-in` | dialogs, drawers, attached overlays |
 
-All three use `ease-out` `cubic-bezier(0.2, 0.7, 0.25, 1)`. New work uses only these roles: no ad-hoc durations, and the shipped `--duration-4` (320ms) is not a motion role. No springs, overshoot, bounce, shake or parallax.
+All three use `ease-out` `cubic-bezier(0.2, 0.7, 0.25, 1)`. New state transitions use only these roles: no ad-hoc durations, and the shipped `--duration-4` (320ms) is not a motion role. The roles time state changes, not continuous activity loops: a genuine-activity spinner keeps the shipped `800ms linear infinite` rotation (`v5/foundation/messages.css`, `route-states.css`). UX-06 names no spinner token; one may be added by a later motion slice, which must not speed the loop up to a transition role. No springs, overshoot, bounce, shake or parallax.
 
 - **Truth doesn't perform:** money, totals, tax, refunds and stock never roll, count up or morph through intermediate values; the correct value appears at once. `MoneyRoll` was removed by RT-243 F1 (#583).
 - **Success settles, risk suppresses expression:** a proven result gets a restrained acknowledgement, never celebration. Payment UNKNOWN and other critical uncertainty are near-static.
@@ -604,7 +604,7 @@ All three use `ease-out` `cubic-bezier(0.2, 0.7, 0.25, 1)`. New work uses only t
 - **Don't** show success colour, a check icon or a success word before the underlying fact is persisted.
 - **Don't** call an UNKNOWN payment a decline, or a local sale "posted".
 - **Don't** auto-dismiss operational state (offline, sync attention, printer, drawer, shift closed) — those are persistent banners.
-- **Don't** animate money values (no rolling or count-up), use durations outside the 80 / 150 / 220ms roles, or use bounce, elastic, ambient or decorative motion.
+- **Don't** animate money values (no rolling or count-up), time a state transition outside the 80 / 150 / 220ms roles, or use bounce, elastic, ambient or decorative motion.
 - **Don't** bind financial confirmation to bare Enter, or show a keyboard hint for a key that is not bound.
 - **Don't** use shadows below the overlay level, nest panels, or put status colours on decoration.
 - **Don't** add a secondary brand accent, a gradient on an operational surface, or a theme toggle (UX-02).
