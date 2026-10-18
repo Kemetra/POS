@@ -1,6 +1,8 @@
 import { useId, type JSX, type ReactNode, type Ref } from 'react';
 
+import type { ShiftCashupRefusal } from '../../../shared/shift-cashup/types';
 import { Notice } from '../foundation/Notice';
+import { shiftRefusalMessage } from './shift-copy';
 import { formatShiftMoney, formatShiftTime } from './shift-format';
 
 /**
@@ -61,6 +63,22 @@ export const invalidEntry = (message: string): FieldError => ({ message, invalid
 
 /** Main refused the call; the entry itself was well formed. */
 export const refusedCall = (message: string): FieldError => ({ message, invalid: false });
+
+/** RT-278 S1: the amount is above its plausibility cap (scanner or typing digits). */
+export function amountOutOfRange(): FieldError {
+  return invalidEntry(shiftRefusalMessage('amount_out_of_range'));
+}
+
+/**
+ * Main's refusal under the field: RT-278 S1's `amount_out_of_range` is about
+ * the amount itself, so it marks the entry invalid like the pre-check does;
+ * any other refusal is a refused call.
+ */
+export function refusalEntry(reason: ShiftCashupRefusal): FieldError {
+  return reason === 'amount_out_of_range'
+    ? amountOutOfRange()
+    : refusedCall(shiftRefusalMessage(reason));
+}
 
 interface AmountFieldProps {
   readonly label: string;

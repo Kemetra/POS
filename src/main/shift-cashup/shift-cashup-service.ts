@@ -113,6 +113,16 @@
  * to close. An opening float is
  * the whole aggregate at the open, already a checked safe integer.
  *
+ * RT-278 S1 (plan doc 29 §3.3, owner decisions RT-278 comment 12764) — a
+ * plausibility cap on each NEW shift amount (`amount_out_of_range`, checked
+ * before anything is read or written; `src/shared/shift-cashup/amount-bound.ts`):
+ * the opening float and each pay-in at most EGP 100,000.00, the counted cash
+ * at most EGP 1,000,000.00. The count is checked first thing in the close's
+ * pre-check (`planClose`), so a scanned count is never tallied as a probe and
+ * never reaches the manager PIN verification. A pay-out keeps the drawer
+ * bound only. The caps never apply to an aggregate: a shift recorded before
+ * rollout, with a larger float or pay-in, still takes a pay-out and closes.
+ *
  * RT-17 slice 4 — probing the blind count (10941 item 3): a pay-out refused
  * above the expected drawer cash, and a close refused for a non-zero variance
  * without an approver, are tallied per shift in memory
@@ -130,6 +140,10 @@ import type {
   ManagerPinVerdict,
 } from '../operator/manager-pin-store.js';
 import { compareCodeUnits } from '../../shared/compare-code-units.js';
+import {
+  isShiftAmountWithinBound,
+  type ShiftAmountEntry,
+} from '../../shared/shift-cashup/amount-bound.js';
 import type { OperatorSessionForPayments } from '../payments/require-operator-session.js';
 import { maxShiftAmountMinor } from './shift-amount-bound.js';
 import { computeCashup, type Cashup } from './shift-cashup-calculator.js';
@@ -164,7 +178,9 @@ export type ShiftCashupRefusalReason =
   | 'approver_is_closer'
   | 'approver_expired'
   | 'approval_stale'
-  | 'aggregate_out_of_range';
+  | 'aggregate_out_of_range'
+  // RT-278 S1: a new shift amount above its plausibility cap (scanner digits).
+  | 'amount_out_of_range';
 
 /** A call the service refuses before recording anything. */
 export class ShiftCashupRefusedError extends Error {
@@ -455,6 +471,17 @@ function requireSafeAggregate(input: { total: bigint; currencyCode: string }): v
   }
 }
 
+/** RT-278 S1: a new shift amount within its flat cap, else `amount_out_of_range`. */
+function requirePlausibleAmount(input: {
+  entry: ShiftAmountEntry;
+  amountMinor: number;
+  currencyCode: string;
+}): void {
+  if (!isShiftAmountWithinBound(input.entry, input.amountMinor, input.currencyCode)) {
+    refuse('amount_out_of_range');
+  }
+}
+
 /**
  * Review P2-1: `now` must lie at least `gapMs` after `floor` (an instant),
  * else `clock_regressed`. 0 = not before (a fact on the open shift); 1 =
@@ -605,11 +632,17 @@ export function createShiftCashupService(deps: ShiftCashupServiceDeps): ShiftCas
   }
 
   /**
-   * The close's synchronous pre-check at now: the open shift (never before its
+   * The close's synchronous pre-check at now: a plausible count (RT-278 S1,
+   * first: nothing read, no probe, no PIN), the open shift (never before its
    * open), no drawer cash in flight, the cash-up, and the count's variance.
    */
   function planClose(input: { scope: ShiftScope; countedCashMinor: number }): ClosePlan {
     const { scope } = input;
+    requirePlausibleAmount({
+      entry: 'counted_cash',
+      amountMinor: input.countedCashMinor,
+      currencyCode: deps.currencyCode,
+    });
     const closedAt = deps.now();
     const open = openShiftAt({ scope, now: closedAt });
     requireDrawerSettled({ sources: deps.sources, scope });
@@ -642,8 +675,13 @@ export function createShiftCashupService(deps: ShiftCashupServiceDeps): ShiftCas
     now: string;
   }): void {
     if (input.movement.kind !== 'pay_in') return;
-    const amount = BigInt(input.movement.amountMinor);
     const { currencyCode } = input.open;
+    requirePlausibleAmount({
+      entry: 'pay_in',
+      amountMinor: input.movement.amountMinor,
+      currencyCode,
+    });
+    const amount = BigInt(input.movement.amountMinor);
     requireSafeAggregate({ total: BigInt(input.open.payInTotalMinor) + amount, currencyCode });
     const { expectedCashMinor } = cashupOf({ ...input, until: input.now });
     requireSafeAggregate({ total: BigInt(expectedCashMinor) + amount, currencyCode });
@@ -671,6 +709,11 @@ export function createShiftCashupService(deps: ShiftCashupServiceDeps): ShiftCas
   return {
     openShift(input) {
       const { scope, userId } = admit();
+      requirePlausibleAmount({
+        entry: 'opening_float',
+        amountMinor: input.openingFloatMinor,
+        currencyCode: deps.currencyCode,
+      });
       const now = deps.now();
       requireClockFrom({ now, floor: deps.sources.lastClosedAt(scope), gapMs: 1 });
       requireDrawerSettled({ sources: deps.sources, scope });

@@ -50,6 +50,9 @@ export const SHIFT_CASHUP_REFUSALS = [
   // records cashier facts only; the manager-envelope path is a later part.
   'no_cashier_identity',
   'invalid_input',
+  // RT-278 S1: an opening float, pay-in or count above its plausibility cap
+  // (scanner or typing digits). Names no amount and no bound.
+  'amount_out_of_range',
   'shift_already_open',
   'shift_not_open',
   'clock_regressed',
