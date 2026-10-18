@@ -69,9 +69,9 @@ export function syncPairingError(snapshot: OpenApiDoc, pinnedError: unknown): Op
 
 // --- CLI driver (runs only when invoked directly) ---------------------------
 
-import { readFileSync, writeFileSync } from 'fs';
-import path from 'path';
-import { fileURLToPath } from 'url';
+import { readFileSync, writeFileSync } from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import jsYaml from 'js-yaml';
 
 const loadYaml = (jsYaml as { load: (src: string) => unknown }).load;
