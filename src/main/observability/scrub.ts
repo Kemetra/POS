@@ -10,9 +10,11 @@
  *     `transaction`, frame `vars` and source context lines are dropped
  *     wholesale, whatever their keys are.
  *   - §3.2 masking inside exception messages: JWTs, URL userinfo/query/
- *     fragment, emails and Postgres row detail. Input is capped at 2,000 chars
- *     before scanning and the output at 300; index scans only, no backtracking
- *     regex on library input.
+ *     fragment, emails, Postgres row detail and (RT-693, contract amendment
+ *     RT-682) `Bearer`/`Authorization` credentials and phone numbers. Input
+ *     is capped at 2,000 chars before scanning and the output at 300; index
+ *     scans only, no backtracking regex on library input. §3.5's golden
+ *     vectors pin the exact output.
  *
  * POS deviations from the reference, both stricter:
  *   - `server_name` is dropped: on a till it is the Windows machine name,
@@ -21,6 +23,8 @@
  *     with the SDK's path-normalising integration off, the raw path would
  *     otherwise leave the device.
  */
+
+import { maskPhones } from './phone-mask.js';
 
 /** Max length of an exception message that leaves the process. */
 const MAX_MESSAGE_LENGTH = 300;
@@ -89,6 +93,22 @@ const POSTGRES_ROW_MARKERS = [
 ] as const;
 const SCHEME_CHAR = /^[a-z0-9+.-]$/i;
 const TRAILING_PUNCTUATION: ReadonlySet<string> = new Set([`"`, "'", ')', ']', ',', ';', '.', '>']);
+const REDACTED = '[redacted]';
+// Characters ignored around `Bearer` and an auth-scheme word (§3.2).
+const WORD_WRAPPERS = `"'{[(,:`;
+const QUOTES = `"'`;
+const IDENTIFIER_CHAR = /^[a-z0-9_-]$/i;
+const AUTHORIZATION_KEY = 'authorization';
+// After `Authorization:`, a scheme word means the credential is the word after it.
+const AUTH_SCHEMES: ReadonlySet<string> = new Set([
+  'bearer',
+  'basic',
+  'digest',
+  'token',
+  'apikey',
+  'negotiate',
+  'ntlm',
+]);
 // Path markers after which a frame filename is app-relative. Checked in order.
 const APP_PATH_MARKERS = ['/app.asar/', '/dist/'] as const;
 
@@ -118,11 +138,18 @@ function maskPostgresRowValues(value: string): string {
   return out;
 }
 
+/** A scrubbed word, and whether the word after it is a credential to mask (§3.2). */
+interface ScrubbedWord {
+  text: string;
+  maskNext: boolean;
+}
+
 /**
  * One whitespace-delimited token of an exception message. Secrets are masked
  * wherever they sit in it (`token=eyJ…`, `"https://u:p@host/x?api_key=…"`):
- * URLs first (userinfo and query), then JWTs, then emails. Index scans only,
- * so the work stays linear on untrusted input.
+ * `Bearer` first, then URLs (userinfo and query), `Authorization` values,
+ * JWTs, emails and phones. Index scans only, so the work stays linear on
+ * untrusted input.
  */
 class MessageToken {
   private readonly text: string;
@@ -131,9 +158,66 @@ class MessageToken {
     this.text = text;
   }
 
-  scrubbed(): string {
-    const masked = this.withoutUrl().withoutJwt();
-    return masked.isEmailLike() ? '[email]' : masked.text;
+  scrubbed(): ScrubbedWord {
+    if (this.unwrapped() === 'bearer') return { text: REDACTED, maskNext: true };
+    const url = this.withoutUrl();
+    const authorization = url.maskedAuthorization();
+    // The part before `authorization=` still gets the JWT/email/phone masks.
+    const masked = (authorization ? new MessageToken(authorization.text) : url).withoutJwt();
+    const text = masked.isEmailLike() ? '[email]' : maskPhones(masked.text);
+    return { text, maskNext: authorization?.maskNext ?? false };
+  }
+
+  /** An auth-scheme word (`Bearer`, `'Basic`): the credential is the next word. */
+  isAuthScheme(): boolean {
+    return AUTH_SCHEMES.has(this.unwrapped());
+  }
+
+  /**
+   * `Authorization:<value>` / `"authorization":` / `headers.authorization=`:
+   * the value after the first such separator is masked, or the next word
+   * when the value is empty. A scheme value (`Bearer`) means the credential
+   * is the next word.
+   */
+  private maskedAuthorization(): ScrubbedWord | null {
+    for (let sep = 0; sep < this.text.length; sep++) {
+      if (this.isAuthorizationSeparator(sep)) {
+        const value = new MessageToken(this.text.slice(sep + 1));
+        if (value.text === '') return { text: this.text, maskNext: true };
+        return {
+          text: `${this.text.slice(0, sep + 1)}${REDACTED}`,
+          maskNext: value.isAuthScheme(),
+        };
+      }
+    }
+    return null;
+  }
+
+  /** Lower-cased, without the wrapper characters around it (`'Bearer` -> `bearer`). */
+  private unwrapped(): string {
+    let start = 0;
+    let end = this.text.length;
+    while (start < end && WORD_WRAPPERS.includes(this.text.charAt(start))) start++;
+    while (end > start && WORD_WRAPPERS.includes(this.text.charAt(end - 1))) end--;
+    return this.text.slice(start, end).toLowerCase();
+  }
+
+  /** A `:` or `=` whose key ends in `authorization` (`Proxy-Authorization:`, `"authorization":`). */
+  private isAuthorizationSeparator(sep: number): boolean {
+    const char = this.text.charAt(sep);
+    return (char === ':' || char === '=') && this.keyBefore(sep).endsWith(AUTHORIZATION_KEY);
+  }
+
+  /**
+   * Lower-cased identifier ending at `sep`, skipping quotes. The scan stops at
+   * the previous separator, so all the scans in one word stay linear.
+   */
+  private keyBefore(sep: number): string {
+    let end = sep;
+    while (end > 0 && QUOTES.includes(this.text.charAt(end - 1))) end--;
+    let start = end;
+    while (start > 0 && IDENTIFIER_CHAR.test(this.text.charAt(start - 1))) start--;
+    return this.text.slice(start, end).toLowerCase();
   }
 
   /** Keep scheme + host + path; drop userinfo, query, fragment. Unparsable -> `[url]`. */
@@ -180,12 +264,32 @@ class MessageToken {
   }
 }
 
+/**
+ * Scrub each word, carrying one "mask the next word" flag across words
+ * (`Bearer <x>`, `Authorization: Basic <x>`). Whitespace passes through.
+ */
+function scrubWords(parts: readonly string[]): string {
+  let maskNext = false;
+  const out: string[] = [];
+  for (const part of parts) {
+    if (part.trim() === '') {
+      out.push(part);
+    } else if (maskNext) {
+      maskNext = new MessageToken(part).isAuthScheme();
+      out.push(REDACTED);
+    } else {
+      const word = new MessageToken(part).scrubbed();
+      maskNext = word.maskNext;
+      out.push(word.text);
+    }
+  }
+  return out.join('');
+}
+
 /** Contract §3.2: cap, mask secrets anywhere in the text, truncate. */
 export function sanitizeMessage(value: string): string {
-  const cleaned = maskPostgresRowValues(value.slice(0, MAX_SCAN_LENGTH))
-    .split(/(\s+)/)
-    .map((token) => new MessageToken(token).scrubbed())
-    .join('');
+  const words = maskPostgresRowValues(value.slice(0, MAX_SCAN_LENGTH)).split(/(\s+)/);
+  const cleaned = scrubWords(words);
   return cleaned.length > MAX_MESSAGE_LENGTH
     ? `${cleaned.slice(0, MAX_MESSAGE_LENGTH - 3)}...`
     : cleaned;
