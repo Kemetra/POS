@@ -365,6 +365,8 @@ describe('mapFailure — canonical { error: { code } } envelope (RT-228)', () =>
       ALREADY_PAIRED: 'already_paired',
       BRANCH_MISMATCH: 'branch_mismatch',
       RATE_LIMITED: 'rate_limited',
+      // RT-591: no dedicated outcome or cashier copy yet, so generic until it lands.
+      REPLACEMENT_BLOCKED: 'unknown_error',
       validation_failure: 'unknown_error',
     };
     expect([...documented].sort()).toEqual(Object.keys(expected).sort());
