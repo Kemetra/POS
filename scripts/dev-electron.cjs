@@ -1,9 +1,9 @@
 'use strict';
 
-const { spawnSync, execFileSync } = require('child_process');
+const { spawnSync, execFileSync } = require('node:child_process');
 const waitOn = require('wait-on');
-const path = require('path');
-const fs = require('fs');
+const path = require('node:path');
+const fs = require('node:fs');
 
 const ROOT = path.join(__dirname, '..');
 const DEV_PORT = 5173;

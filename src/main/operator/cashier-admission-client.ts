@@ -343,6 +343,6 @@ function parseRosterEntry(entry: unknown): CashierRosterEntry | null {
 function interpretRoster(parsed: unknown): CashierRosterResult {
   if (!isRecord(parsed) || !Array.isArray(parsed['cashiers'])) return { kind: 'rejected' };
   const cashiers = parsed['cashiers'].map(parseRosterEntry);
-  if (cashiers.some((c) => c === null)) return { kind: 'rejected' };
+  if (cashiers.includes(null)) return { kind: 'rejected' };
   return { kind: 'roster', cashiers: cashiers as CashierRosterEntry[] };
 }

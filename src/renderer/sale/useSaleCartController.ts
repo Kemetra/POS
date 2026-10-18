@@ -82,7 +82,7 @@ function isSnapshotOf(
 function syncCartStore(snapshot: CartSnapshot): void {
   useCartStore.setState((s) => {
     if (s.activeCart?.cart_id !== snapshot.cart_id) return s;
-    const lastLine = snapshot.lines[snapshot.lines.length - 1];
+    const lastLine = snapshot.lines.at(-1);
     return {
       activeCart: {
         cart_id: snapshot.cart_id,

@@ -14,10 +14,10 @@
  * itself, not for verify).
  */
 
-import { mkdtempSync, readFileSync, rmSync, existsSync } from 'fs';
-import os from 'os';
-import path from 'path';
-import { fileURLToPath } from 'url';
+import { mkdtempSync, readFileSync, rmSync, existsSync } from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { generateApiTypes } from './codegen-api.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));

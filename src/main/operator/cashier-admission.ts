@@ -319,7 +319,7 @@ export async function awaitPendingEnd(deps: CashierAdmissionDeps, user_id: strin
       resolve('capped');
     }, PENDING_END_WAIT_MS);
   });
-  const settled = Promise.all([...forUser]).then(() => 'settled' as const);
+  const settled = Promise.all(forUser).then(() => 'settled' as const);
   const outcome = await Promise.race([settled, capped]);
   clearTimeout(timer);
   if (outcome === 'capped') noteEndOutcome(deps, { user_id, uncertain: true });

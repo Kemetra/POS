@@ -38,7 +38,7 @@ interface SnapshotLine {
 }
 
 function lineKey(parts: readonly unknown[]): string {
-  return parts.map((p) => String(p)).join('|');
+  return parts.map(String).join('|');
 }
 
 /** A contract amount string → integer minor units, or null. */
@@ -88,7 +88,7 @@ function matchesSnapshot(sale: WireSale, linesJson: string): boolean {
   const exponent = exponentFor(sale.currencyCode);
   const server = sale.lines.map((l) => serverLineKey(l, exponent));
   const local = snapshotKeys(linesJson);
-  if (local === null || server.some((k) => k === null)) return false;
+  if (local === null || server.includes(null)) return false;
   return sameMultiset(server as string[], local);
 }
 
