@@ -20,15 +20,23 @@ import {
   signInAs,
 } from './__helpers__/app-router-harness.js';
 
-/** Former AppShell routes, the screen heading each shows, and the nav entry marked current. */
-const FORMER_SHELL_ROUTES: ReadonlyArray<{ path: string; heading: RegExp; current: string }> = [
+/**
+ * Former AppShell routes, the screen heading each shows, and the nav entry
+ * marked current. RT-701 (D8): Audit and Settings have no nav entry, so their
+ * routes mark none (`null`); the routes themselves are unchanged.
+ */
+const FORMER_SHELL_ROUTES: ReadonlyArray<{
+  path: string;
+  heading: RegExp;
+  current: string | null;
+}> = [
   { path: '/app/dashboard', heading: /لوحة المتابعة/, current: 'لوحة المتابعة' },
   { path: '/app/sales', heading: /^المبيعات$/, current: 'المبيعات' },
   { path: '/app/returns', heading: /المرتجعات/, current: 'المرتجعات' },
-  { path: '/app/audit', heading: /سجل المراجعة/, current: 'سجل المراجعة' },
+  { path: '/app/audit', heading: /سجل المراجعة/, current: null },
   { path: '/app/inventory', heading: /المخزون/, current: 'المخزون' },
   { path: '/app/inventory/diagnostics', heading: /فحص الكتالوج/, current: 'المخزون' },
-  { path: '/app/settings', heading: /الإعدادات/, current: 'الإعدادات' },
+  { path: '/app/settings', heading: /الإعدادات/, current: null },
   { path: '/app/manager/stuck-shifts', heading: /الورديات العالقة/, current: 'لوحة المتابعة' },
   { path: '/app/manager/force-fail', heading: /إنهاء دفع معلّق/, current: 'لوحة المتابعة' },
 ];
@@ -89,7 +97,7 @@ describe('one frame — every former AppShell route renders in the v5 frame', ()
       const active = within(nav)
         .getAllByRole('link')
         .filter((link) => link.getAttribute('aria-current') === 'page');
-      expect(active.map((link) => link.textContent)).toEqual([current]);
+      expect(active.map((link) => link.textContent)).toEqual(current === null ? [] : [current]);
     },
   );
 

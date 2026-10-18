@@ -98,13 +98,11 @@ describe('navigation test (T038)', () => {
     );
   });
 
-  it('clicking Settings/Help nav entry shows SettingsHelpPlaceholder', async () => {
-    const user = userEvent.setup();
-    renderApp();
-    await user.click(screen.getByRole('link', { name: 'الإعدادات' }));
-    await waitFor(() =>
-      expect(screen.getByRole('heading', { name: 'الإعدادات' })).toBeInTheDocument(),
-    );
+  // RT-701 (D8): Settings has no nav entry, but its route is unchanged.
+  it('has no Settings nav entry, and /app/settings still shows SettingsHelpPlaceholder', () => {
+    renderApp('/app/settings');
+    expect(screen.queryByRole('link', { name: 'الإعدادات' })).not.toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'الإعدادات' })).toBeInTheDocument();
   });
 
   it('clicking Dashboard nav entry shows the manager home', async () => {
