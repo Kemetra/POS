@@ -11,8 +11,9 @@
  * snapshot always comes from exactly one commit. Each downloaded file's git blob
  * SHA must equal the one GitHub reports for it, or nothing is written.
  *
- * Developer tooling only: it uses the local, already-authenticated `gh` CLI and
- * never runs in CI. CI reads only the committed snapshot (no network, no secret).
+ * Uses the local, already-authenticated `gh` CLI. It never runs in `ci.yml` (that
+ * stays offline and reads only the committed snapshot); `contracts-repin.yml` (RT-676)
+ * runs it on a schedule with the public-read `github.token` and opens a bot PR.
  * After a re-pin, run `npx vitest run tests/contract/backend-core` and commit
  * `contracts/backend-core/` together with any registry change.
  */
