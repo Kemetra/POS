@@ -20,9 +20,9 @@
  *   DATA_PULSE_OPENAPI_URL=https://api.example.test/openapi.json tsx scripts/codegen-api.ts --source=live
  */
 
-import { readFileSync, writeFileSync } from 'fs';
-import path from 'path';
-import { fileURLToPath } from 'url';
+import { readFileSync, writeFileSync } from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import openapiTS, { astToString, type OpenAPITSOptions } from 'openapi-typescript';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));

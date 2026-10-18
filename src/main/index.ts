@@ -9,8 +9,8 @@ import {
   session,
 } from 'electron';
 import * as Sentry from '@sentry/electron/main';
-import path from 'path';
-import { fileURLToPath, pathToFileURL } from 'url';
+import path from 'node:path';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { createSenderGuardedIpcMain } from './ipc/sender-guard.js';
 import { createSessionLockGuardedIpcMain } from './ipc/session-lock-guard.js';
 import { createRecoveryModeGuardedIpcMain } from './ipc/recovery-mode-guard.js';

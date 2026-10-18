@@ -1,5 +1,5 @@
-import { mkdirSync, readdirSync, renameSync, rmSync } from 'fs';
-import path from 'path';
+import { mkdirSync, readdirSync, renameSync, rmSync } from 'node:fs';
+import path from 'node:path';
 
 import type { DatabaseHandle } from './client.js';
 

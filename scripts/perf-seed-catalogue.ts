@@ -50,10 +50,10 @@
  * tables and decides the verdict.
  */
 
-import { existsSync, rmSync } from 'fs';
-import path from 'path';
-import { performance } from 'perf_hooks';
-import { fileURLToPath } from 'url';
+import { existsSync, rmSync } from 'node:fs';
+import path from 'node:path';
+import { performance } from 'node:perf_hooks';
+import { fileURLToPath } from 'node:url';
 
 import type { DatabaseHandle } from '../src/main/db/client.js';
 import { openDatabase } from '../src/main/db/client.js';
