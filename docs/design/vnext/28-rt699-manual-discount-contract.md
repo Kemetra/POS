@@ -104,10 +104,24 @@ For a line with `gross = quantity × unit_price_minor` (from `computeLineSubtota
 ### 3.3 Totals
 
 - Envelope: `subtotal_minor` stays Σ gross. The envelope gains `discount_total_minor` = Σ line
-  discounts and `total_due_minor` = `subtotal_minor − discount_total_minor`. Payment uses
-  `total_due_minor` as the amount due. This is a POS-internal change to the 005/006 handoff
-  contract (`contracts/handoff-envelope.md`): a new `envelope_version` or an explicit v1 field
-  rule. It belongs to the implementation slice, not to Backend-Core.
+  discounts and `total_due_minor` = `subtotal_minor − discount_total_minor`. This is a
+  POS-internal change to the 005/006 handoff contract
+  (`specs/005-sales-cart/contracts/handoff-envelope.md`): a new `envelope_version` or an explicit
+  v1 field rule. It belongs to the implementation slice, not to Backend-Core.
+- **The amount-due chain on `main` and what each step carries.** Today one value,
+  `envelope_subtotal_minor`, flows from the envelope to the Sale, so it must carry the **net**
+  (`total_due_minor`) once a discount exists. Otherwise one name means gross in one place and net
+  in another:
+
+  | Step on `main` | Today | With a discount |
+  |---|---|---|
+  | `payments.start` request (`src/main/ipc/payments.ts`) and `cart-payment-eligibility.ts` | renderer sends `envelope_subtotal_minor`; eligibility requires it to equal the envelope `subtotal_minor` | eligibility requires it to equal the envelope **`total_due_minor`** |
+  | `payment_attempts.envelope_subtotal_minor` (`payments-start.ts`, repository) | Σ gross | **net** (`total_due_minor`). The I1 slice decides whether to keep the column name with a documented meaning or add an `amount_due_minor` (a migration, so owner authorization) |
+  | Tender sufficiency (`tender-line-fsm.ts`, `payment-attempt-fsm.ts`) and voucher apply (`apply-voucher-line.ts`) | against `envelope_subtotal_minor` | unchanged code, now against the net |
+  | Finalize (`finalize-dispatch.ts`: `subtotal_minor: attempt.envelope_subtotal_minor`) | Sale `subtotal_minor` = gross | Sale `subtotal_minor` = **net**, matching the tender sum (`capture-payload.ts`) and the receipt total |
+  | Manager recovery (`manager-recovery.ts`) | reads the attempt amount | reads the net. I1 checks it has no gross assumption |
+
+  With no discount, net = gross, so every existing sale and test is unchanged.
 - Sale: each `lines_json` entry gains an optional `discount` object (`kind`, `value`,
   `amount_minor`, `placeholder_id`). This is a JSON shape, with no DDL. `sales.subtotal_minor`
   keeps meaning **the amount charged before tax**, which is the net. The implementation slice
@@ -289,7 +303,7 @@ Audit:
 
 | Slice | Mode | Repo | Content | Depends on |
 |---|---|---|---|---|
-| **P1** | Planning close-out | POS | The owner answers OD-28-1…4, 9 (list), 10 and 11. Amend spec 005 FR-023 / FR-024 and `contracts/handoff-envelope.md` to point at this contract. | This doc |
+| **P1** | Planning close-out | POS | The owner answers OD-28-1…4, 9 (list), 10 and 11. Amend spec 005 FR-023 / FR-024 and `specs/005-sales-cart/contracts/handoff-envelope.md` to point at this contract. | This doc |
 | **D1** | Docs / design references | POS | The «خصم» sheet (kind, value, reason, preview), the approval prompt reuse, the line discount row, the remove action, the two new refusals, and the receipt rows, at 1024 and 1280. The Arabic copy table is owner-approved. | P1 |
 | **I1** | Implementation | POS | The shared pure discount function, token parse, envelope totals, payment amount due, approval `amountMinor`, the two new refusals, and the audit payload fields. No UI. | P1 |
 | **I2** | Implementation | POS | The renderer control and flows (§4), on D1's references. | I1, D1 |
