@@ -1,0 +1,149 @@
+# RT-676 (contracts-sync S3): keep the vendored Backend-Core contracts current.
+#
+# Daily, repin contracts/backend-core to Backend-Core `main`. When a pinned contract
+# file changed, run the offline conformance suite and open or update ONE bot PR
+# (bot/backend-core-repin). A conformance failure shows up as a draft PR labelled
+# `contracts-break`; it is a signal, not a blocker. ci.yml stays offline and never
+# calls this.
+#
+# Credentials: Backend-Core is public, so the repin reads it with `github.token`
+# (read-only). Pushing and opening the PR use the `kemetra-contracts-bot` GitHub App
+# token: a push or PR made with GITHUB_TOKEN would not trigger `pull_request` CI.
+# The App token is minted FIRST and handed to git (`gh auth setup-git`) only in the final
+# step, so `git push` carries it and triggers CI without the token sitting in .git/config.
+# Repo secrets CONTRACTS_BOT_APP_ID and CONTRACTS_BOT_PRIVATE_KEY must exist.
+#
+# Never force-pushes over human commits on the bot branch: scripts/contracts-repin-pr.ts
+# comments on the PR instead (decideBranchAction).
+name: contracts-repin
+
+on:
+  schedule:
+    - cron: '17 3 * * *'
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Backend-Core ref (branch, tag or SHA) to pin to
+        required: false
+        default: main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: contracts-repin
+  cancel-in-progress: false
+
+env:
+  BC_REF: ${{ inputs.ref || 'main' }}
+
+jobs:
+  repin:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Require the bot credentials
+        env:
+          APP_ID: ${{ secrets.CONTRACTS_BOT_APP_ID }}
+          APP_KEY: ${{ secrets.CONTRACTS_BOT_PRIVATE_KEY }}
+        run: |
+          if [ -z "$APP_ID" ] || [ -z "$APP_KEY" ]; then
+            echo "::error::Repo secrets CONTRACTS_BOT_APP_ID and CONTRACTS_BOT_PRIVATE_KEY are required (GitHub App kemetra-contracts-bot, RT-675). The repin cannot open PRs without them."
+            exit 1
+          fi
+
+      - name: Mint the bot App token
+        id: app
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          app-id: ${{ secrets.CONTRACTS_BOT_APP_ID }}
+          private-key: ${{ secrets.CONTRACTS_BOT_PRIVATE_KEY }}
+          # Only what this job uses: push the branch, PRs, labels/issues/comments.
+          permission-contents: write
+          permission-pull-requests: write
+          permission-issues: write
+
+      # The App token is NOT persisted in .git/config: the repin and the tests run
+      # dev-dependency code that could read it. Only the final step gets it.
+      - name: Checkout main
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: main
+          persist-credentials: false
+
+      - name: Setup Node 24
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies (no lifecycle scripts)
+        run: npm ci --ignore-scripts
+
+      - name: Repin the vendored contracts
+        id: repin
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: npm run contracts:repin -- --ref "$BC_REF" > "$RUNNER_TEMP/repin.log" 2>&1
+
+      # A pinned file renamed or deleted in Backend-Core makes the repin throw. Never a
+      # silent no-op: one open issue labelled contracts-repin carries the error.
+      - name: Open or update the repin failure issue
+        if: steps.repin.outcome == 'failure'
+        env:
+          GH_TOKEN: ${{ steps.app.outputs.token }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          cat "$RUNNER_TEMP/repin.log"
+          gh label create contracts-repin --force --color D93F0B \
+            --description "Scheduled Backend-Core contracts repin failed"
+          {
+            echo "The scheduled contracts repin failed ($RUN_URL)."
+            echo "A pinned Backend-Core contract file was probably renamed or deleted."
+            echo "Fix it with \`npm run contracts:repin -- --remove <path>\` / \`--add <path>\`."
+            echo
+            echo '```'
+            tail -c 4000 "$RUNNER_TEMP/repin.log"
+            echo '```'
+          } > "$RUNNER_TEMP/issue.md"
+          existing="$(gh issue list --label contracts-repin --state open --json number --jq '.[0].number // empty')"
+          if [ -n "$existing" ]; then
+            gh issue comment "$existing" --body-file "$RUNNER_TEMP/issue.md"
+          else
+            gh issue create --label contracts-repin \
+              --title "Backend-Core contracts repin failed" --body-file "$RUNNER_TEMP/issue.md"
+          fi
+
+      - name: Fail the run when the repin failed
+        if: steps.repin.outcome == 'failure'
+        run: exit 1
+
+      # The repin rewrites the PIN commit on every run. Only a changed contract FILE
+      # is worth a PR, so judge by the vendored files, not by the PIN.
+      - name: Detect contract changes
+        id: changes
+        run: |
+          if [ -z "$(git status --porcelain -- contracts/backend-core/openapi)" ]; then
+            echo "Backend-Core contracts unchanged at $BC_REF; nothing to open."
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            git status --porcelain -- contracts/backend-core
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Backend-Core contract conformance
+        id: conformance
+        if: steps.changes.outputs.changed == 'true'
+        continue-on-error: true
+        run: npm test -- tests/contract/backend-core > "$RUNNER_TEMP/conformance.log" 2>&1
+
+      - name: Open or update the repin PR
+        if: steps.changes.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ steps.app.outputs.token }}
+          CONFORMANCE: ${{ steps.conformance.outcome == 'success' && 'pass' || 'fail' }}
+          CONFORMANCE_LOG: ${{ runner.temp }}/conformance.log
+        run: |
+          gh auth setup-git
+          npm run contracts:repin-pr

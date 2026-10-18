@@ -1,0 +1,299 @@
+/**
+ * RT-676 — open or update the one bot PR that carries a Backend-Core contracts re-pin.
+ *
+ * Run by `.github/workflows/contracts-repin.yml` AFTER `npm run contracts:repin`
+ * has rewritten `contracts/backend-core/` in the working tree. Never runs in `ci.yml`.
+ *
+ * Env: GITHUB_REPOSITORY, GH_TOKEN (the GitHub App token, not `github.token`: pushes
+ * and PRs made with `GITHUB_TOKEN` do not trigger `pull_request` CI), CONFORMANCE
+ * (`pass|fail`), optional CONFORMANCE_LOG (path to the vitest output).
+ *
+ * Branch safety: the bot force-pushes `bot/backend-core-repin` only when every
+ * commit ahead of `main` is its own. Otherwise someone adapted POS code on that
+ * branch, so it comments on the PR instead (`decideBranchAction`).
+ */
+import { execFileSync } from 'node:child_process';
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import {
+  decideBranchAction,
+  diffPins,
+  parsePin,
+  planPrState,
+  renderRepinPrBody,
+  summarizeTestLog,
+  type ContractsPin,
+  type PinDiff,
+} from './contracts-pin.js';
+
+const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const SNAPSHOT = 'contracts/backend-core';
+const PIN_FILE = `${SNAPSHOT}/PIN`;
+const OPENAPI_DIR = `${SNAPSHOT}/openapi`;
+const BRANCH = 'bot/backend-core-repin';
+const BOT_LOGIN = 'kemetra-contracts-bot[bot]';
+// GitHub links this noreply address to the App's bot account, so the commits show
+// up with login BOT_LOGIN in the compare API (what decideBranchAction reads back).
+const BOT_EMAIL = '344346299+kemetra-contracts-bot[bot]@users.noreply.github.com';
+const BREAK_LABEL = 'contracts-break';
+
+interface OpenPr {
+  readonly number: number;
+  readonly isDraft: boolean;
+  readonly labels: readonly { readonly name: string }[];
+}
+
+function run(cmd: string, args: readonly string[]): string {
+  try {
+    return execFileSync(cmd, args, {
+      cwd: REPO_ROOT,
+      encoding: 'utf-8',
+      maxBuffer: 16 * 1024 * 1024,
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+  } catch (err) {
+    const stderr = (err as { stderr?: Buffer | string }).stderr?.toString().trim();
+    throw new Error(`${cmd} ${args.slice(0, 3).join(' ')} failed: ${stderr ?? String(err)}`);
+  }
+}
+
+const gh = (args: readonly string[]): string => run('gh', args);
+const git = (args: readonly string[]): string => run('git', args);
+
+const repo = (): string => requireEnv('GITHUB_REPOSITORY');
+
+function requireEnv(name: string): string {
+  const value = process.env[name];
+  if (value === undefined || value === '') throw new Error(`${name} is required`);
+  return value;
+}
+
+/** Logins of the commits on the bot branch that are ahead of `main`. 404 = no branch yet. */
+function branchAuthors(): (string | null)[] {
+  let raw: string;
+  try {
+    raw = gh([
+      'api',
+      `repos/${repo()}/compare/main...${BRANCH}?per_page=100`,
+      '--jq',
+      '{ahead: .ahead_by, authors: [.commits[].author.login]}',
+    ]);
+  } catch (err) {
+    if (/HTTP 404/.test(String(err))) return [];
+    throw err;
+  }
+  const { ahead, authors } = JSON.parse(raw) as { ahead: number; authors: (string | null)[] };
+  // Commits the page did not return cannot be shown to be the bot's: count them as human.
+  return [...authors, ...Array.from({ length: Math.max(0, ahead - authors.length) }, () => null)];
+}
+
+function findOpenPr(): OpenPr | null {
+  const raw = gh([
+    'pr',
+    'list',
+    '-R',
+    repo(),
+    '--head',
+    BRANCH,
+    '--state',
+    'open',
+    '--json',
+    'number,isDraft,labels',
+  ]);
+  return (JSON.parse(raw) as OpenPr[])[0] ?? null;
+}
+
+function ensureBreakLabel(): void {
+  gh([
+    'label',
+    'create',
+    BREAK_LABEL,
+    '-R',
+    repo(),
+    '--force',
+    '--color',
+    'B60205',
+    '--description',
+    'Backend-Core contract repin broke POS conformance',
+  ]);
+}
+
+/**
+ * Tip of the remote bot branch (left in FETCH_HEAD), or null when there is none. Read
+ * BEFORE the author check: the push later leases against this tip, so a human commit
+ * that lands in between makes the push fail instead of being overwritten.
+ */
+function fetchBranchTip(): string | null {
+  try {
+    git(['fetch', '--depth=1', 'origin', BRANCH]);
+  } catch {
+    return null;
+  }
+  return git(['rev-parse', 'FETCH_HEAD']).trim();
+}
+
+/**
+ * The PIN the fetched bot branch already carries when its vendored contract files
+ * equal the working tree's, else null. Lets a daily run skip the commit and
+ * force-push, which would re-trigger CI and stale reviews for nothing.
+ */
+function publishedPinIfIdentical(): ContractsPin | null {
+  // Staged so files the repin added (untracked) are compared too.
+  git(['add', '--', SNAPSHOT]);
+  const differing = git(['diff', '--cached', '--name-only', 'FETCH_HEAD', '--', OPENAPI_DIR]);
+  return differing.trim() === '' ? parsePin(git(['show', `FETCH_HEAD:${PIN_FILE}`])) : null;
+}
+
+function commitAndPush(after: ContractsPin, expectedTip: string | null): void {
+  const identity = ['-c', 'user.name=kemetra-contracts-bot[bot]', '-c', `user.email=${BOT_EMAIL}`];
+  git(['checkout', '-B', BRANCH]);
+  git(['add', '--', SNAPSHOT]);
+  git([
+    ...identity,
+    'commit',
+    '-m',
+    `chore(contracts): repin Backend-Core contracts to ${after.commit.slice(0, 7)}`,
+  ]);
+  // An empty expected value means "the branch must not exist yet".
+  const lease = `--force-with-lease=refs/heads/${BRANCH}:${expectedTip ?? ''}`;
+  git(['push', lease, 'origin', `HEAD:refs/heads/${BRANCH}`]);
+}
+
+function writeBody(body: string): string {
+  const file = path.join(process.env['RUNNER_TEMP'] ?? os.tmpdir(), 'repin-pr-body.md');
+  writeFileSync(file, body);
+  return file;
+}
+
+function readFailureSummary(): string | undefined {
+  const log = process.env['CONFORMANCE_LOG'];
+  return log !== undefined && existsSync(log)
+    ? summarizeTestLog(readFileSync(log, 'utf-8'))
+    : undefined;
+}
+
+interface PrEdit {
+  readonly title: string;
+  readonly bodyFile: string;
+}
+
+function syncExistingPr(pr: OpenPr, edit: PrEdit, failed: boolean): void {
+  const number = String(pr.number);
+  const plan = planPrState(
+    { isDraft: pr.isDraft, labels: pr.labels.map((l) => l.name) },
+    BREAK_LABEL,
+    failed,
+  );
+  const prCmd = (...args: string[]): string => gh(['pr', ...args, '-R', repo()]);
+  prCmd('edit', number, '--title', edit.title, '--body-file', edit.bodyFile);
+  if (plan.draft) prCmd('ready', number, '--undo');
+  if (plan.addLabel) prCmd('edit', number, '--add-label', BREAK_LABEL);
+  if (plan.ready) prCmd('ready', number);
+  if (plan.removeLabel) prCmd('edit', number, '--remove-label', BREAK_LABEL);
+}
+
+function upsertPr(args: {
+  before: ContractsPin;
+  after: ContractsPin;
+  diff: PinDiff;
+  failed: boolean;
+}): void {
+  const { before, after, diff, failed } = args;
+  const body = renderRepinPrBody({
+    before,
+    after,
+    diff,
+    conformance: failed ? 'fail' : 'pass',
+    failureSummary: readFailureSummary(),
+  });
+  const bodyFile = writeBody(body);
+  const title = `chore(contracts): repin Backend-Core contracts to ${after.commit.slice(0, 7)}`;
+  if (failed) ensureBreakLabel();
+  const existing = findOpenPr();
+  if (existing !== null) {
+    syncExistingPr(existing, { title, bodyFile }, failed);
+    return;
+  }
+  gh([
+    'pr',
+    'create',
+    '-R',
+    repo(),
+    '--base',
+    'main',
+    '--head',
+    BRANCH,
+    '--title',
+    title,
+    '--body-file',
+    bodyFile,
+    ...(failed ? ['--draft', '--label', BREAK_LABEL] : []),
+  ]);
+}
+
+function commentOnce(after: ContractsPin): void {
+  const pr = findOpenPr();
+  if (pr === null) {
+    process.stdout.write(
+      `::warning::${BRANCH} has commits that are not the bot's and no open PR; not touching it.\n`,
+    );
+    return;
+  }
+  const marker = `<!-- contracts-repin:${after.commit} -->`;
+  const seen = gh([
+    'pr',
+    'view',
+    String(pr.number),
+    '-R',
+    repo(),
+    '--json',
+    'comments',
+    '--jq',
+    '.comments[].body',
+  ]);
+  if (seen.includes(marker)) return;
+  const text =
+    `${marker}\nBackend-Core \`main\` moved to \`${after.commit.slice(0, 7)}\` with contract changes, ` +
+    `but this branch has commits that are not the bot's, so the bot did not force-push it. ` +
+    `Merge or rebase \`main\` and re-run \`npm run contracts:repin\` yourself, or delete ` +
+    `\`${BRANCH}\` to let the bot start over.`;
+  gh(['pr', 'comment', String(pr.number), '-R', repo(), '--body', text]);
+}
+
+function main(): void {
+  requireEnv('GITHUB_REPOSITORY');
+  const conformance = requireEnv('CONFORMANCE');
+  if (conformance !== 'pass' && conformance !== 'fail') {
+    throw new Error(`CONFORMANCE must be pass|fail, got "${conformance}"`);
+  }
+  const before = parsePin(git(['show', `HEAD:${PIN_FILE}`]));
+  const after = parsePin(readFileSync(path.join(REPO_ROOT, PIN_FILE), 'utf-8'));
+  const diff = diffPins(before, after);
+  if (diff.changed.length + diff.added.length + diff.removed.length === 0) {
+    process.stdout.write('No contract file changed; nothing to open.\n');
+    return;
+  }
+  const tip = fetchBranchTip();
+  if (decideBranchAction(branchAuthors(), BOT_LOGIN) === 'comment') {
+    commentOnce(after);
+    return;
+  }
+  const published = tip === null ? null : publishedPinIfIdentical();
+  if (published === null) commitAndPush(after, tip);
+  else process.stdout.write('Bot branch already carries these contracts; not pushing.\n');
+  // Describe what the branch actually holds, so title and body never disagree with it.
+  upsertPr({ before, after: published ?? after, diff, failed: conformance === 'fail' });
+  const files = diff.changed.length + diff.added.length + diff.removed.length;
+  process.stdout.write(`Repin PR synced (${String(files)} file(s)).\n`);
+}
+
+try {
+  main();
+} catch (err) {
+  process.stderr.write(
+    `contracts-repin-pr failed: ${err instanceof Error ? err.message : String(err)}\n`,
+  );
+  process.exit(1);
+}

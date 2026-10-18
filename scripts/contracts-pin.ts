@@ -209,3 +209,122 @@ export function parseRepinArgs(argv: readonly string[]): RepinArgs {
   }
   return args;
 }
+
+// ─── scheduled re-pin PRs (RT-676) ───────────────────────────────────────────
+
+export interface PinDiff {
+  readonly changed: readonly string[];
+  readonly added: readonly string[];
+  readonly removed: readonly string[];
+}
+
+/** Which pinned files differ by blob SHA between two pins. Paths come back sorted. */
+export function diffPins(before: ContractsPin, after: ContractsPin): PinDiff {
+  const old = new Map(before.files.map((f) => [f.path, f.blobSha]));
+  const next = new Map(after.files.map((f) => [f.path, f.blobSha]));
+  const sorted = (paths: Iterable<string>): string[] =>
+    [...paths].sort((a, b) => a.localeCompare(b));
+  return {
+    changed: sorted([...next.keys()].filter((p) => old.has(p) && old.get(p) !== next.get(p))),
+    added: sorted([...next.keys()].filter((p) => !old.has(p))),
+    removed: sorted([...old.keys()].filter((p) => !next.has(p))),
+  };
+}
+
+export type BranchAction = 'push' | 'comment';
+
+/**
+ * The bot may only force-push its branch when it owns every commit on it: a human
+ * who added commits to adapt POS code must not be overwritten. `null` is a commit
+ * whose author email GitHub could not link to an account, so it counts as human.
+ */
+export function decideBranchAction(
+  commitAuthors: readonly (string | null)[],
+  botLogin: string,
+): BranchAction {
+  return commitAuthors.every((login) => login === botLogin) ? 'push' : 'comment';
+}
+
+export interface RepinPrBodyArgs {
+  readonly before: ContractsPin;
+  readonly after: ContractsPin;
+  readonly diff: PinDiff;
+  readonly conformance: 'pass' | 'fail';
+  readonly failureSummary?: string | undefined;
+}
+
+const short = (sha: string): string => sha.slice(0, 7);
+
+function fileSection(title: string, paths: readonly string[]): string[] {
+  return paths.length === 0 ? [] : [`**${title}**`, ...paths.map((p) => `- \`${p}\``), ''];
+}
+
+function conformanceSection(args: RepinPrBodyArgs): string[] {
+  if (args.conformance === 'pass') {
+    return ['Conformance (`tests/contract/backend-core`): **pass**.'];
+  }
+  return [
+    'Conformance (`tests/contract/backend-core`): **FAIL**. This PR is a draft labelled',
+    '`contracts-break`: POS code must be adapted to the new contract before it can merge.',
+    '',
+    '```',
+    args.failureSummary?.trim() || '(no failure summary captured; see the workflow run)',
+    '```',
+  ];
+}
+
+/** The body of the bot repin PR. Plain markdown; the compare URL names the Backend-Core range. */
+export function renderRepinPrBody(args: RepinPrBodyArgs): string {
+  const { before, after, diff } = args;
+  return [
+    `Repins the vendored Backend-Core contracts \`${short(before.commit)}\` -> \`${short(after.commit)}\`.`,
+    '',
+    `Backend-Core changes: https://github.com/${BACKEND_CORE_REPO}/compare/${before.commit}...${after.commit}`,
+    '',
+    ...fileSection('Changed contract files', diff.changed),
+    ...fileSection('Added contract files', diff.added),
+    ...fileSection('Removed contract files', diff.removed),
+    ...conformanceSection(args),
+    '',
+    'Opened by `contracts-repin.yml` (RT-676). If you push commits to this branch the bot',
+    'stops force-pushing it and comments here instead.',
+    '',
+  ].join('\n');
+}
+
+// ESC, then `[` (as a one-member class), then colour parameters.
+const ANSI_ESCAPE = new RegExp(`${String.fromCodePoint(27)}[[][0-9;]*m`, 'g');
+const SUMMARY_MAX_CHARS = 4000;
+
+/** The tail of a test run's output, colour codes stripped, small enough for a PR body. */
+export function summarizeTestLog(log: string): string {
+  const clean = log.replace(ANSI_ESCAPE, '').trim();
+  return clean.length <= SUMMARY_MAX_CHARS ? clean : `...${clean.slice(-SUMMARY_MAX_CHARS)}`;
+}
+
+export interface PrState {
+  readonly isDraft: boolean;
+  readonly labels: readonly string[];
+}
+
+export interface PrStatePlan {
+  /** Convert to draft. */
+  readonly draft: boolean;
+  /** Mark ready for review. */
+  readonly ready: boolean;
+  readonly addLabel: boolean;
+  readonly removeLabel: boolean;
+}
+
+/**
+ * The draft/label changes an existing bot PR needs. A conformance failure drafts it
+ * and labels it; a later pass undrafts it only if the bot drafted it (the label marks
+ * that). The label is therefore added only when the bot itself converts the PR to
+ * draft, so a PR a human chose to keep as a draft stays one.
+ */
+export function planPrState(pr: PrState, label: string, failed: boolean): PrStatePlan {
+  const labelled = pr.labels.includes(label);
+  return failed
+    ? { draft: !pr.isDraft, ready: false, addLabel: !pr.isDraft && !labelled, removeLabel: false }
+    : { draft: false, ready: pr.isDraft && labelled, addLabel: false, removeLabel: labelled };
+}

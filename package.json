@@ -19,6 +19,7 @@
     "codegen:api": "tsx scripts/codegen-api.ts",
     "codegen:verify": "tsx scripts/verify-codegen.ts",
     "contracts:repin": "tsx scripts/contracts-repin.ts",
+    "contracts:repin-pr": "tsx scripts/contracts-repin-pr.ts",
     "perf:seed": "tsx scripts/perf-seed-catalogue.ts",
     "typecheck": "tsc -p tsconfig.renderer.json --noEmit && tsc -p tsconfig.main.json --noEmit && tsc -p tsconfig.preload.json --noEmit",
     "lint": "eslint . && prettier --check .",
