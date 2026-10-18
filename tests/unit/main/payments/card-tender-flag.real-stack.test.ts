@@ -14,19 +14,9 @@
  * path a renderer that ignores the hidden tile would take.
  */
 
-import { describe, expect, it, beforeAll, beforeEach } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import type { IpcMain, IpcMainInvokeEvent } from 'electron';
-import initSqlJs, { type Database as SqlJsDatabase, type SqlJsStatic } from 'sql.js';
-import { readdirSync, readFileSync } from 'fs';
-import path from 'path';
-import { fileURLToPath } from 'url';
 
-import { bindPaymentActionOutboxRepository } from '../../../../src/main/payments/repositories/payment-action-outbox.repository.js';
-import { bindPaymentAttemptsRepository } from '../../../../src/main/payments/repositories/payment-attempts.repository.js';
-import { bindPaymentTenderLinesRepository } from '../../../../src/main/payments/repositories/payment-tender-lines.repository.js';
-import { createPaymentAttemptFsm } from '../../../../src/main/payments/fsm/payment-attempt-fsm.js';
-import { createTenderLineFsm } from '../../../../src/main/payments/fsm/tender-line-fsm.js';
-import { createIdempotencyHelper } from '../../../../src/main/payments/idempotency.js';
 import { createPaymentsStartHandler } from '../../../../src/main/payments/handlers/payments-start.js';
 import { createTenderApplyHandler } from '../../../../src/main/payments/handlers/tender-apply.js';
 import { registerPaymentsHandlers } from '../../../../src/main/ipc/payments.js';
@@ -38,29 +28,11 @@ import type {
   PaymentsStartResponse,
   TenderApplyResponse,
 } from '../../../../src/shared/bridge-api.js';
-import { makeSqlJsHandle } from '../cart/__helpers__/sql-js-handle.js';
-import { makeAuditEmitterDouble, makeSession } from './__fixtures__/bridge-handler-deps.js';
 import type { ValidateVoucherOutcome } from '../../../../src/main/payments/voucher-authority-client/validate.js';
+import { makeAuditEmitterDouble, makeSession } from './__fixtures__/bridge-handler-deps.js';
+import { bindRealPaymentsCore, freshMigratedDbPerTest } from './__fixtures__/real-payments-core.js';
 
-const __dirnameForFile = path.dirname(fileURLToPath(import.meta.url));
-const REPO_ROOT = path.resolve(__dirnameForFile, '..', '..', '..', '..');
-const MIGRATION_DIR = path.join(REPO_ROOT, 'migrations');
-const MIGRATIONS = readdirSync(MIGRATION_DIR)
-  .filter((f) => f.endsWith('.sql'))
-  .sort()
-  .map((f) => readFileSync(path.join(MIGRATION_DIR, f), 'utf8'));
-
-let SQL: SqlJsStatic;
-beforeAll(async () => {
-  SQL = await initSqlJs();
-});
-
-let db: SqlJsDatabase;
-beforeEach(() => {
-  db = new SQL.Database();
-  db.exec('PRAGMA foreign_keys = ON;');
-  for (const sql of MIGRATIONS) db.exec(sql);
-});
+const currentDb = freshMigratedDbPerTest();
 
 type Handler = (event: IpcMainInvokeEvent, ...args: unknown[]) => unknown;
 
@@ -74,13 +46,8 @@ const validateVoucher = (): Promise<ValidateVoucherOutcome> =>
 
 /** `cardTender` is read on every call, as `index.ts` re-reads the env. */
 function build(flag: { cardTender: boolean }) {
-  const handle = makeSqlJsHandle(db);
-  const attempts = bindPaymentAttemptsRepository(handle);
-  const lines = bindPaymentTenderLinesRepository(handle);
-  const outbox = bindPaymentActionOutboxRepository(handle);
-  const tenderLineFsm = createTenderLineFsm({ db: handle, attempts, lines, outbox });
-  const paymentAttemptFsm = createPaymentAttemptFsm({ db: handle, attempts, lines, outbox });
-  const idempotency = createIdempotencyHelper({ outbox });
+  const { attempts, lines, outbox, tenderLineFsm, paymentAttemptFsm, idempotency } =
+    bindRealPaymentsCore(currentDb());
   const auditEmitter = makeAuditEmitterDouble();
   let n = 0;
   const shared = {
@@ -262,18 +229,15 @@ describe('RT-700 — card-tender flag off (default): main refuses a card tender'
   });
 
   it('fails closed when the flag reader is not wired', async () => {
-    const handle = makeSqlJsHandle(db);
-    const attempts = bindPaymentAttemptsRepository(handle);
-    const lines = bindPaymentTenderLinesRepository(handle);
-    const outbox = bindPaymentActionOutboxRepository(handle);
+    const core = bindRealPaymentsCore(currentDb());
     const s = build({ cardTender: false });
     const attempt = await startAttempt(s);
     const unwired = createTenderApplyHandler({
       getCurrentSession: () => makeSession(),
-      attemptsRepo: attempts,
-      linesRepo: lines,
-      tenderLineFsm: createTenderLineFsm({ db: handle, attempts, lines, outbox }),
-      idempotency: createIdempotencyHelper({ outbox }),
+      attemptsRepo: core.attempts,
+      linesRepo: core.lines,
+      tenderLineFsm: core.tenderLineFsm,
+      idempotency: core.idempotency,
       auditEmitter: makeAuditEmitterDouble(),
       uuid: () => 'uuid-unwired',
       clock: () => new Date('2026-10-18T10:00:00.000Z'),

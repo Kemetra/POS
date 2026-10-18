@@ -48,6 +48,7 @@ import type { PaymentAuditEmitter } from '../audit-emitter.js';
 import type { PaymentAttemptsRepository } from '../repositories/payment-attempts.repository.js';
 import type { PaymentTenderLinesRepository } from '../repositories/payment-tender-lines.repository.js';
 import type { TenderApplyRequest, TenderApplyResponse } from '../../../shared/bridge-api.js';
+import type { RefusalReason } from '../../../shared/payments/types.js';
 import type {
   ValidateVoucherInput,
   ValidateVoucherOutcome,
@@ -190,6 +191,32 @@ export function createTenderApplyHandler(deps: TenderApplyHandlerDeps): TenderAp
     };
   }
 
+  /** The `tender.refused` audit event for a refused apply. */
+  function emitRefusedAudit(
+    ctx: {
+      req: TenderApplyRequest;
+      attempt: AttemptRow;
+      session: OperatorSessionForPayments;
+      tender_line_id: string;
+      now: string;
+    },
+    reason: RefusalReason,
+  ): void {
+    const { req, attempt, session, tender_line_id, now } = ctx;
+    auditEmitter.emitTenderRefused({
+      tender_line_id,
+      payment_attempt_id: req.payment_attempt_id,
+      tender_type: req.tender_type,
+      refusal_reason: reason,
+      refused_at: now,
+      attribution_operator_id: session.operator_id,
+      tenant_id: attempt.tenant_id,
+      branch_id: attempt.branch_id,
+      originating_terminal_id: attempt.terminal_id,
+      session_id: session.operator_session_id,
+    });
+  }
+
   /** Audit / log side effects of an FSM refusal (nothing else was recorded). */
   function recordFsmRefusal(ctx: {
     req: TenderApplyRequest;
@@ -205,18 +232,7 @@ export function createTenderApplyHandler(deps: TenderApplyHandlerDeps): TenderAp
     // reasons short-circuit before persistence (tender_not_yet_supported,
     // invalid_input, attempt_terminal) — no row, no audit.
     if (reason === 'non_cash_overpayment_refused') {
-      auditEmitter.emitTenderRefused({
-        tender_line_id,
-        payment_attempt_id: req.payment_attempt_id,
-        tender_type: req.tender_type,
-        refusal_reason: reason,
-        refused_at: now,
-        attribution_operator_id: session.operator_id,
-        tenant_id: attempt.tenant_id,
-        branch_id: attempt.branch_id,
-        originating_terminal_id: attempt.terminal_id,
-        session_id: session.operator_session_id,
-      });
+      emitRefusedAudit({ req, attempt, session, tender_line_id, now }, reason);
     }
     // RT-437 (D-F2) — nothing was recorded, so there is no tender event to
     // audit (owner decision 4). One log line, with the attempt id and never
@@ -240,21 +256,9 @@ export function createTenderApplyHandler(deps: TenderApplyHandlerDeps): TenderAp
     tender_line_id: string;
     now: string;
   }): TenderApplyResponse {
-    const { req, attempt, session, tender_line_id, now } = ctx;
     const reason = 'card_tender_disabled';
     // `tender_line_id` is the id the line would have had; no row is written.
-    auditEmitter.emitTenderRefused({
-      tender_line_id,
-      payment_attempt_id: req.payment_attempt_id,
-      tender_type: req.tender_type,
-      refusal_reason: reason,
-      refused_at: now,
-      attribution_operator_id: session.operator_id,
-      tenant_id: attempt.tenant_id,
-      branch_id: attempt.branch_id,
-      originating_terminal_id: attempt.terminal_id,
-      session_id: session.operator_session_id,
-    });
+    emitRefusedAudit(ctx, reason);
     return { kind: 'refused', reason };
   }
 
