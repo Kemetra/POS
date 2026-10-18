@@ -208,6 +208,12 @@ describe('planPrState', () => {
     });
   });
 
+  it("does not label a human's draft on fail, so a later pass leaves it a draft", () => {
+    const onFail = planPrState({ isDraft: true, labels: [] }, L, true);
+    expect(onFail).toEqual({ draft: false, ready: false, addLabel: false, removeLabel: false });
+    expect(planPrState({ isDraft: true, labels: [] }, L, false).ready).toBe(false);
+  });
+
   it("leaves a human's own draft (no label) alone on pass", () => {
     expect(planPrState({ isDraft: true, labels: [] }, L, false)).toEqual({
       draft: false,

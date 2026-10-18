@@ -318,12 +318,13 @@ export interface PrStatePlan {
 
 /**
  * The draft/label changes an existing bot PR needs. A conformance failure drafts it
- * and labels it; a later pass undrafts it only if the bot drafted it (it carries the
- * label), so a PR a human chose to keep as a draft stays one.
+ * and labels it; a later pass undrafts it only if the bot drafted it (the label marks
+ * that). The label is therefore added only when the bot itself converts the PR to
+ * draft, so a PR a human chose to keep as a draft stays one.
  */
 export function planPrState(pr: PrState, label: string, failed: boolean): PrStatePlan {
   const labelled = pr.labels.includes(label);
   return failed
-    ? { draft: !pr.isDraft, ready: false, addLabel: !labelled, removeLabel: false }
+    ? { draft: !pr.isDraft, ready: false, addLabel: !pr.isDraft && !labelled, removeLabel: false }
     : { draft: false, ready: pr.isDraft && labelled, addLabel: false, removeLabel: labelled };
 }

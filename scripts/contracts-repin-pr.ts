@@ -121,23 +121,32 @@ function ensureBreakLabel(): void {
 }
 
 /**
- * The PIN the bot branch already carries when its vendored contract files equal the
- * working tree's, else null (no branch yet, or it differs). Lets a daily run skip
- * the commit and force-push, which would re-trigger CI and stale reviews for nothing.
+ * Tip of the remote bot branch (left in FETCH_HEAD), or null when there is none. Read
+ * BEFORE the author check: the push later leases against this tip, so a human commit
+ * that lands in between makes the push fail instead of being overwritten.
  */
-function publishedPinIfIdentical(): ContractsPin | null {
+function fetchBranchTip(): string | null {
   try {
     git(['fetch', '--depth=1', 'origin', BRANCH]);
   } catch {
     return null;
   }
+  return git(['rev-parse', 'FETCH_HEAD']).trim();
+}
+
+/**
+ * The PIN the fetched bot branch already carries when its vendored contract files
+ * equal the working tree's, else null. Lets a daily run skip the commit and
+ * force-push, which would re-trigger CI and stale reviews for nothing.
+ */
+function publishedPinIfIdentical(): ContractsPin | null {
   // Staged so files the repin added (untracked) are compared too.
   git(['add', '--', SNAPSHOT]);
   const differing = git(['diff', '--cached', '--name-only', 'FETCH_HEAD', '--', OPENAPI_DIR]);
   return differing.trim() === '' ? parsePin(git(['show', `FETCH_HEAD:${PIN_FILE}`])) : null;
 }
 
-function commitAndPush(after: ContractsPin): void {
+function commitAndPush(after: ContractsPin, expectedTip: string | null): void {
   const identity = ['-c', 'user.name=kemetra-contracts-bot[bot]', '-c', `user.email=${BOT_EMAIL}`];
   git(['checkout', '-B', BRANCH]);
   git(['add', '--', SNAPSHOT]);
@@ -147,7 +156,9 @@ function commitAndPush(after: ContractsPin): void {
     '-m',
     `chore(contracts): repin Backend-Core contracts to ${after.commit.slice(0, 7)}`,
   ]);
-  git(['push', '--force', 'origin', `HEAD:refs/heads/${BRANCH}`]);
+  // An empty expected value means "the branch must not exist yet".
+  const lease = `--force-with-lease=refs/heads/${BRANCH}:${expectedTip ?? ''}`;
+  git(['push', lease, 'origin', `HEAD:refs/heads/${BRANCH}`]);
 }
 
 function writeBody(body: string): string {
@@ -264,12 +275,13 @@ function main(): void {
     process.stdout.write('No contract file changed; nothing to open.\n');
     return;
   }
+  const tip = fetchBranchTip();
   if (decideBranchAction(branchAuthors(), BOT_LOGIN) === 'comment') {
     commentOnce(after);
     return;
   }
-  const published = publishedPinIfIdentical();
-  if (published === null) commitAndPush(after);
+  const published = tip === null ? null : publishedPinIfIdentical();
+  if (published === null) commitAndPush(after, tip);
   else process.stdout.write('Bot branch already carries these contracts; not pushing.\n');
   // Describe what the branch actually holds, so title and body never disagree with it.
   upsertPr({ before, after: published ?? after, diff, failed: conformance === 'fail' });

@@ -9,7 +9,8 @@
 # Credentials: Backend-Core is public, so the repin reads it with `github.token`
 # (read-only). Pushing and opening the PR use the `kemetra-contracts-bot` GitHub App
 # token: a push or PR made with GITHUB_TOKEN would not trigger `pull_request` CI.
-# The App token is minted FIRST and checkout uses it, so `git push` carries it too.
+# The App token is minted FIRST and handed to git (`gh auth setup-git`) only in the final
+# step, so `git push` carries it and triggers CI without the token sitting in .git/config.
 # Repo secrets CONTRACTS_BOT_APP_ID and CONTRACTS_BOT_PRIVATE_KEY must exist.
 #
 # Never force-pushes over human commits on the bot branch: scripts/contracts-repin-pr.ts
@@ -57,12 +58,18 @@ jobs:
         with:
           app-id: ${{ secrets.CONTRACTS_BOT_APP_ID }}
           private-key: ${{ secrets.CONTRACTS_BOT_PRIVATE_KEY }}
+          # Only what this job uses: push the branch, PRs, labels/issues/comments.
+          permission-contents: write
+          permission-pull-requests: write
+          permission-issues: write
 
-      - name: Checkout main with the bot token
+      # The App token is NOT persisted in .git/config: the repin and the tests run
+      # dev-dependency code that could read it. Only the final step gets it.
+      - name: Checkout main
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           ref: main
-          token: ${{ steps.app.outputs.token }}
+          persist-credentials: false
 
       - name: Setup Node 24
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
@@ -137,4 +144,6 @@ jobs:
           GH_TOKEN: ${{ steps.app.outputs.token }}
           CONFORMANCE: ${{ steps.conformance.outcome == 'success' && 'pass' || 'fail' }}
           CONFORMANCE_LOG: ${{ runner.temp }}/conformance.log
-        run: npm run contracts:repin-pr
+        run: |
+          gh auth setup-git
+          npm run contracts:repin-pr
