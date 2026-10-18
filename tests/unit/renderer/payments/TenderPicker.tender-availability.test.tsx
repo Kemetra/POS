@@ -1,7 +1,9 @@
 /**
  * T021 — TenderPicker tender availability.
  *
- * Cash and external_card_terminal are enabled and selectable.
+ * Cash and external_card_terminal are enabled and selectable (card with
+ * `cardEnabled`, RT-700; the flag-off case is in
+ * src/renderer/ui/payments/__tests__/card-tender-flag.test.tsx).
  * internal_voucher is always reserved (aria-disabled + "(not available)" sub-label).
  */
 
@@ -49,7 +51,7 @@ function makeEnvelope(overrides: Partial<PaymentIntentEnvelope> = {}): PaymentIn
 
 describe('TenderPicker — cash', () => {
   it('renders a cash tender button that is enabled', () => {
-    render(<TenderPicker envelope={makeEnvelope()} onTenderSelect={() => {}} />);
+    render(<TenderPicker envelope={makeEnvelope()} onTenderSelect={() => {}} cardEnabled />);
     const btn = screen.getByTestId('tender-cash');
     expect(btn).toBeInTheDocument();
     expect(btn).not.toBeDisabled();
@@ -59,7 +61,7 @@ describe('TenderPicker — cash', () => {
   it('calls onTenderSelect with "cash" when clicked', async () => {
     const user = userEvent.setup();
     const handler = vi.fn();
-    render(<TenderPicker envelope={makeEnvelope()} onTenderSelect={handler} />);
+    render(<TenderPicker envelope={makeEnvelope()} onTenderSelect={handler} cardEnabled />);
     await user.click(screen.getByTestId('tender-cash'));
     expect(handler).toHaveBeenCalledWith('cash');
     expect(handler).toHaveBeenCalledTimes(1);
@@ -68,7 +70,7 @@ describe('TenderPicker — cash', () => {
 
 describe('TenderPicker — external_card_terminal', () => {
   it('renders an external card terminal button that is enabled', () => {
-    render(<TenderPicker envelope={makeEnvelope()} onTenderSelect={() => {}} />);
+    render(<TenderPicker envelope={makeEnvelope()} onTenderSelect={() => {}} cardEnabled />);
     const btn = screen.getByTestId('tender-external-card');
     expect(btn).toBeInTheDocument();
     expect(btn).not.toBeDisabled();
@@ -78,7 +80,7 @@ describe('TenderPicker — external_card_terminal', () => {
   it('calls onTenderSelect with "external_card_terminal" when clicked', async () => {
     const user = userEvent.setup();
     const handler = vi.fn();
-    render(<TenderPicker envelope={makeEnvelope()} onTenderSelect={handler} />);
+    render(<TenderPicker envelope={makeEnvelope()} onTenderSelect={handler} cardEnabled />);
     await user.click(screen.getByTestId('tender-external-card'));
     expect(handler).toHaveBeenCalledWith('external_card_terminal');
     expect(handler).toHaveBeenCalledTimes(1);
@@ -100,7 +102,7 @@ describe('TenderPicker — internal_voucher (Wave 5c T291 — enabled configurat
   });
 
   it('does NOT render the legacy "(not available)" sub-label', () => {
-    render(<TenderPicker envelope={makeEnvelope()} onTenderSelect={() => {}} />);
+    render(<TenderPicker envelope={makeEnvelope()} onTenderSelect={() => {}} cardEnabled />);
     // The Slice-1 reserved-disabled hint element is gone.
     expect(screen.queryByTestId('tender-voucher-hint')).not.toBeInTheDocument();
   });
@@ -108,7 +110,14 @@ describe('TenderPicker — internal_voucher (Wave 5c T291 — enabled configurat
   it('calls onTenderSelect with "internal_voucher" when clicked', async () => {
     const user = userEvent.setup();
     const handler = vi.fn();
-    render(<TenderPicker envelope={makeEnvelope()} onTenderSelect={handler} voucherEnabled />);
+    render(
+      <TenderPicker
+        envelope={makeEnvelope()}
+        onTenderSelect={handler}
+        voucherEnabled
+        cardEnabled
+      />,
+    );
     await user.click(screen.getByTestId('tender-voucher'));
     expect(handler).toHaveBeenCalledWith('internal_voucher');
     expect(handler).toHaveBeenCalledTimes(1);
@@ -134,7 +143,7 @@ describe('TenderPicker — touch targets', () => {
   });
 
   it('renders every tender as a tile the stylesheet sizes', () => {
-    render(<TenderPicker envelope={makeEnvelope()} onTenderSelect={() => {}} />);
+    render(<TenderPicker envelope={makeEnvelope()} onTenderSelect={() => {}} cardEnabled />);
     for (const id of ['tender-cash', 'tender-external-card', 'tender-voucher']) {
       expect(screen.getByTestId(id)).toHaveClass('v5-tender-tile');
     }

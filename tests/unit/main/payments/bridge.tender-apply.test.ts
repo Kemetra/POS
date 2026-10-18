@@ -82,6 +82,8 @@ function setup() {
     auditEmitter,
     uuid,
     clock,
+    // RT-700: card tender flag on; the flag-off path is card-tender-flag.real-stack.test.ts.
+    isCardTenderEnabled: () => true,
   });
   return {
     sessionSource,

@@ -157,7 +157,9 @@ async function applyCashLine(amountMinor: number): Promise<void> {
 beforeEach(() => {
   signIn();
   usePaymentStore.getState().mount(makeEnvelope());
-  useFeatureFlagsStore.getState().hydrate({ cart: true, payments: true, productSearch: true });
+  useFeatureFlagsStore
+    .getState()
+    .hydrate({ cart: true, payments: true, productSearch: true, cardTender: true });
 });
 
 afterEach(() => {
