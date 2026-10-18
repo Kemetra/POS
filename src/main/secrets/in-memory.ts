@@ -32,7 +32,7 @@ export function createInMemorySecretStore(): SecretStore {
   return {
     get(key: SecretKey): Promise<string | null> {
       const v = store.get(key);
-      return Promise.resolve(v ?? null);
+      return Promise.resolve(v === undefined ? null : v);
     },
     set(key: SecretKey, value: string): Promise<void> {
       try {

@@ -20,9 +20,9 @@
  *   DATA_PULSE_OPENAPI_URL=https://api.example.test/openapi.json tsx scripts/codegen-api.ts --source=live
  */
 
-import { readFileSync, writeFileSync } from 'node:fs';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { readFileSync, writeFileSync } from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import openapiTS, { astToString, type OpenAPITSOptions } from 'openapi-typescript';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -111,7 +111,7 @@ export async function generateApiTypes(options: GenerateApiTypesOptions): Promis
   const ast = await openapiTS(source, FIXED_OPTIONS);
   const body = astToString(ast);
   // Force LF: replace any CRLF the lib (or the tsx runtime) may emit on Windows.
-  const normalized = body.replaceAll(/\r\n/g, '\n');
+  const normalized = body.replace(/\r\n/g, '\n');
   // Single trailing newline, deterministic.
   const ensureTrailingLf = normalized.endsWith('\n') ? normalized : normalized + '\n';
   const finalText = HEADER + ensureTrailingLf;
