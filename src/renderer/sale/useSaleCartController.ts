@@ -102,7 +102,7 @@ function canRequestPostHandoffCancel(
   cartId: string,
   envelope: PaymentIntentEnvelope | null,
 ): envelope is PaymentIntentEnvelope {
-  if (envelope === null || envelope.cart_id !== cartId || envelope.handoff_action_id === '') {
+  if (envelope?.cart_id !== cartId || envelope.handoff_action_id === '') {
     return false;
   }
   const payment = usePaymentStore.getState();

@@ -63,7 +63,7 @@ export interface CatalogueDiagnosticsProps {
 
 function readBridge(): DiagnosticsBridge {
   const api = (window as unknown as { api?: PreloadBridgeAPI }).api;
-  if (!api || api.catalogue === undefined) {
+  if (api?.catalogue === undefined) {
     throw new Error(
       'CatalogueDiagnostics: window.api.catalogue missing — preload not initialised.',
     );
@@ -162,7 +162,7 @@ export function CatalogueDiagnostics(props: Readonly<CatalogueDiagnosticsProps>)
   );
 
   const pairedFields =
-    pairing && pairing.kind === 'paired'
+    pairing?.kind === 'paired'
       ? {
           tenant_id: pairing.tenant_id,
           branch_id: pairing.branch_id,
