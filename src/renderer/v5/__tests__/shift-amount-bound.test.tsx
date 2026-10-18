@@ -73,6 +73,25 @@ function expectRefusedEntry(label: string, value: string): void {
   expect(field).toHaveAccessibleDescription(LINE);
 }
 
+/**
+ * Main answers `amount_out_of_range` for a plausible-looking entry: type it,
+ * commit, and the field ends up as for the pre-check (invalid, the line, the
+ * value kept, focus back), never a retry line.
+ */
+async function expectMainRefusalMarksEntry(input: {
+  label: string;
+  value: string;
+  commit: string;
+  scope?: HTMLElement;
+}): Promise<void> {
+  type(input.label, input.value);
+  press(input.commit, input.scope);
+  await waitFor(() => {
+    expect(screen.getByLabelText(input.label)).toHaveAttribute('aria-invalid', 'true');
+  });
+  expectRefusedEntry(input.label, input.value);
+}
+
 describe('RT-278 — the copy', () => {
   it('is the owner-approved line, with no amount, bound or retry', () => {
     const message = shiftRefusalMessage('amount_out_of_range');
@@ -110,12 +129,11 @@ describe('RT-278 — the opening float', () => {
     bridge.open.mockResolvedValue({ kind: 'refused', reason: 'amount_out_of_range' });
     renderRoute(bridge);
     await screen.findByLabelText(SHIFT_COPY.floatLabel);
-    type(SHIFT_COPY.floatLabel, '500');
-    press(SHIFT_COPY.openCommit);
-    await waitFor(() => {
-      expect(screen.getByLabelText(SHIFT_COPY.floatLabel)).toHaveAttribute('aria-invalid', 'true');
+    await expectMainRefusalMarksEntry({
+      label: SHIFT_COPY.floatLabel,
+      value: '500',
+      commit: SHIFT_COPY.openCommit,
     });
-    expectRefusedEntry(SHIFT_COPY.floatLabel, '500');
   });
 });
 
@@ -151,12 +169,13 @@ describe('RT-278 — pay-in and pay-out', () => {
     const bridge = openBridge();
     bridge.payIn.mockResolvedValue({ kind: 'refused', reason: 'amount_out_of_range' });
     const { dialog } = await openDialog('payIn', bridge);
-    type(SHIFT_COPY.amountLabel, '25');
-    press(SHIFT_COPY.record, dialog);
-    await waitFor(() => {
-      expect(screen.getByLabelText(SHIFT_COPY.amountLabel)).toHaveAttribute('aria-invalid', 'true');
+    await expectMainRefusalMarksEntry({
+      label: SHIFT_COPY.amountLabel,
+      value: '25',
+      commit: SHIFT_COPY.record,
+      scope: dialog,
     });
-    expectRefusedEntry(SHIFT_COPY.amountLabel, '25');
+    // The dialog stays open for the correction.
     expect(screen.getByRole('dialog')).toBeInTheDocument();
   });
 });
@@ -190,12 +209,13 @@ describe('RT-278 — the blind-count close', () => {
     const bridge = openBridge();
     bridge.close.mockResolvedValue({ kind: 'refused', reason: 'amount_out_of_range' });
     const { panel } = await startClose(bridge);
-    type(SHIFT_COPY.countLabel, '515');
-    press(SHIFT_COPY.closeCommit, panel);
-    await waitFor(() => {
-      expect(screen.getByLabelText(SHIFT_COPY.countLabel)).toHaveAttribute('aria-invalid', 'true');
+    await expectMainRefusalMarksEntry({
+      label: SHIFT_COPY.countLabel,
+      value: '515',
+      commit: SHIFT_COPY.closeCommit,
+      scope: panel,
     });
-    expectRefusedEntry(SHIFT_COPY.countLabel, '515');
+    // No manager approval step opens for it.
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 });
