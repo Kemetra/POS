@@ -43,12 +43,13 @@ export function normalizeNullable(node: unknown): unknown {
   return out;
 }
 
+/** True when the pinned schema is the canonical `{ error: {...} }` envelope. */
+function isErrorEnvelope(schema: unknown): boolean {
+  return isRecord(schema) && isRecord(schema.properties) && 'error' in schema.properties;
+}
+
 export function syncPairingError(snapshot: OpenApiDoc, pinnedError: unknown): OpenApiDoc {
-  if (
-    !isRecord(pinnedError) ||
-    !isRecord(pinnedError.properties) ||
-    !('error' in pinnedError.properties)
-  ) {
+  if (!isErrorEnvelope(pinnedError)) {
     throw new Error('pinned Error schema is not the canonical {error:{...}} envelope');
   }
   if (!(SNAPSHOT_SCHEMA_NAME in snapshot.components.schemas)) {
