@@ -75,6 +75,8 @@ beforeEach(() => {
 interface StackOptions {
   validateVoucher?: ValidateVoucherFn;
   reverseVoucher?: ReverseVoucherFn;
+  /** RT-700: the card-tender flag; on unless a test says otherwise. */
+  cardTender?: boolean;
 }
 
 /** V-A answers every validate with the same capped value. */
@@ -97,7 +99,11 @@ function build(options: StackOptions = {}) {
   const paymentAttemptFsm = createPaymentAttemptFsm({ db: handle, attempts, lines, outbox });
   const idempotency = createIdempotencyHelper({ outbox });
   const auditEmitter = makeAuditEmitterDouble();
-  const { validateVoucher = cappedVoucherAuthority(0), reverseVoucher } = options;
+  const {
+    validateVoucher = cappedVoucherAuthority(0),
+    reverseVoucher,
+    cardTender = true,
+  } = options;
   let session: OperatorSessionForPayments = makeSession();
   let n = 0;
   const shared = {
@@ -112,6 +118,7 @@ function build(options: StackOptions = {}) {
   return {
     outbox,
     lines,
+    auditEmitter,
     tenderLineFsm,
     useSession(next: OperatorSessionForPayments): void {
       session = next;
@@ -124,7 +131,7 @@ function build(options: StackOptions = {}) {
       attemptHasLiveTender: () => false,
     }),
     apply: createTenderApplyHandler({
-      isCardTenderEnabled: () => true,
+      isCardTenderEnabled: () => cardTender,
       ...shared,
       linesRepo: lines,
       tenderLineFsm,
@@ -495,5 +502,39 @@ describe('RT-339 — cash with nothing owed, through the real tender.apply handl
     expect(original.kind).toBe('ok');
     const settled = await s.confirm({ payment_attempt_id: attempt, idempotency_key: 'k-confirm' });
     expect(settled.kind).toBe('ok');
+  });
+});
+
+describe('RT-700 — card with the flag off, through the real tender.apply handler', () => {
+  it('is refused and audited once; no line, no outbox row; cash still applies', async () => {
+    const s = build({ cardTender: false });
+    const attempt = await startAttempt(s, 'cart-700');
+    const card = {
+      payment_attempt_id: attempt,
+      tender_type: 'external_card_terminal' as const,
+      amount_applied_minor: 1500,
+      external_reference: 'AB12XY',
+      idempotency_key: 'k-card',
+    };
+
+    expect(await s.apply(card)).toEqual({ kind: 'refused', reason: 'card_tender_disabled' });
+    expect(s.lines.findByAttempt(attempt)).toHaveLength(0);
+    expect(s.outbox.findByActionId('k-card')).toBeUndefined();
+    const refused = s.auditEmitter.captured.filter((e) => e.action_category === 'tender.refused');
+    expect(refused).toHaveLength(1);
+    expect(JSON.stringify(refused)).not.toContain('AB12XY');
+
+    // A same-key retry is evaluated again and refused again.
+    expect(await s.apply(card)).toEqual({ kind: 'refused', reason: 'card_tender_disabled' });
+    expect(s.lines.findByAttempt(attempt)).toHaveLength(0);
+
+    const cash = await s.apply({
+      payment_attempt_id: attempt,
+      tender_type: 'cash',
+      amount_applied_minor: 1500,
+      idempotency_key: 'k-cash',
+    });
+    expect(cash.kind).toBe('ok');
+    expect(s.lines.findByAttempt(attempt)).toHaveLength(1);
   });
 });
