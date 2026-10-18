@@ -307,3 +307,32 @@ export function isRt676ExemptFile(branch: string, file: string): boolean {
     (RT_676_REPIN_EXEMPT_FILES as readonly string[]).includes(file)
   );
 }
+
+/**
+ * `claude/rt307-pairing-snapshot-regen` implements Jira RT-307: regenerate the
+ * legacy `TerminalPairErrorResponse` schema in the OpenAPI snapshot, and the
+ * generated `api-types.ts`, from the canonical Backend-Core pairing error
+ * envelope pinned under `contracts/backend-core` (Kemetra/POS#769). Both files
+ * are forbidden paths, so the change cannot land without an exemption.
+ *
+ * Authority: owner approval typed in the coordination session, 2026-10-18
+ * ("Yes, add exemption"), following the RT-591 / RT-676 file-list pattern.
+ *
+ * Exemption is narrow, and deliberately not a prefix exemption: exactly TWO
+ * files, on exactly ONE branch (exact name, no `startsWith`). Every forbidden
+ * prefix stays blocked for every other file and branch. Narrowness is asserted
+ * by `source-scope-guard-rt307.test.ts`.
+ */
+export const RT_307_SNAPSHOT_REGEN_BRANCH = 'claude/rt307-pairing-snapshot-regen' as const;
+export const RT_307_SNAPSHOT_REGEN_EXEMPT_FILES = [
+  'scripts/openapi-snapshot.json',
+  'src/shared/api-types.ts',
+] as const satisfies readonly string[];
+
+/** True when `file` is one of the files the RT-307 exemption allows on `branch`. */
+export function isRt307ExemptFile(branch: string, file: string): boolean {
+  return (
+    branch === RT_307_SNAPSHOT_REGEN_BRANCH &&
+    (RT_307_SNAPSHOT_REGEN_EXEMPT_FILES as readonly string[]).includes(file)
+  );
+}

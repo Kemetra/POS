@@ -24,6 +24,7 @@ import {
   RT_306_PAIRING_TOKEN_BINDING_EXEMPT_PREFIXES,
   isRt676ExemptFile,
   isRt591ExemptFile,
+  isRt307ExemptFile,
 } from './source-scope-guard.const';
 
 /**
@@ -189,7 +190,8 @@ describe('source-scope guard (T006)', () => {
       (file) =>
         effectiveForbidden.some((prefix) => file === prefix || file.startsWith(prefix)) &&
         !isRt676ExemptFile(currentBranch, file) &&
-        !isRt591ExemptFile(currentBranch, file),
+        !isRt591ExemptFile(currentBranch, file) &&
+        !isRt307ExemptFile(currentBranch, file),
     );
 
     expect(violations, `Forbidden paths modified by this branch: ${violations.join(', ')}`).toEqual(
