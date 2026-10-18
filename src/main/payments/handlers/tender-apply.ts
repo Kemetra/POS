@@ -13,9 +13,19 @@
  *     (a refused tender line is still a real recorded event — the
  *     cashier attempted to apply, the line row exists in state='refused',
  *     and the audit trail must reflect it)
+ *   • card_tender_disabled (RT-700)        → emit `tender.refused`. No line
+ *     is persisted, but the refused card attempt is still recorded (P-26-1).
  *   • All other refusals (no_session, role_denied, attempt_terminal,
  *     tender_not_yet_supported, idempotency_*) → no audit (the line was
  *     never persisted)
+ *
+ * RT-700 (P-26-1, OD-26-1 option A) — card tender flag. `tender.apply` is
+ * where the tender type first crosses the bridge, so this is where card is
+ * kept out of the pilot: with `isCardTenderEnabled()` false (or not wired —
+ * fail-closed) a fresh `external_card_terminal` apply is refused
+ * `card_tender_disabled` after the session, attempt and idempotency checks and
+ * before the FSM, so nothing is written. A same-key replay still answers the
+ * recorded line: it records no new tender.
  *
  * SECURITY:
  *   • `voucher_code` is forwarded to the FSM but NEVER appears in the
@@ -62,6 +72,11 @@ export interface TenderApplyHandlerDeps {
   clock: () => Date;
   /** RT-437 — one `warn` line per out-of-range cash refusal; never the amount. */
   logger?: Pick<Logger, 'warn'>;
+  /**
+   * RT-700 — `POS_PULSE_FEATURE_CARD_TENDER`, read per call. Absent means off:
+   * a card tender is refused `card_tender_disabled` (fail-closed).
+   */
+  isCardTenderEnabled?: () => boolean;
 }
 
 export type TenderApplyHandler = (req: TenderApplyRequest) => Promise<TenderApplyResponse>;
@@ -130,6 +145,7 @@ export function createTenderApplyHandler(deps: TenderApplyHandlerDeps): TenderAp
     uuid,
     clock,
     logger,
+    isCardTenderEnabled = () => false,
   } = deps;
 
   /**
@@ -216,6 +232,32 @@ export function createTenderApplyHandler(deps: TenderApplyHandlerDeps): TenderAp
     }
   }
 
+  /** RT-700 — refuse a card tender while the flag is off; audited, nothing persisted. */
+  function refuseDisabledCard(ctx: {
+    req: TenderApplyRequest;
+    attempt: AttemptRow;
+    session: OperatorSessionForPayments;
+    tender_line_id: string;
+    now: string;
+  }): TenderApplyResponse {
+    const { req, attempt, session, tender_line_id, now } = ctx;
+    const reason = 'card_tender_disabled';
+    // `tender_line_id` is the id the line would have had; no row is written.
+    auditEmitter.emitTenderRefused({
+      tender_line_id,
+      payment_attempt_id: req.payment_attempt_id,
+      tender_type: req.tender_type,
+      refusal_reason: reason,
+      refused_at: now,
+      attribution_operator_id: session.operator_id,
+      tenant_id: attempt.tenant_id,
+      branch_id: attempt.branch_id,
+      originating_terminal_id: attempt.terminal_id,
+      session_id: session.operator_session_id,
+    });
+    return { kind: 'refused', reason };
+  }
+
   return async function tenderApply(req): Promise<TenderApplyResponse> {
     const session = getCurrentSession();
     if (session === null) {
@@ -278,6 +320,10 @@ export function createTenderApplyHandler(deps: TenderApplyHandlerDeps): TenderAp
       const lines = linesRepo.findByAttempt(req.payment_attempt_id);
       const prior = lines.find((l) => l.tender_line_id === reservation.tender_line_id);
       return await Promise.resolve(replayResponse(prior));
+    }
+
+    if (req.tender_type === 'external_card_terminal' && !isCardTenderEnabled()) {
+      return refuseDisabledCard({ req, attempt, session, tender_line_id, now });
     }
 
     // Wave 4 — voucher branch (T263). Slice 3 returned

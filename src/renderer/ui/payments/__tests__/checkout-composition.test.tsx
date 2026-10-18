@@ -85,7 +85,9 @@ function seedSession(): void {
     },
   });
   usePaymentStore.getState().mount(makeEnvelope());
-  useFeatureFlagsStore.getState().hydrate({ cart: true, payments: true, productSearch: true });
+  useFeatureFlagsStore
+    .getState()
+    .hydrate({ cart: true, payments: true, productSearch: true, cardTender: true });
 }
 
 function makeBridge(): { payments: PaymentsBridgeAPI; tender: TenderBridgeAPI } {
@@ -187,20 +189,20 @@ describe('022 US3 T070 / RT-243 W1-C — checkout Direction B composition', () =
 
 describe('022 US3 T071 — tender grid renders exactly the three supported tenders', () => {
   it('renders three tiles and no more', () => {
-    render(<TenderPicker envelope={makeEnvelope()} onTenderSelect={vi.fn()} />);
+    render(<TenderPicker envelope={makeEnvelope()} onTenderSelect={vi.fn()} cardEnabled />);
     const tiles = screen.getAllByRole('radio');
     expect(tiles).toHaveLength(3);
   });
 
   it('renders exactly cash, external_card_terminal and internal_voucher', () => {
-    render(<TenderPicker envelope={makeEnvelope()} onTenderSelect={vi.fn()} />);
+    render(<TenderPicker envelope={makeEnvelope()} onTenderSelect={vi.fn()} cardEnabled />);
     expect(screen.getByTestId('tender-cash')).toBeInTheDocument();
     expect(screen.getByTestId('tender-external-card')).toBeInTheDocument();
     expect(screen.getByTestId('tender-voucher')).toBeInTheDocument();
   });
 
   it('never renders an unsupported tender (RECONCILIATION §B non-capabilities)', () => {
-    render(<TenderPicker envelope={makeEnvelope()} onTenderSelect={vi.fn()} />);
+    render(<TenderPicker envelope={makeEnvelope()} onTenderSelect={vi.fn()} cardEnabled />);
     const text = document.body.textContent;
     // The mockup's six-tile grid carries these; they are NOT authorised here.
     for (const forbidden of ['مدى', 'بطاقة ائتمان', 'شركة تأمين', 'محفظة', 'قسيمة هدية']) {
@@ -212,7 +214,7 @@ describe('022 US3 T071 — tender grid renders exactly the three supported tende
     // Guards the copy regression caught in review: translating the <small>
     // glosses produced near-synonyms stacked on one tile (نقدي / نقداً). The
     // slot is a muted DESCRIPTIVE sub-label per the mockup, not a second name.
-    render(<TenderPicker envelope={makeEnvelope()} onTenderSelect={vi.fn()} />);
+    render(<TenderPicker envelope={makeEnvelope()} onTenderSelect={vi.fn()} cardEnabled />);
     for (const testid of ['tender-cash', 'tender-external-card', 'tender-voucher']) {
       const tile = screen.getByTestId(testid);
       const labelNode = tile.querySelector('.v5-tender-tile__label');

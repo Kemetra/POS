@@ -43,6 +43,12 @@ export interface FeatureFlagsState {
    * `saleVoid.*` call is made. Main refuses every call on its own read too.
    */
   saleVoid: boolean;
+  /**
+   * RT-700: renders the «بطاقة» tender tile at checkout. Fail-closed default:
+   * false — card is out of the pilot (RT-536 D4). Main refuses a card
+   * `tender.apply` on its own read too (`card_tender_disabled`).
+   */
+  cardTender: boolean;
   /** Whether the flag map has been hydrated from main (vs. boot defaults). */
   hydrated: boolean;
 }
@@ -57,6 +63,7 @@ export interface FeatureFlagsStore extends FeatureFlagsState {
     returns?: boolean;
     shiftCashup?: boolean;
     saleVoid?: boolean;
+    cardTender?: boolean;
   }): void;
   reset(): void;
 }
@@ -70,6 +77,7 @@ const INITIAL: FeatureFlagsState = {
   returns: false,
   shiftCashup: false,
   saleVoid: false,
+  cardTender: false,
   hydrated: false,
 };
 
@@ -85,6 +93,7 @@ export const useFeatureFlagsStore = create<FeatureFlagsStore>((set) => ({
       returns: flags.returns === true,
       shiftCashup: flags.shiftCashup === true,
       saleVoid: flags.saleVoid === true,
+      cardTender: flags.cardTender === true,
       hydrated: true,
     });
   },

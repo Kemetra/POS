@@ -102,3 +102,22 @@ describe('feature-flags-store — saleVoid (RT-530, default off)', () => {
     expect(useFeatureFlagsStore.getState().saleVoid).toBe(false);
   });
 });
+
+describe('feature-flags-store — cardTender (RT-700, default off)', () => {
+  it('defaults cardTender to false (fail-closed)', () => {
+    expect(useFeatureFlagsStore.getState().cardTender).toBe(false);
+  });
+
+  it('hydrates cardTender only from an explicit true', () => {
+    useFeatureFlagsStore.getState().hydrate({ cardTender: 'yes' as unknown as boolean });
+    expect(useFeatureFlagsStore.getState().cardTender).toBe(false);
+    useFeatureFlagsStore.getState().hydrate({ cardTender: true });
+    expect(useFeatureFlagsStore.getState().cardTender).toBe(true);
+  });
+
+  it('reset restores cardTender to false', () => {
+    useFeatureFlagsStore.getState().hydrate({ cardTender: true });
+    useFeatureFlagsStore.getState().reset();
+    expect(useFeatureFlagsStore.getState().cardTender).toBe(false);
+  });
+});

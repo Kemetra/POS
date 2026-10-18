@@ -107,7 +107,7 @@ afterEach(() => {
 
 describe('RT-103 TenderPicker — pilot restriction (default)', () => {
   it('renders the voucher tile disabled, and cash + card enabled', () => {
-    render(<TenderPicker envelope={makeEnvelope()} onTenderSelect={vi.fn()} />);
+    render(<TenderPicker envelope={makeEnvelope()} onTenderSelect={vi.fn()} cardEnabled />);
     expect(screen.getByTestId('tender-voucher')).toBeDisabled();
     expect(screen.getByTestId('tender-voucher')).toHaveAttribute('aria-disabled', 'true');
     expect(screen.getByTestId('tender-cash')).toBeEnabled();
@@ -123,7 +123,7 @@ describe('RT-103 TenderPicker — pilot restriction (default)', () => {
 
   it('the keyboard path cannot reach or invoke the voucher tender', async () => {
     const onTenderSelect = vi.fn();
-    render(<TenderPicker envelope={makeEnvelope()} onTenderSelect={onTenderSelect} />);
+    render(<TenderPicker envelope={makeEnvelope()} onTenderSelect={onTenderSelect} cardEnabled />);
     const user = userEvent.setup();
     const reached: (string | null)[] = [];
     for (let i = 0; i < 4; i++) {

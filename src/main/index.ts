@@ -820,7 +820,7 @@ singleInstanceReady
     const getAppConfig = (): AppConfig => {
       const cfg: AppConfig = {};
       // 005 cart / 006 payments / 008 saleFinalization / 009 productSearch /
-      // RT-103 voucherTender / RT-15 returns — all six flags default false (fail-closed).
+      // RT-103 voucherTender / RT-15 returns / RT-700 cardTender — every flag defaults false (fail-closed).
       // RT-162: parsing lives in `app/feature-flags.ts` (one truthy parser,
       // unchanged semantics). Re-parsed per call, as before; the PAYMENTS-
       // without-SALE_FINALIZATION profile never reaches here (refused at startup).
@@ -1702,11 +1702,15 @@ singleInstanceReady
     });
     const paymentsSubscribe = createPaymentsSubscribeHandler(paymentsReadDeps);
     const paymentsRead = createPaymentsReadHandler(paymentsReadDeps);
+    // RT-700 (P-26-1) — card is refused in main while the flag is off; read
+    // per call, like `getAppConfig`, so main and the renderer see one value.
+    const isCardTenderEnabled = (): boolean => parseFeatureFlags(process.env).cardTender;
     const tenderApply = createTenderApplyHandler({
       ...paymentsWriteDeps,
       tenderLineFsm,
       uuid: paymentsUuid,
       logger: mainLogger,
+      isCardTenderEnabled,
     });
     const tenderReverse = createTenderReverseHandler({
       ...paymentsWriteDeps,
@@ -1750,6 +1754,7 @@ singleInstanceReady
             tenderLineFsm,
             uuid: paymentsUuid,
             logger: mainLogger,
+            isCardTenderEnabled,
           }),
           confirm: createPaymentsConfirmHandler({
             ...scoped,

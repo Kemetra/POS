@@ -129,6 +129,8 @@ function build(options: StackOptions = {}) {
       tenderLineFsm,
       validateVoucher,
       uuid,
+      // RT-700: card tender flag on — the card replay cases apply a card line.
+      isCardTenderEnabled: () => true,
     }),
     validate: createVouchersValidateHandler({
       ...shared,
