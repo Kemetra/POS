@@ -23,9 +23,9 @@ import { bindPrintEventsRepository } from '../../../../src/main/sales/repositori
 import { createSaleAuditEmitter } from '../../../../src/main/sales/audit-emitter.js';
 import type { SaleAuditEvent } from '../../../../src/main/sales/audit-emitter.js';
 import { makeSqlJsHandle } from '../cart/__helpers__/sql-js-handle.js';
-import { readFileSync } from 'fs';
-import path from 'path';
-import { fileURLToPath } from 'url';
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import type { ReceiptPayload } from '../../../../src/shared/receipts/types.js';
 import type { SaleId, SaleNumber } from '../../../../src/shared/sales/types.js';
 

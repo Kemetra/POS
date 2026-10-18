@@ -234,7 +234,7 @@ export function createCatalogueBridge(deps: CatalogueBridgeDependencies): Catalo
     async counts(): Promise<CatalogueCountsResponse> {
       const gate = requireCatalogueSession(getCurrentSession());
       if (gate.kind === 'refused') return gate;
-      if (freshness === undefined || freshness.countBarcodes === undefined)
+      if (freshness?.countBarcodes === undefined)
         return await Promise.resolve({ kind: 'refused', reason: 'no_session' });
       const tenantId = gate.session.tenant_id;
       return await Promise.resolve({

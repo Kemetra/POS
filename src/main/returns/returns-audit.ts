@@ -128,11 +128,6 @@ export function createReturnsAudit(deps: ReturnsAuditDeps): ReturnsAudit {
     write(actorOf(entry), category, { ...shared, ...extra(facts) } as AuditPayloadMap[C]);
   }
 
-  /** The references every payout event carries. */
-  function refs(entry: JournalEntry) {
-    return { return_id: entry.returnId, return_ref: confirmedFacts(entry).returnRef };
-  }
-
   function slipEvent(actor: ReturnActor, entry: JournalEntry, outcome: SlipAuditOutcome): void {
     if (!outcome.ok) {
       const failure_reason = outcome.failureReason;
@@ -206,4 +201,9 @@ export function createReturnsAudit(deps: ReturnsAuditDeps): ReturnsAudit {
     },
     slip: slipEvent,
   };
+}
+
+/** The references every payout event carries. */
+function refs(entry: JournalEntry) {
+  return { return_id: entry.returnId, return_ref: confirmedFacts(entry).returnRef };
 }

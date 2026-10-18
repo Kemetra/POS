@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { randomUUID } from 'crypto';
+import { randomUUID } from 'node:crypto';
 
 vi.mock('../../../../src/main/operator/role-enforcement.js', () => ({
   requireRole: () => {

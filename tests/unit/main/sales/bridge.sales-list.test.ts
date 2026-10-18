@@ -16,9 +16,9 @@
 
 import { beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import initSqlJs, { type Database as SqlJsDatabase, type SqlJsStatic } from 'sql.js';
-import { readdirSync, readFileSync } from 'fs';
-import path from 'path';
-import { randomUUID } from 'crypto';
+import { readdirSync, readFileSync } from 'node:fs';
+import path from 'node:path';
+import { randomUUID } from 'node:crypto';
 
 import {
   createSalesBridge,
