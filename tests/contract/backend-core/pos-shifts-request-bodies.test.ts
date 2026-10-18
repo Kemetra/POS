@@ -1,7 +1,7 @@
 /**
  * RT-17 slice 3 — the stored shift bodies against the PINNED Backend-Core
  * contract (`contracts/backend-core/openapi/pos-shifts.openapi.yaml`,
- * 1.1.0-draft at Backend-Core `8d9ba99`; refresh with `npm run contracts:repin`).
+ * 1.2.0-draft at Backend-Core `1711813`; refresh with `npm run contracts:repin`).
  *
  * The POS has no JSON-Schema validator on its dependency tree (adding one is a
  * gated package change), so this reads the vendored YAML with the RT-217
@@ -104,8 +104,8 @@ const SHIFT = '0192F5A2-3B4C-7D8E-9F01-23456789AB01';
 const USER = '0190F5A2-3B4C-7D8E-9F01-23456789ABCD';
 
 describe('stored shift bodies conform to the pinned pos-shifts contract', () => {
-  it('pins pos-shifts 1.1.0-draft', () => {
-    expect(at(at(ROOT, 'info'), 'version').value).toBe('1.1.0-draft');
+  it('pins pos-shifts 1.2.0-draft', () => {
+    expect(at(at(ROOT, 'info'), 'version').value).toBe('1.2.0-draft');
   });
 
   it('openShift body → OpenShiftRequest', () => {
