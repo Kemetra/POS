@@ -17,6 +17,9 @@ const REFUSAL_COPY: Readonly<Record<ShiftCashupRefusal, string>> = Object.freeze
   session_locked: 'الجلسة مقفلة. افتحها ثم حاول مجددًا.',
   no_cashier_identity: 'تُفتح الوردية وتُسجَّل حركاتها وتُغلق من جلسة كاشير فقط.',
   invalid_input: 'البيانات غير صالحة. راجع المبلغ والسبب والملاحظة.',
+  // RT-278 S1 (OD-278-6, doc 15 M-W5): the pre-check and main's refusal. No
+  // amount, no bound; never «حاول مجددًا» (the same amount can never pass).
+  amount_out_of_range: 'المبلغ أكبر من الحد المسموح لهذه العملية. راجع المبلغ. لم يُسجَّل شيء.',
   shift_already_open: 'توجد وردية مفتوحة على هذا الجهاز بالفعل.',
   shift_not_open: 'لا توجد وردية مفتوحة على هذا الجهاز.',
   clock_regressed: 'ساعة الجهاز أقدم من آخر عملية وردية مسجَّلة. صحّح الوقت ثم حاول.',

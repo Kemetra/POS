@@ -99,6 +99,7 @@ const SERVICE_REFUSALS: Readonly<Record<ShiftCashupRefusalReason, ShiftCashupRef
   approver_expired: 'approver_invalid',
   approval_stale: 'approval_stale',
   aggregate_out_of_range: 'invalid_input',
+  amount_out_of_range: 'amount_out_of_range',
 };
 
 /** The enrolment's refusals as the renderer sees them. */

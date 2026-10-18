@@ -43,6 +43,7 @@ import {
   managerSession,
   seedRefund,
   seedSettlement,
+  seedPreRolloutShift,
   seedShiftSale,
   serviceHarness,
   storedBody,
@@ -402,30 +403,43 @@ describe('F1 — a pay-in never takes the shift out of the safe range (10944)', 
       harness.service.recordCashMovement({ kind: 'pay_in', amountMinor, reasonCode: 'other' });
   }
 
-  it('accepts a pay-in that takes the expected cash exactly to the bound, and the shift closes', () => {
-    openShift(MAX - 10);
+  // RT-278 S1: a new float or pay-in is capped at EGP 100,000.00, so a shift
+  // near the safe range can only be one recorded before rollout (seeded
+  // through the repository). The aggregate guard still holds for it.
+  function preRollout(openingFloatMinor: number, payInsMinor: number[] = []): void {
+    seedPreRolloutShift(db, { openingFloatMinor, payInsMinor });
+    harness.state.clock = CLOSED_AT;
+  }
+
+  /** A plausible count of a pre-rollout shift: its variance needs the manager. */
+  async function closeApproved(countedCashMinor: number): Promise<void> {
+    const approver = await approval(countedCashMinor);
+    closeWith(countedCashMinor, approver)();
+  }
+
+  it('accepts a pay-in that takes the expected cash exactly to the bound, and the shift closes', async () => {
+    preRollout(MAX - 10);
     expect(payIn(10)).not.toThrow();
-    expect(closeWith(MAX)).not.toThrow();
+    await expect(closeApproved(FLOAT)).resolves.toBeUndefined();
   });
 
-  it('refuses a pay-in that takes the expected cash past the bound, writing nothing', () => {
-    openShift(MAX - 10);
+  it('refuses a pay-in that takes the expected cash past the bound, writing nothing', async () => {
+    preRollout(MAX - 10);
     const before = factCounts(db);
     expect(payIn(11)).toThrow(refusal('aggregate_out_of_range'));
     expect(factCounts(db)).toEqual(before);
-    expect(closeWith(MAX - 10)).not.toThrow();
+    await expect(closeApproved(FLOAT)).resolves.toBeUndefined();
   });
 
   it('counts the cash sales of the window in the expected cash', () => {
-    openShift(MAX - 1_000);
+    preRollout(MAX - 1_000);
     seedShiftSale(db, { saleId: 's-1', finalizedAt: CLOSED_AT, lines: [cashLine(990)] });
     expect(payIn(11)).toThrow(refusal('aggregate_out_of_range'));
     expect(payIn(10)).not.toThrow();
   });
 
   it('refuses a pay-in whose total would pass the bound although pay-outs keep the cash in range', () => {
-    openShift(0);
-    expect(payIn(MAX)).not.toThrow();
+    preRollout(0, [MAX]);
     harness.service.recordCashMovement({ kind: 'pay_out', amountMinor: MAX, reasonCode: 'other' });
     expect(payIn(1)).toThrow(refusal('aggregate_out_of_range'));
   });
