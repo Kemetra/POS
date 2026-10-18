@@ -135,7 +135,7 @@ Each row in «سجل المرتجعات على هذا الجهاز» opens a **r
   - «بانتظار الدعم» (needs support);
 - attempt history, human-first: each attempt's local time and a cause line. The evidence sits next to it: the HTTP status class and the cause code, never a body or an envelope.
 - the actions, each named for what it does:
-  - **«تحديث الحالة»** reads the server truth. It writes nothing on the server and never sends the return.
+  - **«تحديث الحالة»** reads the server truth. It never sends the return and changes no return or sale state on the server. It does write one ref-only `pos_sales.return_read` audit record (BR-5).
   - **«إعادة الإرسال»** sends the identical request again, for this row only.
   - **«إغلاق كمرتجع غير مسجَّل»** appears only after a read answered *not recorded*.
   - **«تحويل إلى الدعم»** marks the row needs-support.
@@ -149,14 +149,19 @@ The evidence each verdict needs:
 | **Confirmed** | The provenance read returns a `SaleReturn` that passes the dispatcher's **existing** match: `externalId`, `saleRef`, currency, lines and `returnTotal` = `quoted_total_minor`. The plan reuses `matchingTotalMinor` and does not write a second matcher. | The existing `markConfirmed` plus the `confirmed` and `payout_ready` audits in one transaction. Payout is then allowed as today. |
 | **Not recorded** | The read answers an **affirmative** `not_recorded`, distinct from the gate 404 and the scope 404 (requirement BR-2), **and** the quiet period has passed (OD-196-5) with no send in flight. | First recommend «إعادة الإرسال»: the same key converges. If the manager instead closes the row, a `not_recorded_closed` disposition is written (§3.4). The row stays `unknown` in `0039`, the sale is freed, and the row is never resent. |
 | **Mismatch** | The read returns a `SaleReturn` under this key that fails the match. | A `needs_support` disposition. No payout while it lasts. Background resends stop. The sale stays blocked (OD-196-4). It is **not terminal**: a later matching read or manual resend confirms the row, and a later `not_recorded` read allows a close. |
-| **Inconclusive** | Offline, 401/403, gate off, 5xx or an unreadable body. | Nothing changes. Refusal copy names the cause. |
+| **Inconclusive** | Offline, 401/403, gate off, 5xx or an unreadable body. | No verdict, and nothing changes from the read itself. Refusal copy names the cause. The one exception is send-side and automatic: the §3.6 `auth_failure` flag. |
 
 **Options:**
 
 - **A. Recommended: server truth by provenance read, plus a POS quiet period.**
   - A verdict comes only from the BC read.
   - "Not recorded" frees the sale only through an explicit, approved close.
-  - Residual risk: a POST already in flight lands after the read. It is bounded by the quiet period, which is ≥ 60× the 15 s request timeout. If it happens anyway, no cash moved: a closed row never pays out. Once R-7 is live, the server shows it as accepted-not-settled (F-9).
+  - **Residual risk: a late commit.** A POST already in flight can still commit on the server after the read.
+    - The POS 15 s timeout bounds only how long the till waits. It does **not** bound Backend-Core processing.
+    - The quiet period therefore only *reduces* the race. It eliminates it only when Backend-Core guarantees that a `recordReturn` request cannot commit later than a stated bound shorter than the quiet period. That guarantee is BR-7 (GATED, part of S2/S3).
+    - Without BR-7, the owner must explicitly accept the risk under OD-196-1. If it happens, no cash moved: a closed row never pays out.
+    - Once R-7 is live, the server shows it as accepted-not-settled (F-9). Before R-7, it leaves an ERP credit note posted as paid (B-5, §9).
+    - Option B (a tombstone) removes the race entirely.
 - **B. A plus a Backend-Core tombstone.** The `not_recorded` answer atomically reserves the provenance key, so a later POST with it gets 409. This is the strongest guarantee, but it adds a BC write and a \[GATED] migration. Recommended as post-pilot hardening, not for V1.
 - **C. Rejected: manager attestation with no server read.** It closes a row on a human's word. Before R-7, a row the server did record keeps an ERP credit note posted as paid while no cash left the drawer (B-5).
 - **D. Rejected: infer from `readSale` `returnedQuantity`.** The count aggregates every return on every till and cannot attribute one return to one key. At most it is shown as a hint.
@@ -169,6 +174,8 @@ The evidence each verdict needs:
 | A confirm that results from a read | No extra approval. | The server proves it. It is the same transition the dispatcher writes. |
 | «إغلاق كمرتجع غير مسجَّل», «تحويل إلى الدعم» | A bound approval of a new kind, `return.resolve_unknown`. Subject: `return_id`. `subject_version`: the state + `attempt_count` + the last read verdict id. `amount_minor` = `quoted_total_minor`. **Recommended:** four-eyes against the row's original `operator_id`, following the `sale.void` pattern. | Closing frees a sale for a second return of money, which is a terminal judgement. |
 
+**Four-eyes needs the originating user.** `return_journal.operator_id` is the provider operator id, not `users.id`. `createSellingUserIdResolver` maps a *sale's* selling cashier, not a return's operator. So S4 durably captures the requester's `users.id` with each new return, in `return_journal_origin`, written in the journal insert transaction. Rows journaled earlier have no origin user: four-eyes then excludes only the current requester, and the audit says so (§9).
+
 **Alternatives for the close approval:**
 - (b) The session manager's own PIN, recovery-style. Cheaper at night with one manager, but no second person checks it.
 - (c) No PIN (plain C6).
@@ -178,7 +185,15 @@ The evidence each verdict needs:
 **Recommended: leave `0039` untouched and add one append-only side table** (\[GATED] local migration, next free number at execution; `0056` today):
 
 `return_journal_dispositions`:
-- columns: `disposition_id` (uuidv7 PK), `return_id` (FK), `kind` (`not_recorded_closed` | `needs_support`), `verdict_source` (`provenance_read` | `operator`), `read_verdict_at`, `approval_id` (nullable for `needs_support` raised automatically by a mismatch), `actor_operator_id`, `created_at`;
+- columns: `disposition_id` (uuidv7 PK), `return_id` (FK), `kind` (`not_recorded_closed` | `needs_support`), `verdict_source`, `reason` (`mismatch` | `auth_failure` | `operator` | `not_recorded`), `read_verdict_at` (nullable), `approval_id`, `actor_operator_id` (nullable for automatic raises), `created_at`;
+- `verdict_source` values:
+  - `provenance_read`: a status-read verdict;
+  - `send_response`: a mismatch received on a send (U-3/U-4);
+  - `auth_failure`: the automatic §3.6 flag;
+  - `operator`: a manager's own support raise.
+- CHECK rules:
+  - `approval_id IS NULL` exactly when `verdict_source IN ('send_response', 'auth_failure')`. Those two are automatic `needs_support` raises.
+  - `not_recorded_closed` requires `verdict_source = 'provenance_read'` and a non-null `approval_id`;
 - a partial unique index allows **at most one `not_recorded_closed` per row**. `needs_support` may appear more than once, and may be followed by a close;
 - triggers: no UPDATE, no DELETE. No insert once the row has a `not_recorded_closed` disposition or has left `pending`/`unknown`;
 - an insert is allowed only while the header is `unknown` or `pending` with `attempt_count > 0`.
@@ -187,7 +202,7 @@ The evidence each verdict needs:
 
 **Readers that change:**
 - `hasUnresolvedForSale` excludes a `not_recorded_closed` row and keeps blocking a `needs_support` row (per OD-196-4).
-- The resolver's background tick skips **every** row with a disposition. The on-demand bar pass skips them too. A `needs_support` row is resent only by its own per-row «إعادة الإرسال». A closed row is never resent by any path: that is the safety property.
+- The resolver's background tick skips **every** row with a disposition. The on-demand bar pass skips them too. A `needs_support` row is resent only by its own per-row «إعادة الإرسال». A closed row is never resent by any path: that is the safety property. Filtering the lists is not enough, because the resolver snapshots its rows and then sends them one by one. So the safety property is enforced at the **dispatch commit point**: right before the POST, `sendOnce` re-reads the disposition in the same synchronous step as its authorization recheck, and answers `deferred` for a closed row. A close is also serialized against sends: it is refused with `send_in_flight` while the dispatcher's per-return single-flight map holds that `return_id`. Because the main process is single-threaded, a close that commits before that synchronous check is always seen, and a close attempted after it is refused.
 - The void guard `LIVE_RETURN_SQL` excludes `not_recorded_closed`.
 - The `markConfirmed` / `markRefused` guards refuse a row with a `not_recorded_closed` disposition. A late answer is logged as `returns:late_answer_after_close` and surfaced, never applied. A `needs_support` row confirms normally.
 
@@ -199,13 +214,15 @@ The evidence each verdict needs:
 
 - Returns are online-only (I-16), and so is resolution.
 - Offline, the panel is **read-only**. The local history and causes still show, and every action is refused with `offline` before any write.
-- No disposition is ever written from local evidence alone, except `needs_support` from a mismatch the till already received.
+- No disposition is ever written from local evidence alone, with two automatic `needs_support` exceptions. Both are raised from send responses the till actually received: a mismatch (`send_response`), and the repeated authentication failures of §3.6 (`auth_failure`). Neither enables a payout or frees the sale.
 
 ### 3.6 Revoked device or no envelope (OD-196-6)
 
 - With a revoked device, or a session that cannot authenticate (U-1), the till **cannot** read the server truth, so it cannot close the row.
 - **Recommended:**
-  - The till shows «بانتظار الدعم» with copy that sends the manager to support.
+  - **An automatic flag, as an explicit authority exception.** A row whose resends answer a pre-replay 401/403 on **3 consecutive attempts spanning at least the quiet period** gets an automatic `needs_support` disposition. Its fields: `verdict_source = auth_failure`, `reason = auth_failure`, no approval, no actor. The till shows «بانتظار الدعم» with copy that sends the manager to support.
+  - It needs no approval because it only *restricts*. It stops background resends, it never frees the sale, and it never enables a payout. A later matching read or resend still confirms the row (§3.4).
+  - A 404 from the gate (U-2) does not raise it, because it heals once the gate is back on.
   - Support resolves it through Backend-Core truth: the F-9 Admin-Console view, or an operator query until F-9 exists.
   - After the device is restored, «تحديث الحالة» settles the row normally.
 - U-7 orphans (if re-pair changes `terminal_id`) are a support item, not a till item.
@@ -220,7 +237,7 @@ Each is a new `sale.return.*` category in `event-shape.ts`, with no DDL. Payload
 | `sale.return.status_read` | Each «تحديث الحالة» | `return_id`, `verdict` (`recorded_match`, `recorded_mismatch`, `not_recorded`, `inconclusive`), `cause` when inconclusive |
 | `sale.return.resend_requested` | Per-row «إعادة الإرسال» | `return_id` |
 | `sale.return.closed_not_recorded` | Disposition written | `return_id`, `approval_id`, `read_verdict_at` |
-| `sale.return.needs_support` | Disposition written | `return_id`, `approval_id \| null`, `reason` (`mismatch`, `unauthenticated`, `operator`) |
+| `sale.return.needs_support` | Disposition written | `return_id`, `approval_id \| null`, `verdict_source`, `reason` (`mismatch`, `auth_failure`, `operator`) |
 
 The existing `sale.return.confirmed` gains `via: 'send' | 'status_read'`, and the approval consumption carries `approving_supervisor_id` (RT-114 C7).
 
@@ -277,6 +294,7 @@ These requirements are this plan's input to RT-490. RT-196 does not edit the con
 - **BR-4 Credit-linked returns.** A key that belongs to a credit reversal (RT-577) answers `recorded`, with a flag the POS treats as a mismatch. The till never pays a credit reversal.
 - **BR-5 Audit.** Each authorized 200 writes one `pos_sales.return_read` event, ref-only (the RT-548 pattern).
 - **BR-6 No migration.** The read uses the existing `(tenant, source_system, external_id)` unique index, so the runtime can ship **before F-2** (OD-196-8).
+- **BR-7 A processing bound (GATED).** The contract states the maximum time after receipt within which a `recordReturn` request either commits or is abandoned, for example a transaction or statement timeout. That bound must be shorter than the POS quiet period (OD-196-5). Without it, the late-commit race in §3.2 is an owner-accepted risk (OD-196-1).
 
 ---
 
@@ -284,12 +302,12 @@ These requirements are this plan's input to RT-490. RT-196 does not edit the con
 
 | ID | Decision | Recommended | Alternatives |
 | --- | --- | --- | --- |
-| **OD-196-1** | Reconcile rule | **A:** server truth via the provenance read, plus the POS quiet period. A close needs an affirmative `not_recorded`. | B: A + BC tombstone (post-pilot hardening). C: manager attestation (rejected). D: `returnedQuantity` inference (rejected). |
+| **OD-196-1** | Reconcile rule | **A:** server truth via the provenance read, plus the POS quiet period, plus the BR-7 server bound. A close needs an affirmative `not_recorded`. If BR-7 is not delivered, the owner explicitly accepts the residual late-commit risk. | B: A + BC tombstone (post-pilot hardening). C: manager attestation (rejected). D: `returnedQuantity` inference (rejected). |
 | **OD-196-2** | Local persistence | An **append-only `return_journal_dispositions` side table**, with `0039` untouched; attempt causes go in audit events. | Rebuild `return_journal` with new states; an attempts table. |
 | **OD-196-3** | Authority | Read and resend directly (C6, audited). Close and needs-support take a bound approval of a **new kind `return.resolve_unknown`**, four-eyes against the original operator. | Session manager's own PIN (recovery-style); no PIN. |
 | **OD-196-4** | Does `needs_support` keep blocking new returns and voids on the sale? | **Yes** (decision 1050). Only server truth unblocks it. | Free the sale; the server cap still prevents an over-return. |
 | **OD-196-5** | Quiet period before a close | **15 min** since `last_attempt_at` (≥ 60× the 15 s request timeout), with no send in flight. | 5 min; 1 h; the next business day. |
-| **OD-196-6** | Revoked device or unauthenticated till | **Needs support**, resolved via Backend-Core truth: F-9 or a support query. No till-side close. | A till-side close on manager attestation (conflicts with OD-196-1 A). |
+| **OD-196-6** | Revoked device or unauthenticated till | An **automatic `needs_support` flag** (`auth_failure`) after 3 consecutive pre-replay 401/403 resends spanning the quiet period. It is an authority exception: no approval, because it only restricts. It is resolved via Backend-Core truth (F-9 or a support query) or a later matching read. No till-side close. | A till-side close on manager attestation (conflicts with OD-196-1 A). |
 | **OD-196-7** | Shift close | **Warn, don't block.** Counts go in the close summary and the close audit. | Block close while any undisposed `pending`/`unknown` row exists. |
 | **OD-196-8** | Backend-Core packaging | Split `readReturnByProvenance` out of RT-490/F-2 as its **own contract + runtime slice** (no migration), so RT-196 does not wait for the execution migration. | Ship it with RT-490 and F-2 as planned. |
 | **OD-196-9** | The §2.3 credit-403 classification fix | Fold it into S1 (classify by status + `error.code`). | A separate bug ticket. |
@@ -303,13 +321,13 @@ These requirements are this plan's input to RT-490. RT-196 does not edit the con
 | Slice | Repo | Gate | Depends on | Content | Acceptance |
 | --- | --- | --- | --- | --- | --- |
 | **S1** Unknown causes + per-row resend | POS | none | — | `sale.return.attempt_unknown` with `cause` (§3.7), written in the same transaction as `markUnknown`, and only when that guarded UPDATE changed the row (the confirm and refuse pattern). The §2.3 classification fix. A per-row `returns.resend({ returnId })` that reuses the dispatcher. `ReturnJournalView` gains `attemptCount`, `lastAttemptAt` and `lastCause`, read from the audit. | Each U-path test writes exactly one `attempt_unknown` with the right cause. The resend is byte-identical under the same key (the existing dispatcher test). On a resend, only the credit 403 `error.code` → refused; the operator-guard 403 and every pre-replay 401/403/404 → unknown. Resending a `confirmed` or `refused` row is refused `already_resolved`. |
-| **S2** Read contract | Backend-Core | **GATED contract** | OD-196-8 | BR-1 to BR-5 in `pos-sales/sales.yaml`. While the runtime is absent, the op carries `x-runtime-status: contract-only`. | oasdiff is additive only. Contract suites are green. The `not_recorded` vs 404 rule is stated normatively. |
-| **S3** Read runtime | Backend-Core | **GATED runtime** (reads only, no migration; ships after S2 is approved) | S2 | Controller + service on the existing provenance index. Gate, scope, then the read. Audit as BR-5. | Tests: recorded, not recorded, gate off (404), sale out of scope (404), cross-tenant (404), credit-linked flag. Tenant isolation (RLS). |
-| **S4** Dispositions table | POS | **GATED local migration** | OD-196-2 | `return_journal_dispositions` (§3.4) with its triggers, plus the reader changes: `hasUnresolvedForSale`, `listUnresolved`, `LIVE_RETURN_SQL`, and the `markConfirmed`/`markRefused` guards. | Migration round-trip test. UPDATE and DELETE are denied. One disposition per row. A closed row is never listed by the resolver. A closed row frees new returns and voids. `needs_support` still blocks (per OD-196-4). A late confirm after a close does not apply, while a `needs_support` row still confirms. The bar pass and background tick skip disposed rows. |
-| **S5** Reconcile service | POS | contract growth (action kind) | S1, S3, S4, OD-196-3 | Client `readReturnByProvenance`. `returns.readStatus({ returnId })`. `returns.close({ returnId, approvalId })` and `returns.raiseSupport({ returnId, approvalId? })`. The new `return.resolve_unknown` action kind, its approval resolver and its consume step, in one transaction with the disposition and its audit. The kind is added to `mayRequest` (which today refuses a manager session for ordinary kinds) and to `approverAllowed`. Four-eyes compares `users.id`, so the row's original `operator_id` is resolved to its user id the way `sale.void` does (`createSellingUserIdResolver`). | Each §3.2 verdict maps to the right effect. A confirm via a read reuses `matchingTotalMinor` and writes `confirmed` + `payout_ready` once. A close is refused before the quiet period, without a `not_recorded` read, or while a send is in flight. A mismatch never confirms and never pays out. needs_support → a matching read → confirmed. needs_support → `not_recorded` → close. Offline refuses with no write. Each RT-114 refusal applies (expired, stale, four-eyes). |
+| **S2** Read contract | Backend-Core | **GATED contract** | OD-196-8 | BR-1 to BR-5 and BR-7 in `pos-sales/sales.yaml`. While the runtime is absent, the op carries `x-runtime-status: contract-only`. | oasdiff is additive only. Contract suites are green. The `not_recorded` vs 404 rule is stated normatively. |
+| **S3** Read runtime | Backend-Core | **GATED runtime** (reads only, no migration; ships after S2 is approved) | S2 | Controller + service on the existing provenance index. Gate, scope, then the read. Audit as BR-5. Enforce the BR-7 bound on `recordReturn`. | Tests: recorded, not recorded, gate off (404), sale out of scope (404), cross-tenant (404), credit-linked flag. Tenant isolation (RLS). |
+| **S4** Dispositions table | POS | **GATED local migration** | OD-196-2 | `return_journal_dispositions` (§3.4) with its triggers. Also `return_journal_origin` (`return_id` PK/FK, `requester_user_id`), written in the journal insert transaction (§3.3). Plus the dispatcher's commit-point disposition check, and the reader changes: `hasUnresolvedForSale`, `listUnresolved`, `LIVE_RETURN_SQL`, and the `markConfirmed`/`markRefused` guards. | Migration round-trip test. UPDATE and DELETE are denied. At most one `not_recorded_closed` per row (partial UNIQUE). Repeated `needs_support` rows are accepted and may be followed by a close. The `verdict_source`/`approval_id` CHECKs hold. A closed row is never listed by the resolver. A row closed after the resolver snapshot is **not** POSTed (`deferred` at the commit point). A close during an in-flight send is refused `send_in_flight`. A new return's `requester_user_id` is written in the journal insert transaction. A closed row frees new returns and voids. `needs_support` still blocks (per OD-196-4). A late confirm after a close does not apply, while a `needs_support` row still confirms. The bar pass and background tick skip disposed rows. |
+| **S5** Reconcile service | POS | contract growth (action kind) | S1, S3, S4, OD-196-3 | Client `readReturnByProvenance`. `returns.readStatus({ returnId })`. `returns.close({ returnId, approvalId })` and `returns.raiseSupport({ returnId, approvalId? })`. The new `return.resolve_unknown` action kind, its approval resolver and its consume step, in one transaction with the disposition and its audit. The kind is added to `mayRequest` (which today refuses a manager session for ordinary kinds) and to `approverAllowed`. Four-eyes compares `users.id` against `return_journal_origin.requester_user_id` (S4), never against the provider `operator_id`. | Each §3.2 verdict maps to the right effect. A confirm via a read reuses `matchingTotalMinor` and writes `confirmed` + `payout_ready` once. A close is refused before the quiet period, without a `not_recorded` read, or while a send is in flight. A mismatch never confirms and never pays out. needs_support → a matching read → confirmed. needs_support → `not_recorded` → close. Offline refuses with no write. Each RT-114 refusal applies (expired, stale, four-eyes). |
 | **S6** Recovery panel | POS (renderer) | none | S5 (S1 for the history-only part) | Per-row panel (§3.1), copy (§3.9), RT-114 approval sheet reuse, state labels. | RTL a11y scope tests. The copy registry has no duplicate lines. Each action is disabled offline. The visual-acceptance captures follow the RT-501 pattern. |
 | **S7** Shift-close warning | POS | none | S4 | Close summary counts and close-audit fields (OD-196-7). | A close with an unknown row succeeds and records the counts. Expected Cash is unchanged by unknown, closed or needs-support rows. |
-| **S8** Packaged verification | POS | none | S5–S7 | Lab scenarios: U-3 mismatch → needs support; a lost answer → read → confirmed → paid out in the current shift; not recorded → close → new return accepted; offline read-only; revoked device → needs support. | A witnessed run is recorded on RT-196. |
+| **S8** Packaged verification | POS | none | S5–S7 | Lab scenarios: U-3 mismatch → needs support; a lost answer → read → confirmed → paid out in the current shift; not recorded → close → new return accepted; offline read-only; revoked device → 3 auth-failed resends over the quiet period → automatic needs support → device restored → read → confirmed. | A witnessed run is recorded on RT-196. |
 
 **Order:** S1 first. It has no dependencies and gives operators the cause today. Then S2 → S3 (Backend-Core) and S4 in parallel. Then S5 → S6 → S7 → S8.
 
@@ -336,7 +354,8 @@ These requirements are this plan's input to RT-490. RT-196 does not edit the con
 
 - **U-7 is unverified.** It is not known whether a re-pair assigns a new `terminal_id`. If it does, old rows are unreachable from the till by design, and support must resolve them.
 - Option A's residual race (§3.2) is bounded, not eliminated. Option B removes it.
-- Before F-2/R-7 ship, a server-recorded return that the till closed would keep its ERP credit note posted as paid (B-5). OD-196-1 A makes this need both an affirmative `not_recorded` and a POST landing after the quiet period.
+- Before F-2/R-7 ship, a server-recorded return that the till closed would keep its ERP credit note posted as paid (B-5). OD-196-1 A makes this need both an affirmative `not_recorded` and a POST committing after the quiet period. Only BR-7 or Option B bounds that; without either, the risk is owner-accepted.
+- Rows journaled before S4 have no `requester_user_id`. For them, four-eyes can only exclude the current requester, and the approval audit records `origin_user_unknown: true` (OD-196-3).
 - No tests were run. This is a reading of `origin/main` at the baselines above.
 
 ## 10. Next safe action
