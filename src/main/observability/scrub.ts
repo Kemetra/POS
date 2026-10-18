@@ -94,8 +94,8 @@ const POSTGRES_ROW_MARKERS = [
 const SCHEME_CHAR = /^[a-z0-9+.-]$/i;
 const TRAILING_PUNCTUATION: ReadonlySet<string> = new Set([`"`, "'", ')', ']', ',', ';', '.', '>']);
 const REDACTED = '[redacted]';
-// Characters ignored around `Bearer` and an auth-scheme word (§3.2).
-const WORD_WRAPPERS = `"'{[(,:`;
+// Characters ignored around `Bearer` and an auth-scheme word (§3.2; RT-694 adds `)]}`).
+const WORD_WRAPPERS = `"'{[(,:)]}`;
 const QUOTES = `"'`;
 const IDENTIFIER_CHAR = /^[a-z0-9_-]$/i;
 const AUTHORIZATION_KEY = 'authorization';
@@ -138,10 +138,17 @@ function maskPostgresRowValues(value: string): string {
   return out;
 }
 
-/** A scrubbed word, and whether the word after it is a credential to mask (§3.2). */
+/**
+ * How to treat the word after this one (§3.2): scrub it as usual, mask it as a
+ * credential, or (after a bare `Authorization` key, RT-694) take a leading
+ * `:`/`=` in it as that key's separator.
+ */
+type NextWord = 'scrub' | 'mask' | 'authorizationSeparator';
+
+/** A scrubbed word, and how to treat the word after it. */
 interface ScrubbedWord {
   text: string;
-  maskNext: boolean;
+  next: NextWord;
 }
 
 /**
@@ -159,13 +166,28 @@ class MessageToken {
   }
 
   scrubbed(): ScrubbedWord {
-    if (this.unwrapped() === 'bearer') return { text: REDACTED, maskNext: true };
+    if (this.unwrapped() === 'bearer') return { text: REDACTED, next: 'mask' };
     const url = this.withoutUrl();
     const authorization = url.maskedAuthorization();
     // The part before `authorization=` still gets the JWT/email/phone masks.
     const masked = (authorization ? new MessageToken(authorization.text) : url).withoutJwt();
     const text = masked.isEmailLike() ? '[email]' : maskPhones(masked.text);
-    return { text, maskNext: authorization?.maskNext ?? false };
+    return { text, next: authorization?.next ?? this.nextAfterKey() };
+  }
+
+  /**
+   * The word after a bare `Authorization` key (`Authorization : Basic x`,
+   * RT-694): a leading `:` or `=` is that key's separator, so the rest of the
+   * word is its value. `null` when the word does not start with one.
+   */
+  separatedValue(): ScrubbedWord | null {
+    return this.isSeparator(0) ? this.valueAfter(0) : null;
+  }
+
+  /** A word ending in an `Authorization` key, quotes ignored, waits for a separator word. */
+  private nextAfterKey(): NextWord {
+    const key = this.keyBefore(this.text.length);
+    return key.endsWith(AUTHORIZATION_KEY) ? 'authorizationSeparator' : 'scrub';
   }
 
   /** An auth-scheme word (`Bearer`, `'Basic`): the credential is the next word. */
@@ -181,16 +203,19 @@ class MessageToken {
    */
   private maskedAuthorization(): ScrubbedWord | null {
     for (let sep = 0; sep < this.text.length; sep++) {
-      if (this.isAuthorizationSeparator(sep)) {
-        const value = new MessageToken(this.text.slice(sep + 1));
-        if (value.text === '') return { text: this.text, maskNext: true };
-        return {
-          text: `${this.text.slice(0, sep + 1)}${REDACTED}`,
-          maskNext: value.isAuthScheme(),
-        };
-      }
+      if (this.isAuthorizationSeparator(sep)) return this.valueAfter(sep);
     }
     return null;
+  }
+
+  /** The value after the separator at `sep` masked, or the next word when it is empty. */
+  private valueAfter(sep: number): ScrubbedWord {
+    const value = new MessageToken(this.text.slice(sep + 1));
+    if (value.text === '') return { text: this.text, next: 'mask' };
+    return {
+      text: `${this.text.slice(0, sep + 1)}${REDACTED}`,
+      next: value.isAuthScheme() ? 'mask' : 'scrub',
+    };
   }
 
   /** Lower-cased, without the wrapper characters around it (`'Bearer` -> `bearer`). */
@@ -204,8 +229,12 @@ class MessageToken {
 
   /** A `:` or `=` whose key ends in `authorization` (`Proxy-Authorization:`, `"authorization":`). */
   private isAuthorizationSeparator(sep: number): boolean {
-    const char = this.text.charAt(sep);
-    return (char === ':' || char === '=') && this.keyBefore(sep).endsWith(AUTHORIZATION_KEY);
+    return this.isSeparator(sep) && this.keyBefore(sep).endsWith(AUTHORIZATION_KEY);
+  }
+
+  private isSeparator(at: number): boolean {
+    const char = this.text.charAt(at);
+    return char === ':' || char === '=';
   }
 
   /**
@@ -264,22 +293,44 @@ class MessageToken {
   }
 }
 
+const NEXT_WORD_RANK: Readonly<Record<NextWord, number>> = {
+  scrub: 0,
+  authorizationSeparator: 1,
+  mask: 2,
+};
+
+/** The stricter of two next-word states (mask, then separator, then scrub). */
+function stricter(a: NextWord, b: NextWord): NextWord {
+  return NEXT_WORD_RANK[a] >= NEXT_WORD_RANK[b] ? a : b;
+}
+
 /**
- * Scrub each word, carrying one "mask the next word" flag across words
- * (`Bearer <x>`, `Authorization: Basic <x>`). Whitespace passes through.
+ * One word, scrubbed as the word before it asks (`next`). A word masked or read
+ * as a separator value still passes on its own signal (`[Bearer] Authorization: x`,
+ * `Authorization :a,authorization= x`), so nothing is masked less than before.
+ */
+function scrubWord(token: MessageToken, next: NextWord): ScrubbedWord {
+  if (next === 'mask') {
+    return { text: REDACTED, next: token.isAuthScheme() ? 'mask' : token.scrubbed().next };
+  }
+  const separated = next === 'authorizationSeparator' ? token.separatedValue() : null;
+  if (separated === null) return token.scrubbed();
+  return { text: separated.text, next: stricter(separated.next, token.scrubbed().next) };
+}
+
+/**
+ * Scrub each word, carrying one "next word" state across words (`Bearer <x>`,
+ * `Authorization: Basic <x>`, `Authorization : <x>`). Whitespace passes through.
  */
 function scrubWords(parts: readonly string[]): string {
-  let maskNext = false;
+  let next: NextWord = 'scrub';
   const out: string[] = [];
   for (const part of parts) {
     if (part.trim() === '') {
       out.push(part);
-    } else if (maskNext) {
-      maskNext = new MessageToken(part).isAuthScheme();
-      out.push(REDACTED);
     } else {
-      const word = new MessageToken(part).scrubbed();
-      maskNext = word.maskNext;
+      const word = scrubWord(new MessageToken(part), next);
+      next = word.next;
       out.push(word.text);
     }
   }

@@ -11,8 +11,8 @@ import { initSentryMain } from '../sentry-main.js';
 
 /**
  * RT-693 — OBS-1 §3.5 golden vectors (Confluence 42926084, amended by
- * RT-682). `obs1-golden-vectors.json` is Backend-Core's file
- * (`packages/shared/__tests__/observability/`, Kemetra/Backend-Core#833),
+ * RT-682 and RT-694). `obs1-golden-vectors.json` is Backend-Core's file
+ * (`packages/shared/__tests__/observability/`, Kemetra/Backend-Core#837),
  * copied unchanged: every repository asserts the same expected outputs.
  *
  * If a vector fails, fix the SOURCE — never the fixture.
@@ -40,8 +40,8 @@ function scrubValue(value: string): string | undefined {
 }
 
 describe('OBS-1 §3.5 golden vectors (Bearer/Authorization and phones)', () => {
-  it('carries all 37 contract vectors', () => {
-    expect(golden.vectors).toHaveLength(37);
+  it('carries all 46 contract vectors', () => {
+    expect(golden.vectors).toHaveLength(46);
   });
 
   it.each(golden.vectors.map((v) => [v.id, v.input, v.expected] as const))(
@@ -80,7 +80,65 @@ describe('OBS-1 §3.5 golden vectors (Bearer/Authorization and phones)', () => {
       '[phone];Authorization: [redacted] [redacted]',
     ],
     ['a Bearer credential split across a newline', 'Bearer\nsecret-x', '[redacted]\n[redacted]'],
+    [
+      'a separator word across newlines (RT-694)',
+      'Authorization\n:\nBearer x y',
+      'Authorization\n:\n[redacted] [redacted] y',
+    ],
+    [
+      'a quoted key before a separator word',
+      "headers={'Authorization' : 'Bearer x'} y",
+      "headers={'Authorization' : [redacted] [redacted] y",
+    ],
+    [
+      'a bare Authorization key with no separator word',
+      'missing Authorization',
+      'missing Authorization',
+    ],
+    [
+      'a key not directly before the separator word (known gap)',
+      'Authorization ok : x',
+      'Authorization ok : x',
+    ],
+    [
+      'a value that is only a separator (known gap)',
+      'Authorization : : x y',
+      'Authorization : [redacted] x y',
+    ],
   ])('follows the §3.2 phone/Authorization text on %s', (_label, input, expected) => {
+    expect(scrubValue(input)).toBe(expected);
+  });
+
+  // A word masked because of the word before it (`[Bearer] <word>`) or read as a
+  // separator value (`Authorization :<word>`) still passes on its own Bearer /
+  // Authorization signal, so RT-694 never masks less than the RT-682 baseline.
+  it.each([
+    [
+      'a separator value that ends in its own empty Authorization',
+      'Authorization :a,Authorization: S1',
+      'Authorization :[redacted] [redacted]',
+    ],
+    [
+      'a separator value that ends in its own scheme value',
+      'Authorization =x,Proxy-Authorization:Bearer S1',
+      'Authorization =[redacted] [redacted]',
+    ],
+    [
+      'a wrapped Bearer before an empty Authorization',
+      '[Bearer] Authorization: S1',
+      '[redacted] [redacted] [redacted]',
+    ],
+    [
+      'a wrapped Bearer before an empty authorization=',
+      '(Bearer) ?authorization= S1',
+      '[redacted] [redacted] [redacted]',
+    ],
+    [
+      'a wrapped scheme value before an empty Authorization',
+      'Authorization: (Bearer) Authorization: S1',
+      'Authorization: [redacted] [redacted] [redacted]',
+    ],
+  ])('keeps the next-word signal of a masked word on %s', (_label, input, expected) => {
     expect(scrubValue(input)).toBe(expected);
   });
 
@@ -101,6 +159,7 @@ describe('OBS-1 §3.5 golden vectors (Bearer/Authorization and phones)', () => {
       '0020'.repeat(50_000),
       'a:Authorization: '.repeat(10_000),
       `${'authorization'.repeat(10_000)}:x`,
+      'Authorization : '.repeat(50_000),
     ];
     const started = performance.now();
     for (const value of adversarial) expect(scrubValue(value)?.length).toBeLessThanOrEqual(300);
