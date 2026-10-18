@@ -155,7 +155,7 @@ const IDEMPOTENCY_KEY_PREFIX: Readonly<Record<ShiftFactKind, string>> = {
 const UUID_LOWER = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const CURRENCY_CODE = /^[A-Z]{3}$/;
 /** The contract's decimal grammar (`SignedDecimalAmount` ⊇ `NonNegativeDecimalAmount`). */
-const DECIMAL_AMOUNT = /^-?[0-9]{1,15}(\.[0-9]{1,4})?$/;
+const DECIMAL_AMOUNT = /^-?\d{1,15}(\.\d{1,4})?$/;
 const NOTE_MAX = 200;
 const SALE_COUNT_MAX = 2_147_483_647;
 const REFUND_REFS_MAX = 1_000;

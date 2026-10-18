@@ -25,7 +25,7 @@ function hasModifier(event: KeyboardEvent<HTMLElement>): boolean {
 function originOf(target: EventTarget): { row: HTMLElement | null; action: string | null } {
   if (!(target instanceof HTMLElement)) return { row: null, action: null };
   const row = target.closest<HTMLElement>('[data-line-id]');
-  return { row, action: row === null ? null : target.getAttribute('data-row-action') };
+  return { row, action: row === null ? null : (target.dataset['rowAction'] ?? null) };
 }
 
 /** From outside the rows ↓ enters at the first row and ↑ at the last; inside, one step. */
@@ -55,7 +55,7 @@ export function moveRowFocus(event: KeyboardEvent<HTMLElement>): void {
 function findRow(lineId: string): HTMLElement | null {
   return (
     Array.from(document.querySelectorAll<HTMLElement>('[data-line-id]')).find(
-      (row) => row.getAttribute('data-line-id') === lineId,
+      (row) => row.dataset['lineId'] === lineId,
     ) ?? null
   );
 }

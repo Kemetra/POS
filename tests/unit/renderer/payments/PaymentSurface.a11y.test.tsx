@@ -7,16 +7,25 @@
  * - Tender buttons have accessible labels.
  */
 
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { cleanup, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom/vitest';
 
 afterEach(cleanup);
 
+// RT-700: these tests drive the card tender, so its flag is on (fail-closed default is off).
+beforeEach(() => {
+  useFeatureFlagsStore.setState({ cardTender: true });
+});
+afterEach(() => {
+  useFeatureFlagsStore.getState().reset();
+});
+
 import { PaymentSurface } from '../../../../src/renderer/ui/payments/PaymentSurface.js';
 import { useOperatorSessionStore } from '../../../../src/renderer/stores/operator-session-store.js';
 import { usePaymentStore } from '../../../../src/renderer/stores/payment-store.js';
+import { useFeatureFlagsStore } from '../../../../src/renderer/stores/feature-flags-store.js';
 import type { PaymentIntentEnvelope } from '../../../../src/shared/cart/handoff-envelope.js';
 
 function makeEnvelope(): PaymentIntentEnvelope {

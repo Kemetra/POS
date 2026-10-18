@@ -14,7 +14,7 @@ export function postHandoffCancelApprovalResolver(
 ): ApprovalSubjectResolver {
   return ({ subjectRef, session }) => {
     const cart = store.getCart(subjectRef);
-    if (cart === undefined || cart.operator_session_id !== session.id) return null;
+    if (cart?.operator_session_id !== session.id) return null;
     return postHandoffApprovalSubject(cart, session);
   };
 }

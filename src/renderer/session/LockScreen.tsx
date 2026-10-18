@@ -45,7 +45,9 @@ export interface LockScreenProps {
 }
 
 /** 004 cashier PIN format — same bounds as the sign-in PinPad (4–6 digits). */
-const PIN_FORMAT = new RegExp(`^\\d{${String(PIN_MIN_LENGTH)},${String(PIN_MAX_LENGTH)}}$`);
+const PIN_FORMAT = new RegExp(
+  String.raw`^\d{${String(PIN_MIN_LENGTH)},${String(PIN_MAX_LENGTH)}}$`,
+);
 
 /**
  * M-L1 (doc 15 §5): «الطرفية مقفلة. أدخل الرقم السري للمتابعة.» (cashier);

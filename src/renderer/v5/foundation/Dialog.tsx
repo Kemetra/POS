@@ -137,7 +137,7 @@ function isOnStop(active: Element | null, stop: HTMLElement): boolean {
 function wrapTarget(panel: HTMLElement, backwards: boolean): HTMLElement | null {
   const stops = tabStops(panel);
   const first = stops[0];
-  const last = stops[stops.length - 1];
+  const last = stops.at(-1);
   if (first === undefined || last === undefined) return panel;
   const [edge, wrap] = backwards ? [first, last] : [last, first];
   const active = document.activeElement;

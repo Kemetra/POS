@@ -14,10 +14,6 @@
 import type { AuditEvent, Fr025MandatoryAttribute } from '../../shared/audit/event-shape.js';
 import { FR025_MANDATORY_ATTRIBUTES } from '../../shared/audit/event-shape.js';
 import { findForbiddenKey } from './find-forbidden-key.js';
-import {
-  FORBIDDEN_PAYLOAD_KEYS,
-  type ForbiddenPayloadKey,
-} from '../../shared/audit/forbidden-keys.js';
 
 // ─── Forbidden payload field names (PR-1 / FR-027) ─────────────────────────
 
@@ -26,8 +22,10 @@ import {
  * The same list also drives `src/main/logging/logger.ts` redaction paths
  * and the Sentry `beforeSend` denylist (T050) — one source of truth.
  */
-export { FORBIDDEN_PAYLOAD_KEYS };
-export type { ForbiddenPayloadKey };
+export {
+  FORBIDDEN_PAYLOAD_KEYS,
+  type ForbiddenPayloadKey,
+} from '../../shared/audit/forbidden-keys.js';
 
 // ─── DI interface ──────────────────────────────────────────────────────────
 

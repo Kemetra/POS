@@ -6,6 +6,7 @@ import '@testing-library/jest-dom/vitest';
 import { PaymentSurface } from '../../../../src/renderer/ui/payments/PaymentSurface.js';
 import { useOperatorSessionStore } from '../../../../src/renderer/stores/operator-session-store.js';
 import { usePaymentStore } from '../../../../src/renderer/stores/payment-store.js';
+import { useFeatureFlagsStore } from '../../../../src/renderer/stores/feature-flags-store.js';
 import type { PaymentIntentEnvelope } from '../../../../src/shared/cart/handoff-envelope.js';
 import type {
   PaymentsBridgeAPI,
@@ -146,6 +147,8 @@ function makeBridge(o: MakeBridgeOverrides = {}): {
 }
 
 beforeEach(() => {
+  // RT-700: these tests drive the card tender, so its flag is on (fail-closed default is off).
+  useFeatureFlagsStore.setState({ cardTender: true });
   setSignedIn();
   usePaymentStore.getState().reset();
   usePaymentStore.getState().mount(ENVELOPE);
@@ -155,6 +158,7 @@ afterEach(() => {
   cleanup();
   useOperatorSessionStore.getState().reset();
   usePaymentStore.getState().reset();
+  useFeatureFlagsStore.getState().reset();
 });
 
 describe('PaymentSurface — split-tender UX (T154)', () => {

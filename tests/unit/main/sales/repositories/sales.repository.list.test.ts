@@ -12,8 +12,8 @@
 
 import { beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import initSqlJs, { type Database as SqlJsDatabase, type SqlJsStatic } from 'sql.js';
-import { readdirSync, readFileSync } from 'fs';
-import path from 'path';
+import { readdirSync, readFileSync } from 'node:fs';
+import path from 'node:path';
 
 import {
   SALES_LIST_SQL,

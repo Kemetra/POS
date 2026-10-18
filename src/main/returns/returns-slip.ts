@@ -44,7 +44,7 @@ export function slipTotalsAgree(lines: readonly SlipLine[], totalMinor: number):
   if (lines.length === 0) return false;
   const amounts = lines.map((l) => l.amountMinor);
   if (amounts.every((a) => a === null)) return true;
-  if (amounts.some((a) => a === null)) return false;
+  if (amounts.includes(null)) return false;
   return (amounts as number[]).reduce((sum, a) => sum + a, 0) === totalMinor;
 }
 

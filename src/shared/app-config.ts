@@ -104,5 +104,16 @@ export interface AppConfig {
      * deployed: a void without it is refused by an older server.
      */
     saleVoid?: boolean;
+    /**
+     * RT-700 (P-26-1, OD-26-1 option A) — enables the external card terminal
+     * tender at checkout.
+     *
+     * Defaults to `false`. Flip via `POS_PULSE_FEATURE_CARD_TENDER` in main.
+     * Fail-closed: card is out of the pilot (RT-536 D4), so the «بطاقة» tile is
+     * not rendered and main refuses a `tender.apply` with
+     * `tender_type = external_card_terminal` as `card_tender_disabled`, audited
+     * as `tender.refused`. `payments.start` is tender-neutral and unaffected.
+     */
+    cardTender?: boolean;
   };
 }

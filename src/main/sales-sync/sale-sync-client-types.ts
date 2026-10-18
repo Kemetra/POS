@@ -98,7 +98,7 @@ export function createFakeSaleSyncClient(
   const calls: CaptureSalePayload[] = [];
   const cashierCalls: FakeCashierCall[] = [];
   const queue = [...script];
-  let last: SaleSyncResult = script[script.length - 1] ?? { kind: 'ok', saleRef: null };
+  let last: SaleSyncResult = script.at(-1) ?? { kind: 'ok', saleRef: null };
   const nextResult = (): Promise<SaleSyncResult> => {
     const next = queue.shift();
     if (next !== undefined) last = next;

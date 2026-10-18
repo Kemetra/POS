@@ -1,5 +1,5 @@
-import { mkdirSync, readdirSync, renameSync, rmSync } from 'fs';
-import path from 'path';
+import { mkdirSync, readdirSync, renameSync, rmSync } from 'node:fs';
+import path from 'node:path';
 
 import type { DatabaseHandle } from './client.js';
 
@@ -66,7 +66,7 @@ export function writePreMigrationSnapshot(
   }
 
   // ISO-8601 with ':' and '.' replaced keeps the name filesystem-safe.
-  const stamp = now().toISOString().replace(/[:.]/g, '-');
+  const stamp = now().toISOString().replaceAll(/[:.]/g, '-');
   const fileName = `${headPrefix}${stamp}.db`;
   const target = path.join(backupsDir, fileName);
   // Copy to a temp name and publish by rename only once the copy succeeded, so

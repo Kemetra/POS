@@ -122,6 +122,7 @@ beforeEach(() => {
   signIn();
   usePaymentStore.getState().mount(makeEnvelope());
   useFeatureFlagsStore.getState().hydrate({
+    cardTender: true,
     cart: true,
     payments: true,
     saleFinalization: true,

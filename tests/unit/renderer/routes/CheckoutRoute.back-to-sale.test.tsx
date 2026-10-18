@@ -59,7 +59,7 @@ let paymentsStart: ReturnType<typeof vi.fn>;
 let paymentsCancel: ReturnType<typeof vi.fn>;
 
 beforeEach(() => {
-  useFeatureFlagsStore.getState().hydrate({ cart: true, payments: true });
+  useFeatureFlagsStore.getState().hydrate({ cart: true, payments: true, cardTender: true });
   useOperatorSessionStore.setState({
     state: {
       kind: 'signedIn',

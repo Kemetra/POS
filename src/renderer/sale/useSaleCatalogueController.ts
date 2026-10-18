@@ -17,7 +17,7 @@ interface SaleCatalogueOptions {
 
 function readBridges(): { cart: CartBridgeAPI; catalogue: CatalogueBridgeAPI } {
   const api = (window as unknown as { api?: PreloadBridgeAPI }).api;
-  if (!api || !api.catalogue) throw new Error('Sale catalogue: preload bridge not initialised.');
+  if (!api?.catalogue) throw new Error('Sale catalogue: preload bridge not initialised.');
   return { cart: api.cart, catalogue: api.catalogue };
 }
 

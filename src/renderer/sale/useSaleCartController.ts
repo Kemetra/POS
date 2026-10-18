@@ -82,7 +82,7 @@ function isSnapshotOf(
 function syncCartStore(snapshot: CartSnapshot): void {
   useCartStore.setState((s) => {
     if (s.activeCart?.cart_id !== snapshot.cart_id) return s;
-    const lastLine = snapshot.lines[snapshot.lines.length - 1];
+    const lastLine = snapshot.lines.at(-1);
     return {
       activeCart: {
         cart_id: snapshot.cart_id,
@@ -102,7 +102,7 @@ function canRequestPostHandoffCancel(
   cartId: string,
   envelope: PaymentIntentEnvelope | null,
 ): envelope is PaymentIntentEnvelope {
-  if (envelope === null || envelope.cart_id !== cartId || envelope.handoff_action_id === '') {
+  if (envelope?.cart_id !== cartId || envelope.handoff_action_id === '') {
     return false;
   }
   const payment = usePaymentStore.getState();

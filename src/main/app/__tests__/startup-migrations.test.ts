@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { mkdtempSync, readdirSync, rmSync, writeFileSync } from 'fs';
-import os from 'os';
-import path from 'path';
+import { mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 
 import type { AppliedRow, MigrationFile, MigrationsDb } from '../../db/migrate.js';
 import { SNAPSHOT_FILE_PREFIX } from '../../db/pre-migration-snapshot.js';

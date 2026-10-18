@@ -21,7 +21,7 @@
  * hash; two payloads that differ in any value produce different hashes.
  */
 
-import { createHash } from 'crypto';
+import { createHash } from 'node:crypto';
 
 import { compareCodeUnits } from '../../../shared/compare-code-units.js';
 import type { DatabaseHandle } from '../../db/client.js';

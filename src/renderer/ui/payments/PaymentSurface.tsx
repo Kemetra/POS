@@ -648,6 +648,9 @@ function PaymentSurfaceBody({
   // RT-103: vouchers are excluded from the pilot (RT-10 D2). Off (the default)
   // disables the voucher tile and refuses a voucher selection here as well.
   const voucherTenderFlag = useFeatureFlagsStore((s) => s.voucherTender);
+  // RT-700: card is out of the pilot (RT-536 D4). Off (the default) hides the
+  // card tile and refuses a card selection here; main refuses the apply too.
+  const cardTenderFlag = useFeatureFlagsStore((s) => s.cardTender);
 
   const bridge = resolveBridge(_testBridge);
 
@@ -857,6 +860,7 @@ function PaymentSurfaceBody({
     // Defence in depth behind the disabled tile: never start or select a
     // voucher payment while the pilot restriction is active.
     if (tender === 'internal_voucher' && !voucherTenderFlag) return;
+    if (tender === 'external_card_terminal' && !cardTenderFlag) return;
     // RT-298: no tender while a cancel hold stands (outcome unknown, or main
     // refuses every payment for this cart until a manager acts). Its line stays.
     if (cancelHold !== 'none') return;
@@ -1766,6 +1770,7 @@ function PaymentSurfaceBody({
               envelope={envelope}
               selectedTender={selectedTender}
               voucherEnabled={voucherTenderFlag}
+              cardEnabled={cardTenderFlag}
               onTenderSelect={(tender) => {
                 void handleTenderSelect(tender);
               }}
@@ -1789,7 +1794,7 @@ function PaymentSurfaceBody({
                     }}
                   />
                 )}
-                {selectedTender === 'external_card_terminal' && (
+                {selectedTender === 'external_card_terminal' && cardTenderFlag && (
                   <ExternalCardTerminalEntry
                     remainingBalanceMinor={remainingBalanceMinor}
                     paymentAttemptId={paymentAttemptId}

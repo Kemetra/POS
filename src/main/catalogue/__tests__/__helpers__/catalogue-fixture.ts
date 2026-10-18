@@ -14,9 +14,9 @@
  * from the raw values via `normalize()` unless the caller overrides them.
  */
 import initSqlJs, { type Database as SqlJsDatabase, type SqlJsStatic } from 'sql.js';
-import { readdirSync, readFileSync } from 'fs';
-import path from 'path';
-import { fileURLToPath } from 'url';
+import { readdirSync, readFileSync } from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 import type { DatabaseHandle } from '../../../db/client.js';
 import { normalize } from '../../normalize.js';
