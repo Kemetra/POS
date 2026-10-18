@@ -57,10 +57,13 @@ async function captureOne(browser, [name, hash, waitFor, click], width, forced) 
   fs.mkdirSync(outDir, { recursive: true });
   const browser = await chromium.launch({ executablePath: CHROMIUM });
   const entries = [];
-  for (const c of CASES)
-    for (const width of Object.keys(SIZES))
-      for (const forced of [false, true]) entries.push(await captureOne(browser, c, width, forced));
-  await browser.close();
+  try {
+    for (const c of CASES)
+      for (const width of Object.keys(SIZES))
+        for (const forced of [false, true]) entries.push(await captureOne(browser, c, width, forced));
+  } finally {
+    await browser.close();
+  }
   fs.writeFileSync(path.join(outDir, `${label}-log.json`), JSON.stringify(entries, null, 2) + '\n');
   for (const e of entries) console.log(e.file, JSON.stringify(e.glyphs), e.axe.join(',') || 'axe:0', e.errors.join('|'));
 })();

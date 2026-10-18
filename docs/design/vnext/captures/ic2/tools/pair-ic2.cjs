@@ -15,26 +15,29 @@ const CAPTION = 36;
   const after = JSON.parse(fs.readFileSync(path.join(rawDir, 'after-log.json'), 'utf-8'));
   const browser = await chromium.launch({ executablePath: CHROMIUM });
   const pairs = [];
-  for (const b of before) {
-    const a = after.find((e) => e.case === b.case && e.viewport === b.viewport && e.forced === b.forced);
-    if (!a) throw new Error(`no after capture for ${b.file}`);
-    const [w, h] = b.viewport.split('x').map(Number);
-    const page = await browser.newPage({ viewport: { width: w * 2 + GAP * 3, height: h + CAPTION + GAP * 2 } });
-    const src = (f) => `data:image/png;base64,${fs.readFileSync(path.join(rawDir, f)).toString('base64')}`;
-    const mode = b.forced ? 'forced colours' : 'light';
-    await page.setContent(`<!doctype html><body style="margin:0;padding:${GAP}px;background:#5b6470;font:600 15px system-ui;color:#fff">
-      <div style="display:flex;gap:${GAP}px">
-        <figure style="margin:0"><figcaption style="height:${CAPTION}px">BEFORE · main ${sha} · ${b.case} · ${b.viewport} · ${mode}</figcaption><img src="${src(b.file)}" width="${w}" height="${h}" style="display:block"></figure>
-        <figure style="margin:0"><figcaption style="height:${CAPTION}px">AFTER · IC-2 (RT-695) · ${b.case} · ${b.viewport} · ${mode}</figcaption><img src="${src(a.file)}" width="${w}" height="${h}" style="display:block"></figure>
-      </div></body>`);
-    const file = `ic2-${b.case}-${b.viewport}${b.forced ? '-forced' : ''}.png`;
-    await page.screenshot({ path: path.join(outDir, file) });
-    await page.close();
-    pairs.push({ file, case: b.case, viewport: b.viewport, forced: b.forced,
-      glyphs: { before: b.glyphs, after: a.glyphs }, axe: { before: b.axe, after: a.axe },
-      errors: { before: b.errors, after: a.errors } });
+  try {
+    for (const b of before) {
+      const a = after.find((e) => e.case === b.case && e.viewport === b.viewport && e.forced === b.forced);
+      if (!a) throw new Error(`no after capture for ${b.file}`);
+      const [w, h] = b.viewport.split('x').map(Number);
+      const page = await browser.newPage({ viewport: { width: w * 2 + GAP * 3, height: h + CAPTION + GAP * 2 } });
+      const src = (f) => `data:image/png;base64,${fs.readFileSync(path.join(rawDir, f)).toString('base64')}`;
+      const mode = b.forced ? 'forced colours' : 'light';
+      await page.setContent(`<!doctype html><body style="margin:0;padding:${GAP}px;background:#5b6470;font:600 15px system-ui;color:#fff">
+        <div style="display:flex;gap:${GAP}px">
+          <figure style="margin:0"><figcaption style="height:${CAPTION}px">BEFORE · main ${sha} · ${b.case} · ${b.viewport} · ${mode}</figcaption><img src="${src(b.file)}" width="${w}" height="${h}" style="display:block"></figure>
+          <figure style="margin:0"><figcaption style="height:${CAPTION}px">AFTER · IC-2 (RT-695) · ${b.case} · ${b.viewport} · ${mode}</figcaption><img src="${src(a.file)}" width="${w}" height="${h}" style="display:block"></figure>
+        </div></body>`);
+      const file = `ic2-${b.case}-${b.viewport}${b.forced ? '-forced' : ''}.png`;
+      await page.screenshot({ path: path.join(outDir, file) });
+      await page.close();
+      pairs.push({ file, case: b.case, viewport: b.viewport, forced: b.forced,
+        glyphs: { before: b.glyphs, after: a.glyphs }, axe: { before: b.axe, after: a.axe },
+        errors: { before: b.errors, after: a.errors } });
+    }
+  } finally {
+    await browser.close();
   }
-  await browser.close();
   fs.writeFileSync(path.join(outDir, 'ic2-capture-log.json'), JSON.stringify(pairs, null, 2) + '\n');
   console.log(`${pairs.length} pairs`);
 })();
