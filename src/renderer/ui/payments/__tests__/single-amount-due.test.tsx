@@ -95,7 +95,9 @@ function seedSession(): void {
     },
   });
   usePaymentStore.getState().mount(makeEnvelope());
-  useFeatureFlagsStore.getState().hydrate({ cart: true, payments: true, productSearch: true });
+  useFeatureFlagsStore
+    .getState()
+    .hydrate({ cardTender: true, cart: true, payments: true, productSearch: true });
 }
 
 function makeBridge(): { payments: PaymentsBridgeAPI; tender: TenderBridgeAPI } {

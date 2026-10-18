@@ -26,6 +26,12 @@ export interface FeatureFlagsState {
    */
   voucherTender: boolean;
   /**
+   * RT-700 (P-26-1): enables the external card terminal tender at checkout.
+   * Fail-closed default: false — card is outside the pilot (RT-536 D4); with it
+   * off the «بطاقة» tile is not rendered. Main refuses a card `tender.apply` too.
+   */
+  cardTender: boolean;
+  /**
    * RT-15 S3: enables the manager/admin return flow at /app/returns.
    * Fail-closed default: false (AC1). Main gates every `returns.*` call too.
    */
@@ -54,6 +60,7 @@ export interface FeatureFlagsStore extends FeatureFlagsState {
     saleFinalization?: boolean;
     productSearch?: boolean;
     voucherTender?: boolean;
+    cardTender?: boolean;
     returns?: boolean;
     shiftCashup?: boolean;
     saleVoid?: boolean;
@@ -67,6 +74,7 @@ const INITIAL: FeatureFlagsState = {
   saleFinalization: false,
   productSearch: false,
   voucherTender: false,
+  cardTender: false,
   returns: false,
   shiftCashup: false,
   saleVoid: false,
@@ -82,6 +90,7 @@ export const useFeatureFlagsStore = create<FeatureFlagsStore>((set) => ({
       saleFinalization: flags.saleFinalization === true,
       productSearch: flags.productSearch === true,
       voucherTender: flags.voucherTender === true,
+      cardTender: flags.cardTender === true,
       returns: flags.returns === true,
       shiftCashup: flags.shiftCashup === true,
       saleVoid: flags.saleVoid === true,

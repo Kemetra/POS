@@ -55,6 +55,7 @@ describe('parseFeatureFlags', () => {
       saleFinalization: 'POS_PULSE_FEATURE_SALE_FINALIZATION',
       productSearch: 'POS_PULSE_FEATURE_PRODUCT_SEARCH',
       voucherTender: 'POS_PULSE_FEATURE_VOUCHER_TENDER',
+      cardTender: 'POS_PULSE_FEATURE_CARD_TENDER',
       returns: 'POS_PULSE_FEATURE_RETURNS',
       shiftCashup: 'POS_PULSE_FEATURE_SHIFT_CASHUP',
       saleVoid: 'POS_PULSE_FEATURE_SALE_VOID',
@@ -68,16 +69,18 @@ describe('parseFeatureFlags', () => {
       saleFinalization: false,
       productSearch: false,
       voucherTender: false,
+      cardTender: false,
       returns: false,
       shiftCashup: false,
       saleVoid: false,
     });
   });
 
-  it('always returns all eight keys as booleans', () => {
+  it('always returns all nine keys as booleans', () => {
     const flags = parseFeatureFlags({ POS_PULSE_FEATURE_CART: 'nonsense' });
     expect(Object.keys(flags).sort()).toEqual(
       [
+        'cardTender',
         'cart',
         'payments',
         'productSearch',
@@ -117,6 +120,7 @@ describe('parseFeatureFlags', () => {
       saleFinalization: true,
       productSearch: true,
       voucherTender: false,
+      cardTender: false,
       returns: false,
       shiftCashup: false,
       saleVoid: false,
@@ -141,6 +145,13 @@ describe('parseFeatureFlags', () => {
     expect(parseFeatureFlags({ POS_PULSE_FEATURE_SALE_VOID: 'on' }).saleVoid).toBe(true);
   });
 
+  it('RT-700: cardTender is off by default and on only via POS_PULSE_FEATURE_CARD_TENDER', () => {
+    expect(parseFeatureFlags({}).cardTender).toBe(false);
+    expect(parseFeatureFlags({ POS_PULSE_FEATURE_CARD_TENDER: 'off' }).cardTender).toBe(false);
+    expect(parseFeatureFlags({ POS_PULSE_FEATURE_CARD_TENDER: '' }).cardTender).toBe(false);
+    expect(parseFeatureFlags({ POS_PULSE_FEATURE_CARD_TENDER: 'on' }).cardTender).toBe(true);
+  });
+
   it('ignores unrelated env vars', () => {
     expect(
       parseFeatureFlags({ POS_PULSE_FEATURE_SALE_TENDERS_SINCE: '1', CART: '1', PAYMENTS: '1' }),
@@ -148,7 +159,7 @@ describe('parseFeatureFlags', () => {
   });
 });
 
-/** Every one of the 256 combinations of the eight boolean flags. */
+/** Every one of the 512 combinations of the nine boolean flags. */
 function allFlagCombinations(): FeatureFlags[] {
   const keys = Object.keys(FEATURE_FLAG_ENV) as (keyof FeatureFlags)[];
   const out: FeatureFlags[] = [];
@@ -169,6 +180,7 @@ const PILOT_PROFILE: FeatureFlags = {
   saleFinalization: true,
   productSearch: true,
   voucherTender: false,
+  cardTender: false,
   returns: false,
   shiftCashup: false,
   saleVoid: false,
@@ -196,11 +208,11 @@ describe('assessCashierProfile (D-1: fail closed on the money combination)', () 
     expect(assessCashierProfile(flags)).toEqual(expected);
   });
 
-  it('rejects exactly the 64 of 256 combinations with payments on and finalization off', () => {
+  it('rejects exactly the 128 of 512 combinations with payments on and finalization off', () => {
     const combos = allFlagCombinations();
-    expect(combos).toHaveLength(256);
+    expect(combos).toHaveLength(512);
     const rejected = combos.filter((flags) => !assessCashierProfile(flags).ok);
-    expect(rejected).toHaveLength(64);
+    expect(rejected).toHaveLength(128);
     for (const flags of combos) {
       const expectedOk = !(flags.payments && !flags.saleFinalization);
       expect(assessCashierProfile(flags).ok).toBe(expectedOk);

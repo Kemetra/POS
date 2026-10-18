@@ -46,6 +46,25 @@ describe('feature-flags-store — voucherTender (RT-103, RT-10 D2 pilot rule)', 
   });
 });
 
+describe('feature-flags-store — cardTender (RT-700, P-26-1)', () => {
+  it('defaults cardTender to false (pilot: card tender unavailable)', () => {
+    expect(useFeatureFlagsStore.getState().cardTender).toBe(false);
+  });
+
+  it('hydrates cardTender only from an explicit true', () => {
+    useFeatureFlagsStore.getState().hydrate({ payments: true });
+    expect(useFeatureFlagsStore.getState().cardTender).toBe(false);
+    useFeatureFlagsStore.getState().hydrate({ cardTender: true });
+    expect(useFeatureFlagsStore.getState().cardTender).toBe(true);
+  });
+
+  it('reset restores cardTender to false', () => {
+    useFeatureFlagsStore.getState().hydrate({ cardTender: true });
+    useFeatureFlagsStore.getState().reset();
+    expect(useFeatureFlagsStore.getState().cardTender).toBe(false);
+  });
+});
+
 describe('feature-flags-store — returns (RT-15 S3, AC1 default off)', () => {
   it('defaults returns to false (fail-closed)', () => {
     expect(useFeatureFlagsStore.getState().returns).toBe(false);

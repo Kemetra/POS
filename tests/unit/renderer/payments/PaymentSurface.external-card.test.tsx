@@ -5,6 +5,7 @@ import '@testing-library/jest-dom/vitest';
 
 import { PaymentSurface } from '../../../../src/renderer/ui/payments/PaymentSurface.js';
 import { useOperatorSessionStore } from '../../../../src/renderer/stores/operator-session-store.js';
+import { useFeatureFlagsStore } from '../../../../src/renderer/stores/feature-flags-store.js';
 import { usePaymentStore } from '../../../../src/renderer/stores/payment-store.js';
 import type { PaymentIntentEnvelope } from '../../../../src/shared/cart/handoff-envelope.js';
 import type {
@@ -153,6 +154,7 @@ beforeEach(() => {
   setSignedIn();
   usePaymentStore.getState().reset();
   usePaymentStore.getState().mount(ENVELOPE);
+  useFeatureFlagsStore.setState({ cardTender: true });
 });
 
 afterEach(() => {

@@ -80,6 +80,7 @@ Use the canonical values `1` and `0`. The parser accepts `1|true|yes|on`
 | `POS_PULSE_FEATURE_SALE_FINALIZATION` | `1` | Sale row, receipt, sync outbox entry and Backend-Core capture |
 | `POS_PULSE_FEATURE_PRODUCT_SEARCH` | `1` | Catalogue search and scan in the Sale screen (needs cart) |
 | `POS_PULSE_FEATURE_VOUCHER_TENDER` | `0` | Voucher tile shown **disabled**. Vouchers are excluded from the pilot (RT-10 D2). |
+| `POS_PULSE_FEATURE_CARD_TENDER` | `0` | «بطاقة» tile **not rendered**, and main refuses a card `tender.apply` (`card_tender_disabled`, audited). Card is excluded from the pilot (RT-536 D4, RT-700). |
 
 **D-1 (RT-162): `PAYMENTS=1` with `SALE_FINALIZATION` not `1` is an invalid money
 profile.** The POS refuses to start in that state. Main logs
@@ -164,6 +165,7 @@ removes the reason for choosing it. The §6.1 check fails on such an account.
      'POS_PULSE_FEATURE_SALE_FINALIZATION' = '1'
      'POS_PULSE_FEATURE_PRODUCT_SEARCH'    = '1'
      'POS_PULSE_FEATURE_VOUCHER_TENDER'    = '0'
+     'POS_PULSE_FEATURE_CARD_TENDER'       = '0'
      'VITE_API_BASE_URL'                   = '<pilot Backend-Core base URL>'
      'CLERK_PUBLISHABLE_KEY'               = '<pilot Clerk publishable key>'
      # Optional, only when instructed: SENTRY_DSN, POS_PULSE_FEATURE_SALE_TENDERS_SINCE, POS_PULSE_FEATURE_SALE_RECEIPT_SINCE,
@@ -209,6 +211,7 @@ $expected = [ordered]@{
   POS_PULSE_FEATURE_SALE_FINALIZATION = -not $expectRollback
   POS_PULSE_FEATURE_PRODUCT_SEARCH    = -not $expectRollback
   POS_PULSE_FEATURE_VOUCHER_TENDER    = $false
+  POS_PULSE_FEATURE_CARD_TENDER       = $false
 }
 function On([string]$v) { $null -ne $v -and @('1','true','yes','on') -contains $v.Trim().ToLower() }
 $fail = 0

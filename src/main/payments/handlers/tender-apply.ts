@@ -13,6 +13,9 @@
  *     (a refused tender line is still a real recorded event — the
  *     cashier attempted to apply, the line row exists in state='refused',
  *     and the audit trail must reflect it)
+ *   • RT-700 card_tender_disabled (card flag off) → emit `tender.refused`
+ *     (no line row is persisted; the audit row carries a fresh id that
+ *     names no line)
  *   • All other refusals (no_session, role_denied, attempt_terminal,
  *     tender_not_yet_supported, idempotency_*) → no audit (the line was
  *     never persisted)
@@ -60,6 +63,13 @@ export interface TenderApplyHandlerDeps {
   validateVoucher?: (input: ValidateVoucherInput) => Promise<ValidateVoucherOutcome>;
   uuid: () => string;
   clock: () => Date;
+  /**
+   * RT-700 (P-26-1) — the card-tender flag, read per call in main. Off means
+   * `tender.apply` with `external_card_terminal` is refused before anything is
+   * recorded. Required: a caller that forgets it fails to compile instead of
+   * silently allowing card.
+   */
+  isCardTenderEnabled: () => boolean;
   /** RT-437 — one `warn` line per out-of-range cash refusal; never the amount. */
   logger?: Pick<Logger, 'warn'>;
 }
@@ -129,6 +139,7 @@ export function createTenderApplyHandler(deps: TenderApplyHandlerDeps): TenderAp
     validateVoucher,
     uuid,
     clock,
+    isCardTenderEnabled,
     logger,
   } = deps;
 
@@ -252,6 +263,26 @@ export function createTenderApplyHandler(deps: TenderApplyHandlerDeps): TenderAp
 
     const now = clock().toISOString();
     const tender_line_id = uuid();
+
+    // RT-700 (P-26-1, OD-26-1) — card is outside the pilot. The tender type first
+    // crosses the bridge here, so main refuses it here, after the session / role /
+    // ownership gate and before the idempotency reservation, so nothing is
+    // recorded: no outbox row, no line, no FSM call. Audited as `tender.refused`.
+    if (req.tender_type === 'external_card_terminal' && !isCardTenderEnabled()) {
+      auditEmitter.emitTenderRefused({
+        tender_line_id,
+        payment_attempt_id: req.payment_attempt_id,
+        tender_type: req.tender_type,
+        refusal_reason: 'card_tender_disabled',
+        refused_at: now,
+        attribution_operator_id: session.operator_id,
+        tenant_id: attempt.tenant_id,
+        branch_id: attempt.branch_id,
+        originating_terminal_id: attempt.terminal_id,
+        session_id: session.operator_session_id,
+      });
+      return await Promise.resolve({ kind: 'refused', reason: 'card_tender_disabled' });
+    }
 
     const reservation = idempotency.checkOrReserve({
       action_id: req.idempotency_key,

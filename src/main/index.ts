@@ -1702,10 +1702,14 @@ singleInstanceReady
     });
     const paymentsSubscribe = createPaymentsSubscribeHandler(paymentsReadDeps);
     const paymentsRead = createPaymentsReadHandler(paymentsReadDeps);
+    // RT-700 (P-26-1): read per call, like `getAppConfig`, so main and the
+    // renderer tile always see the same environment.
+    const isCardTenderEnabled = (): boolean => parseFeatureFlags(process.env).cardTender;
     const tenderApply = createTenderApplyHandler({
       ...paymentsWriteDeps,
       tenderLineFsm,
       uuid: paymentsUuid,
+      isCardTenderEnabled,
       logger: mainLogger,
     });
     const tenderReverse = createTenderReverseHandler({
@@ -1749,6 +1753,7 @@ singleInstanceReady
             ...scoped,
             tenderLineFsm,
             uuid: paymentsUuid,
+            isCardTenderEnabled,
             logger: mainLogger,
           }),
           confirm: createPaymentsConfirmHandler({

@@ -14,6 +14,7 @@ afterEach(cleanup);
 
 import { PaymentSurface } from '../../../../src/renderer/ui/payments/PaymentSurface.js';
 import { useOperatorSessionStore } from '../../../../src/renderer/stores/operator-session-store.js';
+import { useFeatureFlagsStore } from '../../../../src/renderer/stores/feature-flags-store.js';
 import { usePaymentStore } from '../../../../src/renderer/stores/payment-store.js';
 import type { PaymentIntentEnvelope } from '../../../../src/shared/cart/handoff-envelope.js';
 
@@ -73,6 +74,7 @@ describe('PaymentSurface — operator badge', () => {
   it('renders the OperatorBadge when signed in and envelope is present', () => {
     seedSignedInSession();
     usePaymentStore.getState().mount(makeEnvelope());
+    useFeatureFlagsStore.setState({ cardTender: true });
     render(<PaymentSurface />);
     expect(screen.getByTestId('operator-badge')).toBeInTheDocument();
   });
@@ -80,6 +82,7 @@ describe('PaymentSurface — operator badge', () => {
   it('shows the operator display_name in the badge', () => {
     seedSignedInSession();
     usePaymentStore.getState().mount(makeEnvelope());
+    useFeatureFlagsStore.setState({ cardTender: true });
     render(<PaymentSurface />);
     expect(screen.getByTestId('operator-badge')).toHaveTextContent('Jane Smith');
   });
@@ -87,6 +90,7 @@ describe('PaymentSurface — operator badge', () => {
   it('returns null when signed out', () => {
     useOperatorSessionStore.getState().reset();
     usePaymentStore.getState().mount(makeEnvelope());
+    useFeatureFlagsStore.setState({ cardTender: true });
     const { container } = render(<PaymentSurface />);
     expect(container.firstChild).toBeNull();
   });
@@ -109,6 +113,7 @@ describe('PaymentSurface — tender selection feedback', () => {
     const user = userEvent.setup();
     seedSignedInSession();
     usePaymentStore.getState().mount(makeEnvelope());
+    useFeatureFlagsStore.setState({ cardTender: true });
     render(<PaymentSurface />);
     await user.click(screen.getByTestId('tender-cash'));
     expect(screen.getByTestId('payment-surface-tender-selected')).toHaveTextContent(
@@ -120,6 +125,7 @@ describe('PaymentSurface — tender selection feedback', () => {
     const user = userEvent.setup();
     seedSignedInSession();
     usePaymentStore.getState().mount(makeEnvelope());
+    useFeatureFlagsStore.setState({ cardTender: true });
     render(<PaymentSurface />);
     await user.click(screen.getByTestId('tender-external-card'));
     expect(screen.getByTestId('payment-surface-tender-selected')).toHaveTextContent(

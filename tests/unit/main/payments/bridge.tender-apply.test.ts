@@ -74,6 +74,7 @@ function setup() {
   const uuid = vi.fn<() => string>(() => 'tl-1');
   const clock = vi.fn<() => Date>(() => new Date('2026-05-23T11:00:01.000Z'));
   const handler = createTenderApplyHandler({
+    isCardTenderEnabled: () => true,
     getCurrentSession: sessionSource.getCurrentSession,
     attemptsRepo,
     linesRepo,
@@ -99,6 +100,7 @@ function setup() {
 describe('T105 — tender.apply bridge handler', () => {
   it('refuses no_session when there is no active session', async () => {
     const handler = createTenderApplyHandler({
+      isCardTenderEnabled: () => true,
       getCurrentSession: makeSessionSource(null).getCurrentSession,
       attemptsRepo: makeAttemptsRepoDouble(),
       linesRepo: makeLinesRepoDouble(),
@@ -118,6 +120,7 @@ describe('T105 — tender.apply bridge handler', () => {
     const sessionSource = makeSessionSource(makeSession());
     const row = makeAttemptRow({ tenant_id: 'tenant-OTHER' });
     const handler = createTenderApplyHandler({
+      isCardTenderEnabled: () => true,
       getCurrentSession: sessionSource.getCurrentSession,
       attemptsRepo: makeAttemptsRepoDouble([row]),
       linesRepo: makeLinesRepoDouble(),
@@ -137,6 +140,7 @@ describe('T105 — tender.apply bridge handler', () => {
     const sessionSource = makeSessionSource(makeSession());
     const row = makeAttemptRow({ state: 'settled' });
     const handler = createTenderApplyHandler({
+      isCardTenderEnabled: () => true,
       getCurrentSession: sessionSource.getCurrentSession,
       attemptsRepo: makeAttemptsRepoDouble([row]),
       linesRepo: makeLinesRepoDouble(),
@@ -245,6 +249,7 @@ describe('T105 — tender.apply bridge handler', () => {
   it('refuses idempotency_payload_mismatch when the helper signals mismatch', async () => {
     const sessionSource = makeSessionSource(makeSession());
     const handler = createTenderApplyHandler({
+      isCardTenderEnabled: () => true,
       getCurrentSession: sessionSource.getCurrentSession,
       attemptsRepo: makeAttemptsRepoDouble([makeAttemptRow()]),
       linesRepo: makeLinesRepoDouble(),
@@ -274,6 +279,7 @@ describe('T105 — tender.apply bridge handler', () => {
     ]);
     const fsm = makeTenderLineFsmDouble();
     const handler = createTenderApplyHandler({
+      isCardTenderEnabled: () => true,
       getCurrentSession: sessionSource.getCurrentSession,
       attemptsRepo: makeAttemptsRepoDouble([makeAttemptRow()]),
       linesRepo,
@@ -341,6 +347,7 @@ describe('T105 — tender.apply bridge handler', () => {
 
     // Replay branch — same idempotency_key, identical payload → no audit.
     const replayHandler = createTenderApplyHandler({
+      isCardTenderEnabled: () => true,
       getCurrentSession: sessionSource.getCurrentSession,
       attemptsRepo: makeAttemptsRepoDouble([makeAttemptRow()]),
       linesRepo,
@@ -355,6 +362,7 @@ describe('T105 — tender.apply bridge handler', () => {
 
     // Mismatch branch — same idempotency_key, divergent payload → no audit.
     const mismatchHandler = createTenderApplyHandler({
+      isCardTenderEnabled: () => true,
       getCurrentSession: sessionSource.getCurrentSession,
       attemptsRepo: makeAttemptsRepoDouble([makeAttemptRow()]),
       linesRepo: makeLinesRepoDouble(),
@@ -421,6 +429,7 @@ describe('T263 — tender.apply voucher branch (Wave 4)', () => {
     const uuid = vi.fn(() => 'tl-v');
     const clock = vi.fn(() => new Date('2026-05-25T10:00:01.000Z'));
     const handler = createTenderApplyHandler({
+      isCardTenderEnabled: () => true,
       getCurrentSession: sessionSource.getCurrentSession,
       attemptsRepo,
       linesRepo,
@@ -522,6 +531,7 @@ describe('tender.apply — branch-coverage backfill', () => {
     ]);
     const fsm = makeTenderLineFsmDouble();
     const handler = createTenderApplyHandler({
+      isCardTenderEnabled: () => true,
       getCurrentSession: sessionSource.getCurrentSession,
       attemptsRepo: makeAttemptsRepoDouble([makeAttemptRow()]),
       linesRepo,
@@ -577,6 +587,7 @@ describe('tender.apply — branch-coverage backfill', () => {
       }),
     );
     const handler = createTenderApplyHandler({
+      isCardTenderEnabled: () => true,
       getCurrentSession: sessionSource.getCurrentSession,
       attemptsRepo: makeAttemptsRepoDouble([row]),
       linesRepo,

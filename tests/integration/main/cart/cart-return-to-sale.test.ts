@@ -244,7 +244,12 @@ function buildPaymentHandlers(
       paymentAttemptFsm,
     }),
     cancel: createPaymentsCancelHandler({ ...writeDeps, paymentAttemptFsm }),
-    apply: createTenderApplyHandler({ ...writeDeps, tenderLineFsm, uuid }),
+    apply: createTenderApplyHandler({
+      isCardTenderEnabled: () => true,
+      ...writeDeps,
+      tenderLineFsm,
+      uuid,
+    }),
   };
 }
 

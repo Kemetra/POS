@@ -31,6 +31,12 @@ export interface TenderPickerProps {
   selectedTender?: TenderKind | null;
   /** RT-103: whether the voucher may be chosen. Fail-closed default (pilot rule). */
   voucherEnabled?: boolean;
+  /**
+   * RT-700 (P-26-1): whether the card tile is rendered. Defaults on so the frozen
+   * checkout drawing holds; `PaymentSurface` always passes the fail-closed
+   * `cardTender` flag, and main refuses a card `tender.apply` whatever the tile does.
+   */
+  cardEnabled?: boolean;
 }
 
 interface Tile {
@@ -72,11 +78,14 @@ export function TenderPicker({
   onTenderSelect,
   selectedTender = null,
   voucherEnabled = false,
+  cardEnabled = true,
 }: Readonly<TenderPickerProps>): JSX.Element | null {
   // Route guard: no envelope, nothing to pay.
   if (envelope === null) return null;
 
-  const tiles: readonly Tile[] = [CASH, CARD, voucherTile(voucherEnabled)];
+  const tiles: readonly Tile[] = cardEnabled
+    ? [CASH, CARD, voucherTile(voucherEnabled)]
+    : [CASH, voucherTile(voucherEnabled)];
 
   return (
     <section

@@ -75,6 +75,16 @@ export interface AppConfig {
      */
     voucherTender?: boolean;
     /**
+     * RT-700 (P-26-1, OD-26-1) — enables the external card terminal tender.
+     *
+     * Defaults to `false`. Flip via `POS_PULSE_FEATURE_CARD_TENDER` in main.
+     * Fail-closed: card is outside the pilot (RT-536 D4), so the «بطاقة» tile is
+     * not rendered and main refuses `tender.apply` with
+     * `tender_type = external_card_terminal` (`card_tender_disabled`, audited).
+     * `payments.start` stays tender-neutral; cash and voucher are unchanged.
+     */
+    cardTender?: boolean;
+    /**
      * RT-15 S2 — enables the cashier return flow (`returns.*`).
      *
      * Defaults to `false` (AC1). Flip via `POS_PULSE_FEATURE_RETURNS` in main.

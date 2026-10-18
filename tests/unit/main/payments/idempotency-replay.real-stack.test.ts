@@ -124,6 +124,7 @@ function build(options: StackOptions = {}) {
       attemptHasLiveTender: () => false,
     }),
     apply: createTenderApplyHandler({
+      isCardTenderEnabled: () => true,
       ...shared,
       linesRepo: lines,
       tenderLineFsm,

@@ -31,6 +31,7 @@ describe('RT-437 — tender.apply and the cash bound', () => {
     const auditEmitter = makeAuditEmitterDouble();
     const warn = vi.fn();
     const handler = createTenderApplyHandler({
+      isCardTenderEnabled: () => true,
       getCurrentSession: makeSessionSource(makeSession()).getCurrentSession,
       attemptsRepo: makeAttemptsRepoDouble([makeAttemptRow()]),
       linesRepo: makeLinesRepoDouble(),
@@ -68,6 +69,7 @@ describe('RT-437 — tender.apply and the cash bound', () => {
     fsm.apply.mockReturnValueOnce({ kind: 'refused', reason: 'attempt_fully_tendered' });
     const warn = vi.fn();
     const handler = createTenderApplyHandler({
+      isCardTenderEnabled: () => true,
       getCurrentSession: makeSessionSource(makeSession()).getCurrentSession,
       attemptsRepo: makeAttemptsRepoDouble([makeAttemptRow()]),
       linesRepo: makeLinesRepoDouble(),
@@ -90,6 +92,7 @@ describe('RT-437 — tender.apply and the cash bound', () => {
   it('a line recorded before the bound replays with its original outcome; the FSM is not called', async () => {
     const fsm = makeTenderLineFsmDouble();
     const handler = createTenderApplyHandler({
+      isCardTenderEnabled: () => true,
       getCurrentSession: makeSessionSource(makeSession()).getCurrentSession,
       attemptsRepo: makeAttemptsRepoDouble([makeAttemptRow()]),
       linesRepo: makeLinesRepoDouble([

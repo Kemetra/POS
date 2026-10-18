@@ -112,7 +112,13 @@ function paymentStack(db: ReturnType<typeof handleFor>) {
       checkCartForPayment: () => ({ kind: 'ok' }),
       attemptHasLiveTender: () => false,
     }),
-    apply: createTenderApplyHandler({ ...shared, getCurrentSession, tenderLineFsm, uuid }),
+    apply: createTenderApplyHandler({
+      isCardTenderEnabled: () => true,
+      ...shared,
+      getCurrentSession,
+      tenderLineFsm,
+      uuid,
+    }),
     confirm: createPaymentsConfirmHandler({
       ...shared,
       ...realSettlementDeps({
