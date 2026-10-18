@@ -161,10 +161,10 @@ export function minorUnitsToDecimalString(minor: number, exponent: number): stri
   // wrong amount on the wire — reject it at the source. The boundary (`toWireBody`,
   // and ultimately `postSale`) maps the throw to a `permanent` dead-letter.
   if (!Number.isSafeInteger(minor)) {
-    throw new Error(`minor units must be a safe integer; got ${String(minor)}`);
+    throw new TypeError(`minor units must be a safe integer; got ${String(minor)}`);
   }
   if (!Number.isInteger(exponent) || exponent < 0) {
-    throw new Error(`exponent must be a non-negative integer; got ${String(exponent)}`);
+    throw new TypeError(`exponent must be a non-negative integer; got ${String(exponent)}`);
   }
   const sign = minor < 0 ? '-' : '';
   const digits = String(Math.abs(minor));
@@ -313,7 +313,7 @@ export function toWireBody(payload: CaptureSalePayload, currencyCode: string): C
   // own guard here; the *Minor fields are re-checked inside minorUnitsToDecimalString.
   for (const line of payload.lines) {
     if (!Number.isSafeInteger(line.quantity)) {
-      throw new Error(
+      throw new TypeError(
         `line ${line.lineRef} quantity must be a safe integer; got ${String(line.quantity)}`,
       );
     }
@@ -374,7 +374,7 @@ function tendersWire(
   let sum = 0;
   for (const t of tenders) {
     if (!Number.isSafeInteger(t.amountMinor)) {
-      throw new Error(`tender ${t.method} amount must be a safe integer`);
+      throw new TypeError(`tender ${t.method} amount must be a safe integer`);
     }
     sum += t.amountMinor;
   }

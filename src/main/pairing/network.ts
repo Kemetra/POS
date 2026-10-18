@@ -183,10 +183,10 @@ export function createNetwork(deps: NetworkDeps): Network {
           body: JSON.stringify(body),
           signal,
         });
-      } catch (err) {
+      } catch {
         // The only paths that throw out of fetch are transport failures
         // and signal aborts. Distinguish timeout from generic failure.
-        const reason = classifyTransportRejection(err, signal);
+        const reason = classifyTransportRejection(signal);
         throw new TransportError({
           timed_out: reason === 'timeout',
           reason,
@@ -303,11 +303,11 @@ async function parseJsonSafely(response: Response): Promise<Record<string, unkno
  * would risk surfacing user-supplied values that the runtime placed
  * into the message.
  */
-function classifyTransportRejection(err: unknown, signal: AbortSignal): TransportErrorReason {
+function classifyTransportRejection(signal: AbortSignal): TransportErrorReason {
   // AbortSignal.timeout is the only abort source we use in this module,
   // so any aborted signal at this point is a timeout. If a future
   // caller wires an external signal, this classifier should split a
   // separate 'aborted' branch.
-  void err; // intentionally unused — see security comment above
+  // The rejection value is deliberately not inspected — see security comment above.
   return signal.aborted ? 'timeout' : 'fetch_failed';
 }

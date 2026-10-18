@@ -64,6 +64,6 @@ export default tsEslint.config(
       'react-hooks/exhaustive-deps': 'warn',
     },
   },
-  // TODO: Add electron-security ESLint plugin rules once package name is confirmed
+  // Deferred: add electron-security ESLint plugin rules once package name is confirmed
   // (e.g., eslint-plugin-electron or similar; verify on npm before installing)
 );

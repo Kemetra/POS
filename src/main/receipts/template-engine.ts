@@ -134,9 +134,12 @@ const TENDER_LABELS: Record<SalesTenderType, string> = {
 
 function compose(payload: ReceiptPayload): Band[] {
   const bands: Band[] = [];
-  const rule = (char: RuleBand['char']): void => void bands.push({ kind: 'rule', char });
-  const text = (t: string, align: BandAlign, emphasis = false): void =>
-    void bands.push({ kind: 'text', text: t, align, emphasis });
+  const rule = (char: RuleBand['char']): void => {
+    bands.push({ kind: 'rule', char });
+  };
+  const text = (t: string, align: BandAlign, emphasis = false): void => {
+    bands.push({ kind: 'text', text: t, align, emphasis });
+  };
 
   // Duplicate-copy marker band — topmost, reprint_duplicate only (§(b)).
   if (payload.variant === 'reprint_duplicate') {
