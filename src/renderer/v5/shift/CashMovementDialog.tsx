@@ -1,5 +1,6 @@
 import { useId, useRef, useState, type JSX } from 'react';
 
+import { isShiftAmountWithinBound } from '../../../shared/shift-cashup/amount-bound';
 import {
   SHIFT_MOVEMENT_REASON_CODES,
   SHIFT_NOTE_MAX_LENGTH,
@@ -9,11 +10,12 @@ import {
 } from '../../../shared/shift-cashup/types';
 import { Dialog } from '../foundation/Dialog';
 import { callShift, dismissUnlessBusy, useSingleFlight } from './shift-bridge';
-import { MOVEMENT_REASON_LABELS, SHIFT_COPY, shiftRefusalMessage } from './shift-copy';
+import { MOVEMENT_REASON_LABELS, SHIFT_COPY } from './shift-copy';
 import { parseShiftAmount } from './shift-format';
 import {
+  amountOutOfRange,
   invalidEntry,
-  refusedCall,
+  refusalEntry,
   ShiftAmountField,
   ShiftRefusal,
   type FieldError,
@@ -25,6 +27,8 @@ export type MovementKind = 'payIn' | 'payOut';
 interface Props {
   readonly bridge: ShiftCashupBridgeAPI;
   readonly kind: MovementKind;
+  /** The open shift's currency (RT-278 S1: the pay-in pre-check's cap). */
+  readonly currencyCode: string;
   readonly onDismiss: () => void;
   readonly onRecorded: () => void;
 }
@@ -45,7 +49,9 @@ function movementOf(input: {
  * RT-17 slice 4 part 3 — a pay-in or pay-out: amount, contract reason and an
  * optional note. A refused pay-out shows only the generic
  * `pay_out_not_accepted` line (main never says why, so no amount or bound of
- * the hidden expected cash can be read from it).
+ * the hidden expected cash can be read from it). RT-278 S1: a pay-in above
+ * main's flat cap is not sent; a pay-out has no pre-check (the drawer bound
+ * is main's alone).
  */
 export function CashMovementDialog(props: Props): JSX.Element {
   const ids = { reason: useId(), note: useId() };
@@ -58,10 +64,23 @@ export function CashMovementDialog(props: Props): JSX.Element {
   const title = SHIFT_COPY[props.kind];
   const dismiss = dismissUnlessBusy(busy, props.onDismiss);
 
+  /** The amount itself is wrong: say so under the field and give it focus back. */
+  const rejectAmount = (next: FieldError): void => {
+    setError(next);
+    amountRef.current?.focus();
+  };
+
   const submit = (): void => {
     const request = movementOf({ amount, reasonCode, note });
     if (request === null) {
       setError(invalidEntry(SHIFT_COPY.invalidAmount));
+      return;
+    }
+    if (
+      props.kind === 'payIn' &&
+      !isShiftAmountWithinBound('pay_in', request.amountMinor, props.currencyCode)
+    ) {
+      rejectAmount(amountOutOfRange());
       return;
     }
     setError(null);
@@ -71,7 +90,8 @@ export function CashMovementDialog(props: Props): JSX.Element {
         kind === 'payIn' ? bridge.payIn(request) : bridge.payOut(request),
       );
       if (answer.kind === 'recorded') props.onRecorded();
-      else setError(refusedCall(shiftRefusalMessage(answer.reason)));
+      else if (answer.reason === 'amount_out_of_range') rejectAmount(refusalEntry(answer.reason));
+      else setError(refusalEntry(answer.reason));
     });
   };
 
