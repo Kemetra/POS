@@ -78,7 +78,7 @@ function makeBridge(): { bridge: TestBridge; start: ReturnType<typeof vi.fn> } {
   return { bridge, start };
 }
 
-function seedSurface(voucherTender: boolean): void {
+function seedSurface(voucherTender: boolean, cardTender = false): void {
   useOperatorSessionStore.setState({
     state: {
       kind: 'signedIn',
@@ -94,7 +94,9 @@ function seedSurface(voucherTender: boolean): void {
     },
   });
   usePaymentStore.getState().mount(makeEnvelope());
-  useFeatureFlagsStore.getState().hydrate({ cart: true, payments: true, voucherTender });
+  useFeatureFlagsStore
+    .getState()
+    .hydrate({ cart: true, payments: true, voucherTender, cardTender });
 }
 
 afterEach(() => {
@@ -187,5 +189,37 @@ describe('RT-103 PaymentSurface — pilot restriction from the voucherTender fla
     const start = await pickTender(voucherTender, tile);
     expect(start).toHaveBeenCalledTimes(1);
     expect(await screen.findByTestId(entryTestId)).toBeInTheDocument();
+  });
+});
+
+describe('RT-700 PaymentSurface and TenderPicker — card tile from the cardTender flag', () => {
+  const tileIds = (): (string | null)[] =>
+    screen.getAllByRole('radio').map((tile) => tile.getAttribute('data-testid'));
+
+  it('cardEnabled false: no card tile; cash and voucher keep their slots', () => {
+    render(<TenderPicker envelope={makeEnvelope()} onTenderSelect={vi.fn()} cardEnabled={false} />);
+    expect(tileIds()).toEqual(['tender-cash', 'tender-voucher']);
+  });
+
+  it('cardEnabled true: the frozen drawing, cash then card then voucher', () => {
+    render(<TenderPicker envelope={makeEnvelope()} onTenderSelect={vi.fn()} cardEnabled />);
+    expect(tileIds()).toEqual(['tender-cash', 'tender-external-card', 'tender-voucher']);
+  });
+
+  it('flag off (the default): the surface renders no card tile and cash still starts', async () => {
+    const start = await pickTender(false, 'tender-cash');
+    expect(screen.queryByTestId('tender-external-card')).not.toBeInTheDocument();
+    expect(start).toHaveBeenCalledTimes(1);
+  });
+
+  it('flag on: the surface renders the card tile and opens the card entry', async () => {
+    seedSurface(false, true);
+    const { bridge } = makeBridge();
+    render(<PaymentSurface _testBridge={bridge} />);
+    await act(async () => {
+      screen.getByTestId('tender-external-card').click();
+      await Promise.resolve();
+    });
+    expect(await screen.findByTestId('external-card-terminal-entry')).toBeInTheDocument();
   });
 });

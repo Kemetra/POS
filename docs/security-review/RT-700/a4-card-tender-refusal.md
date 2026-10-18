@@ -46,5 +46,5 @@ refusal path. Docs only.
 ## 5. Tests
 
 - `tests/unit/main/payments/bridge.tender-apply.card-flag.test.ts`: flag off refuses and records nothing; one `tender.refused` audit row, without reference or amount; replayed key refused; session gate first; cash unchanged; voucher on its own path; flag on reaches the FSM; a direct call on the registered IPC channel in both states; the enum lists the reason once.
-- `src/renderer/ui/payments/__tests__/card-tender-flag.test.tsx`: tile absent with the flag off, cash still starts the payment; tile and card entry present with it on; picker order.
+- `src/renderer/ui/payments/__tests__/voucher-pilot-restriction.test.tsx` (RT-700 block): tile absent with the flag off, cash still starts the payment; tile and card entry present with it on; picker order.
 - `src/renderer/stores/__tests__/feature-flags-store.test.ts` and `src/main/app/__tests__/feature-flags.test.ts`: default off, explicit true only, env-var name, all 512 flag combinations.
