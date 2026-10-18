@@ -1,0 +1,44 @@
+/*
+ * RT-692 (doc 25 IC-1) — registry glyphs. Colour is `currentColor`, so the
+ * control's status or interaction token decides it, and forced colours apply
+ * as they do to text: no `forced-color-adjust` here (DESIGN.md Forced-Colours
+ * Rule).
+ *
+ * Direction (doc 25 §4.2) comes from the nearest `dir` attribute, carried down
+ * as inherited custom properties, so an LTR-isolated run (a keypad, a money
+ * field with `dir="ltr"`) keeps its glyphs unmirrored inside the RTL page. Not
+ * `:dir()`: the renderer build lowers `:dir(rtl)` to a `:lang(ar, …)` list,
+ * which matches inside those isolates too. Not a `[dir] .rt-icon` ancestor
+ * selector: it matches any RTL ancestor, not the nearest.
+ */
+[dir='rtl' i] {
+  --rt-icon-flip: -1;
+  --rt-icon-ltr: none;
+  --rt-icon-rtl: inline;
+}
+
+[dir='ltr' i] {
+  --rt-icon-flip: 1;
+  --rt-icon-ltr: inline;
+  --rt-icon-rtl: none;
+}
+
+.rt-icon {
+  display: inline-block;
+  flex-shrink: 0;
+  vertical-align: middle;
+}
+
+/* A direction-implying meaning flips with the reading direction. */
+.rt-icon--mirror {
+  transform: scaleX(var(--rt-icon-flip, 1));
+}
+
+/* A `variant` entry carries both Fluent assets; the direction shows one. */
+.rt-icon__ltr {
+  display: var(--rt-icon-ltr, inline);
+}
+
+.rt-icon__rtl {
+  display: var(--rt-icon-rtl, none);
+}

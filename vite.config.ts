@@ -17,6 +17,12 @@ export default defineConfig({
   build: {
     outDir: path.resolve(__dirname, 'dist/renderer'),
     emptyOutDir: true,
+    // Keep `/*! … @license */` comments through minification, which strips
+    // them by default: the vendored Fluent icon data (RT-692, MIT) and other
+    // third-party code carry their notice in the bundle.
+    rolldownOptions: {
+      output: { comments: { legal: true } },
+    },
   },
   plugins: [react()],
   server: {
