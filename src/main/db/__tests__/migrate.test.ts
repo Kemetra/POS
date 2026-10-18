@@ -1,9 +1,9 @@
 import { describe, it, expect, vi } from 'vitest';
-import { createHash } from 'crypto';
-import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'fs';
-import os from 'os';
-import path from 'path';
-import { fileURLToPath } from 'url';
+import { createHash } from 'node:crypto';
+import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import initSqlJs, { type Database as SqlJsDatabase } from 'sql.js';
 
 import {

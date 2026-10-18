@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { PassThrough } from 'stream';
+import { PassThrough } from 'node:stream';
 import type { ErrorEvent } from '@sentry/electron/main';
 
 import { createLogger, type PinoRollFactory } from '../../src/main/logging/logger.js';
