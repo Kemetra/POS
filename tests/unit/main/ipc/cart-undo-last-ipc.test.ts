@@ -1,9 +1,9 @@
 import { describe, it, expect, vi, beforeAll } from 'vitest';
 import type { IpcMain, IpcMainInvokeEvent } from 'electron';
 import initSqlJs, { type SqlJsStatic } from 'sql.js';
-import { readFileSync } from 'fs';
-import path from 'path';
-import { fileURLToPath } from 'url';
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 import { registerCartHandlers } from '../../../../src/main/ipc/cart.js';
 import { CartBridgeHandlers } from '../../../../src/main/cart/cart-bridge.js';

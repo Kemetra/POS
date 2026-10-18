@@ -340,7 +340,7 @@ export class SessionManager {
    * credential first; this method only flips the state.
    */
   unlock(at: string): void {
-    if (this.current === null || this.current.lock_state !== 'locked') return;
+    if (this.current?.lock_state !== 'locked') return;
     this.current.lock_state = 'active';
     this.current.locked_at = null;
     this.current.last_activity_at = at;

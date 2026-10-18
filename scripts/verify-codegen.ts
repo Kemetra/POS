@@ -146,8 +146,10 @@ async function main(): Promise<void> {
 
 const invokedAsScript = process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1];
 if (invokedAsScript) {
-  main().catch((err: unknown) => {
+  try {
+    await main();
+  } catch (err: unknown) {
     console.error('[verify-codegen] failed:', err);
     process.exit(1);
-  });
+  }
 }

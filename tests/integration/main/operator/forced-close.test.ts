@@ -1,9 +1,9 @@
 import { describe, expect, it, beforeAll } from 'vitest';
 import initSqlJs, { type Database as SqlJsDatabase, type SqlJsStatic } from 'sql.js';
-import { readFileSync } from 'fs';
-import path from 'path';
-import { fileURLToPath } from 'url';
-import { randomUUID } from 'crypto';
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { randomUUID } from 'node:crypto';
 
 import { ForcedCloseHandler } from '../../../../src/main/operator/forced-close-handler.js';
 import type { ForcedCloseHandlerDeps } from '../../../../src/main/operator/forced-close-handler.js';

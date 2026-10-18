@@ -12,9 +12,9 @@
 
 import { beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import initSqlJs, { type Database as SqlJsDatabase, type SqlJsStatic } from 'sql.js';
-import { readFileSync } from 'fs';
-import path from 'path';
-import { fileURLToPath } from 'url';
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 import { createReceiptsBridge } from '../../../src/main/receipts/receipts-bridge.js';
 import { createPrintDispatcher } from '../../../src/main/receipts/print-dispatcher.js';

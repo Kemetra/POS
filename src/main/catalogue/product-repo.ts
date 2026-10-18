@@ -140,27 +140,6 @@ export function createProductRepo(db: DatabaseHandle): ProductRepo {
     return stmt.get() !== undefined;
   }
 
-  function toSnapshot(row: ProductRow, sellingBarcode?: string): ProductSnapshotDisplay {
-    return {
-      product_id: row.product_id,
-      display_name_ar: row.name_ar,
-      ...(row.name_en !== null ? { display_name_en: row.name_en } : {}),
-      // `price_minor` is carried verbatim (AD-5). The migration's NOT NULL
-      // CHECK(>= 0) guarantees a non-negative integer; the `Number.isSafeInteger`
-      // refusal for a corrupt row lives on the resolve path (S4 / FR-19), not on
-      // the read — surfacing a display snapshot does not commit money.
-      price_minor: row.price_minor,
-      ...(row.unit_pack_label !== null ? { unit_pack_label: row.unit_pack_label } : {}),
-      // `tax_category` is NOT NULL in the schema (D3), so it is always present.
-      tax_category: row.tax_category,
-      ...(sellingBarcode !== undefined ? { selling_barcode: sellingBarcode } : {}),
-      sku: row.sku,
-      active: row.active === 1,
-      controlled_substance: row.controlled_substance === 1,
-      prescription_required: row.prescription_required === 1,
-    };
-  }
-
   function lookupByBarcode(tenantId: string, rawBarcode: string): ProductLookupResult {
     const barcodeNorm = normalize(rawBarcode);
     try {
@@ -292,4 +271,25 @@ function discriminate<R extends { product_id: string }>(
   const distinctIds = new Set(rows.map((r) => r.product_id));
   if (distinctIds.size > 1) return { kind: 'ambiguous' };
   return { kind: 'one', product: toProduct(first) };
+}
+
+function toSnapshot(row: ProductRow, sellingBarcode?: string): ProductSnapshotDisplay {
+  return {
+    product_id: row.product_id,
+    display_name_ar: row.name_ar,
+    ...(row.name_en !== null ? { display_name_en: row.name_en } : {}),
+    // `price_minor` is carried verbatim (AD-5). The migration's NOT NULL
+    // CHECK(>= 0) guarantees a non-negative integer; the `Number.isSafeInteger`
+    // refusal for a corrupt row lives on the resolve path (S4 / FR-19), not on
+    // the read — surfacing a display snapshot does not commit money.
+    price_minor: row.price_minor,
+    ...(row.unit_pack_label !== null ? { unit_pack_label: row.unit_pack_label } : {}),
+    // `tax_category` is NOT NULL in the schema (D3), so it is always present.
+    tax_category: row.tax_category,
+    ...(sellingBarcode !== undefined ? { selling_barcode: sellingBarcode } : {}),
+    sku: row.sku,
+    active: row.active === 1,
+    controlled_substance: row.controlled_substance === 1,
+    prescription_required: row.prescription_required === 1,
+  };
 }

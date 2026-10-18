@@ -1,9 +1,9 @@
 import { describe, it, expect, beforeAll, beforeEach } from 'vitest';
 import initSqlJs, { type Database as SqlJsDatabase, type SqlJsStatic } from 'sql.js';
-import { createHash } from 'crypto';
-import { readFileSync } from 'fs';
-import path from 'path';
-import { fileURLToPath } from 'url';
+import { createHash } from 'node:crypto';
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 import { bindPaymentAttemptsRepository } from '../../../../../src/main/payments/repositories/payment-attempts.repository.js';
 import {

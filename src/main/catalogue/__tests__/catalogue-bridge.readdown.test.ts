@@ -62,8 +62,8 @@ const startedAdmission: TickAdmission = {
 /** A fake freshness source: the sync-state row + a tenant-scoped product count. */
 function fakeFreshness(row: CatalogueSyncStateRow | null, productCount: number) {
   return {
-    readSyncState: (tenantId: string) => (row && row.tenant_id === tenantId ? row : null),
-    countProducts: (tenantId: string) => (row && row.tenant_id === tenantId ? productCount : 0),
+    readSyncState: (tenantId: string) => (row?.tenant_id === tenantId ? row : null),
+    countProducts: (tenantId: string) => (row?.tenant_id === tenantId ? productCount : 0),
   };
 }
 

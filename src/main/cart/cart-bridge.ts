@@ -526,7 +526,7 @@ function hasStaleLineVersion(
 ): boolean {
   return perLineVersions.some(({ line_id, version }) => {
     const line = store.getLine(cartId, line_id);
-    return line === undefined || line.removed_at !== null || line.version !== version;
+    return line?.removed_at !== null || line.version !== version;
   });
 }
 
@@ -1169,7 +1169,7 @@ export class CartBridgeHandlers {
       return refuse('manager_attribution_required');
     }
     const line = store.getLine(req.cart_id, req.line_id);
-    if (line === undefined || line.removed_at !== null) return refuse('wrong_owner');
+    if (line?.removed_at !== null) return refuse('wrong_owner');
 
     try {
       store.insertDiscountPlaceholderAndOutbox(() =>

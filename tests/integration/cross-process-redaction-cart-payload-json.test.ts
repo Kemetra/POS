@@ -14,7 +14,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { PassThrough } from 'stream';
+import { PassThrough } from 'node:stream';
 
 import { createLogger, type PinoRollFactory } from '../../src/main/logging/logger.js';
 

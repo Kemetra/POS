@@ -12,9 +12,9 @@
 
 import { describe, it, expect, beforeAll, beforeEach } from 'vitest';
 import initSqlJs, { type Database as SqlJsDatabase, type SqlJsStatic } from 'sql.js';
-import { readFileSync } from 'fs';
-import path from 'path';
-import { fileURLToPath } from 'url';
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 import { CartBridgeHandlers, type ItemRefResolver } from '../../../../src/main/cart/cart-bridge.js';
 import { bindCartStore } from '../../../../src/main/cart/cart-store.js';

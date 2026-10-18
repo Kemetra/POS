@@ -511,10 +511,6 @@ export function createOfflineGrantWiring(deps: OfflineGrantWiringDeps): OfflineG
     return { admissible: false, category: 'grant_invalidated' };
   }
 
-  function refused(category: OfflineGrantRefusalCategory): OfflineGrantEvaluation {
-    return { admissible: false, category };
-  }
-
   function judged(
     user_id: string,
     read: (at: OfflineGrantScope) => OfflineGrantEvaluation,
@@ -669,4 +665,8 @@ export function withOfflineGrantPairing<S extends PairingStore>(inner: S, grants
       }
     },
   };
+}
+
+function refused(category: OfflineGrantRefusalCategory): OfflineGrantEvaluation {
+  return { admissible: false, category };
 }

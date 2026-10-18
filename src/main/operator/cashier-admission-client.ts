@@ -192,14 +192,6 @@ export function createCashierAdmissionClient(
     }
   }
 
-  async function readJson(response: Response): Promise<unknown> {
-    try {
-      return (await response.json()) as unknown;
-    } catch {
-      return undefined;
-    }
-  }
-
   return {
     async admit(req) {
       const sent = await send(ADMISSIONS_PATH, 'POST', {
@@ -345,4 +337,12 @@ function interpretRoster(parsed: unknown): CashierRosterResult {
   const cashiers = parsed['cashiers'].map(parseRosterEntry);
   if (cashiers.includes(null)) return { kind: 'rejected' };
   return { kind: 'roster', cashiers: cashiers as CashierRosterEntry[] };
+}
+
+async function readJson(response: Response): Promise<unknown> {
+  try {
+    return (await response.json()) as unknown;
+  } catch {
+    return undefined;
+  }
 }
