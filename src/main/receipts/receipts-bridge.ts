@@ -175,8 +175,7 @@ export function createReceiptsBridge(deps: ReceiptsBridgeDependencies): Receipts
     const { session } = admitted;
     const row = salesRepo.readById(sale_id);
     if (
-      row === null ||
-      row.tenant_id !== session.tenant_id ||
+      row?.tenant_id !== session.tenant_id ||
       row.branch_id !== session.branch_id ||
       row.terminal_id !== session.terminal_id
     ) {
