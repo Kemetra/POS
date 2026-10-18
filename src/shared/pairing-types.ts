@@ -80,7 +80,14 @@ export type PairingOutcome =
    * a sign-in cannot complete during a re-pair and skip the relaunch. The code
    * is not sent. (Distinct from the server's `already_paired`: code used.)
    */
-  | 'terminal_already_paired';
+  | 'terminal_already_paired'
+  /**
+   * RT-591 — Backend-Core refused a REPLACEMENT pairing (409
+   * `REPLACEMENT_BLOCKED`, RT-367): the replaced device still has an open Cash
+   * Session. The pairing code stays pending server-side, so the cashier closes
+   * the shift on the old till, lets it sync, and enters the same code again.
+   */
+  | 'replacement_blocked';
 
 /**
  * Result returned to the renderer after a submit. Discriminated on
@@ -110,7 +117,8 @@ export type PairingSubmitResult =
         | 'network_error'
         | 'unknown_error'
         | 'session_active'
-        | 'terminal_already_paired';
+        | 'terminal_already_paired'
+        | 'replacement_blocked';
     };
 
 /**

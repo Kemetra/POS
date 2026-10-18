@@ -80,6 +80,18 @@ export const SESSION_ACTIVE_MESSAGE = 'أنهِ البيع الحالي وسجّ
 export const TERMINAL_ALREADY_PAIRED_MESSAGE = 'هذا الجهاز مربوط بالفعل.';
 
 /**
+ * Message for `outcome: 'replacement_blocked'` (HTTP 409 REPLACEMENT_BLOCKED,
+ * RT-367 / RT-591): the replaced terminal still has an open shift. The code
+ * stays pending, so the recovery is to close the shift on the old till, let it
+ * sync, and enter the same code again. The contract also uses this code when
+ * the replaced device was retired (retrying cannot succeed) and never says
+ * which case it is, so the copy ends with an escalation line. Owner-approved
+ * wording (2026-10-18).
+ */
+export const REPLACEMENT_BLOCKED_MESSAGE =
+  'لا يمكن الربط الآن: الجهاز القديم ما زالت عليه وردية مفتوحة. أغلق الوردية على الجهاز القديم وانتظر حتى تكتمل المزامنة، ثم أدخل الرمز نفسه مرة أخرى. إن استمرت المشكلة فاطلب من المشرف.';
+
+/**
  * Client-side validation copy for an empty / whitespace-only submit.
  * Surfaces visibly via `role="status"` so the operator sees a reason
  * instead of a silent no-op (T045).
@@ -103,12 +115,13 @@ export const RECHECK_UNREACHABLE_MESSAGE = 'تعذّر الوصول إلى ال�
 /**
  * Resolve a `PairingOutcome` to its operator-facing message.
  *
- * Covers all ten `PairingOutcome` values:
+ * Covers all eleven `PairingOutcome` values:
  *   - US3: invalid_code / expired_code / already_paired
  *   - US4: branch_mismatch
  *   - US5: rate_limited
  *   - T074: network_error / unknown_error
  *   - RT-215: session_active / terminal_already_paired
+ *   - RT-591: replacement_blocked
  *   - success: generic fallback (form navigates before this is rendered)
  */
 /**
@@ -127,6 +140,7 @@ const MESSAGE_FOR: Readonly<Record<PairingOutcome, string>> = {
   unknown_error: UNKNOWN_ERROR_MESSAGE,
   session_active: SESSION_ACTIVE_MESSAGE,
   terminal_already_paired: TERMINAL_ALREADY_PAIRED_MESSAGE,
+  replacement_blocked: REPLACEMENT_BLOCKED_MESSAGE,
 };
 
 export function messageFor(outcome: PairingOutcome): string {

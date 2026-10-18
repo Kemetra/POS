@@ -77,6 +77,7 @@ export interface PairingAttemptLogRecord {
     | 'already_paired'
     | 'branch_mismatch'
     | 'rate_limited'
+    | 'replacement_blocked'
     | 'network_error'
     | 'unknown_error';
   /** ISO-8601, second precision. */
@@ -271,7 +272,10 @@ export function createPairingService(deps: CreatePairingServiceOptions): Pairing
         case 'invalid_code':
         case 'expired_code':
         case 'already_paired':
-        case 'branch_mismatch': {
+        case 'branch_mismatch':
+        // RT-591: the code stays pending server-side; no store call, so a
+        // retry with the same code is just another submit.
+        case 'replacement_blocked': {
           pairingLog({ event: 'pairing_attempt', outcome, at: nowIso() });
           emitBreadcrumb(outcome, pairResult.status);
           return { outcome };
