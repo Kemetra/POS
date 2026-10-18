@@ -123,18 +123,6 @@ describe('RT-278 — the opening float', () => {
       expect(bridge.open).toHaveBeenCalledWith({ openingFloatMinor: 10_000_000 });
     });
   });
-
-  it("main's amount_out_of_range shows the line marked invalid, not a retry line", async () => {
-    const bridge = fakeShiftBridge();
-    bridge.open.mockResolvedValue({ kind: 'refused', reason: 'amount_out_of_range' });
-    renderRoute(bridge);
-    await screen.findByLabelText(SHIFT_COPY.floatLabel);
-    await expectMainRefusalMarksEntry({
-      label: SHIFT_COPY.floatLabel,
-      value: '500',
-      commit: SHIFT_COPY.openCommit,
-    });
-  });
 });
 
 describe('RT-278 — pay-in and pay-out', () => {
@@ -164,20 +152,6 @@ describe('RT-278 — pay-in and pay-out', () => {
       });
     });
   });
-
-  it("main's amount_out_of_range on a pay-in shows the line marked invalid", async () => {
-    const bridge = openBridge();
-    bridge.payIn.mockResolvedValue({ kind: 'refused', reason: 'amount_out_of_range' });
-    const { dialog } = await openDialog('payIn', bridge);
-    await expectMainRefusalMarksEntry({
-      label: SHIFT_COPY.amountLabel,
-      value: '25',
-      commit: SHIFT_COPY.record,
-      scope: dialog,
-    });
-    // The dialog stays open for the correction.
-    expect(screen.getByRole('dialog')).toBeInTheDocument();
-  });
 });
 
 describe('RT-278 — the blind-count close', () => {
@@ -204,18 +178,56 @@ describe('RT-278 — the blind-count close', () => {
       expect(bridge.close).toHaveBeenCalledWith({ countedCashMinor: 100_000_000 });
     });
   });
+});
 
-  it("main's amount_out_of_range on the close shows the line marked invalid, with no approval step", async () => {
-    const bridge = openBridge();
-    bridge.close.mockResolvedValue({ kind: 'refused', reason: 'amount_out_of_range' });
-    const { panel } = await startClose(bridge);
-    await expectMainRefusalMarksEntry({
+describe("RT-278 — main's own amount_out_of_range", () => {
+  const REFUSED = { kind: 'refused', reason: 'amount_out_of_range' } as const;
+  const CASES = [
+    {
+      entry: 'the opening float',
+      bridge: () => fakeShiftBridge(),
+      refuse: (b: FakeShiftBridge) => b.open.mockResolvedValue(REFUSED),
+      openDialog: null,
+      label: SHIFT_COPY.floatLabel,
+      value: '500',
+      commit: SHIFT_COPY.openCommit,
+      // No dialog was open, and none opens.
+      dialogAfter: false,
+    },
+    {
+      entry: 'a pay-in',
+      bridge: openBridge,
+      refuse: (b: FakeShiftBridge) => b.payIn.mockResolvedValue(REFUSED),
+      openDialog: SHIFT_COPY.payIn,
+      label: SHIFT_COPY.amountLabel,
+      value: '25',
+      commit: SHIFT_COPY.record,
+      // The movement dialog stays open for the correction.
+      dialogAfter: true,
+    },
+    {
+      entry: 'the count',
+      bridge: openBridge,
+      refuse: (b: FakeShiftBridge) => b.close.mockResolvedValue(REFUSED),
+      openDialog: null,
       label: SHIFT_COPY.countLabel,
       value: '515',
       commit: SHIFT_COPY.closeCommit,
-      scope: panel,
-    });
-    // No manager approval step opens for it.
-    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
-  });
+      // No manager approval step opens for it.
+      dialogAfter: false,
+    },
+  ];
+
+  it.each(CASES)(
+    '$entry: the line marked invalid, the amount kept, focus back, never a retry line',
+    async (c) => {
+      const bridge = c.bridge();
+      c.refuse(bridge);
+      renderRoute(bridge);
+      if (c.openDialog !== null) press(c.openDialog, await screen.findByTestId('shift-actions'));
+      await screen.findByLabelText(c.label);
+      await expectMainRefusalMarksEntry({ label: c.label, value: c.value, commit: c.commit });
+      expect(screen.queryByRole('dialog') !== null).toBe(c.dialogAfter);
+    },
+  );
 });
