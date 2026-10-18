@@ -535,7 +535,7 @@ export function createOfflineGrantStore(deps: OfflineGrantStoreDeps): OfflineGra
   /** F3 (10893): a throwing logger never escapes, and never aborts a write. */
   function log(level: 'info' | 'warn', fields: Record<string, string | number>): void {
     try {
-      deps.logger?.[level](fields, String(fields['event']).replace(/\./g, ' '));
+      deps.logger?.[level](fields, String(fields['event']).replaceAll(/\./g, ' '));
     } catch {
       // Logging is best-effort.
     }

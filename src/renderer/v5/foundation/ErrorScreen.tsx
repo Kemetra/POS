@@ -19,7 +19,7 @@ function reloadRenderer(): void {
 
 /** Eight hex characters: short enough to read aloud to a manager. */
 function newSupportRef(): string {
-  return globalThis.crypto.randomUUID().replace(/-/g, '').slice(0, 8).toUpperCase();
+  return globalThis.crypto.randomUUID().replaceAll(/-/g, '').slice(0, 8).toUpperCase();
 }
 
 /** A loggable kind for the error: never its message, which may carry internals. */

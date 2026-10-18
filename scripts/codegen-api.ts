@@ -111,7 +111,7 @@ export async function generateApiTypes(options: GenerateApiTypesOptions): Promis
   const ast = await openapiTS(source, FIXED_OPTIONS);
   const body = astToString(ast);
   // Force LF: replace any CRLF the lib (or the tsx runtime) may emit on Windows.
-  const normalized = body.replace(/\r\n/g, '\n');
+  const normalized = body.replaceAll(/\r\n/g, '\n');
   // Single trailing newline, deterministic.
   const ensureTrailingLf = normalized.endsWith('\n') ? normalized : normalized + '\n';
   const finalText = HEADER + ensureTrailingLf;
