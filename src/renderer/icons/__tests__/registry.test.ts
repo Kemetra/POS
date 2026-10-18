@@ -3,7 +3,7 @@ import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 import { FLUENT_PATHS } from '../fluent-paths';
-import { ICON_NAMES, ICON_REGISTRY, assetKey, type IconName } from '../registry';
+import { ICON_NAMES, ICON_REGISTRY, assetKey, type IconGrid, type IconName } from '../registry';
 
 /**
  * RT-692 (doc 25 IC-1) — the semantic icon registry. Names are meanings, the
@@ -150,19 +150,18 @@ describe('icon registry grids (doc 25 §2 rule 7, §6)', () => {
   });
 });
 
+/** Every vendored key the registry declares: asset(s) × declared grids × style. */
 function declaredAssetKeys(): Set<string> {
-  const keys = new Set<string>();
-  for (const name of ICON_NAMES) {
-    const entry = ICON_REGISTRY[name];
-    const assets = 'rtlAsset' in entry ? [entry.asset, entry.rtlAsset] : [entry.asset];
-    for (const asset of assets) {
-      for (const grid of entry.regular) keys.add(assetKey(asset, grid, 'regular'));
-      if ('filled' in entry) {
-        for (const grid of entry.filled) keys.add(assetKey(asset, grid, 'filled'));
-      }
-    }
-  }
-  return keys;
+  return new Set(ICON_NAMES.flatMap((name) => entryAssetKeys(ICON_REGISTRY[name])));
+}
+
+function entryAssetKeys(entry: (typeof ICON_REGISTRY)[IconName]): string[] {
+  const assets = 'rtlAsset' in entry ? [entry.asset, entry.rtlAsset] : [entry.asset];
+  const filled: readonly IconGrid[] = 'filled' in entry ? entry.filled : [];
+  return assets.flatMap((asset) => [
+    ...entry.regular.map((grid) => assetKey(asset, grid, 'regular')),
+    ...filled.map((grid) => assetKey(asset, grid, 'filled')),
+  ]);
 }
 
 describe('Fluent licence (doc 25 §5)', () => {
