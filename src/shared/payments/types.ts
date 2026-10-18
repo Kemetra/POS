@@ -95,8 +95,7 @@ export const REFUSAL_REASONS = [
   'invalid_input',
   'non_cash_overpayment_refused',
   'tender_not_yet_supported',
-  // RT-700 (P-26-1): card is outside the pilot — `POS_PULSE_FEATURE_CARD_TENDER`
-  // is off, so main refuses `tender.apply` with `external_card_terminal`.
+  // RT-700 (P-26-1): a card tender while `POS_PULSE_FEATURE_CARD_TENDER` is off.
   'card_tender_disabled',
   'line_not_applied',
   'dependency_unavailable',

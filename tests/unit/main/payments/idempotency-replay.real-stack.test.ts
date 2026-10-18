@@ -14,28 +14,18 @@
  *     (attempt cancelled, line reversed, voucher reversal pending)
  */
 
-import { describe, expect, it, beforeAll, beforeEach } from 'vitest';
-import initSqlJs, { type Database as SqlJsDatabase, type SqlJsStatic } from 'sql.js';
-import { readdirSync, readFileSync } from 'fs';
-import path from 'path';
-import { fileURLToPath } from 'url';
+import { describe, expect, it } from 'vitest';
 
-import { bindPaymentActionOutboxRepository } from '../../../../src/main/payments/repositories/payment-action-outbox.repository.js';
-import { bindPaymentAttemptsRepository } from '../../../../src/main/payments/repositories/payment-attempts.repository.js';
-import { bindPaymentTenderLinesRepository } from '../../../../src/main/payments/repositories/payment-tender-lines.repository.js';
-import { createPaymentAttemptFsm } from '../../../../src/main/payments/fsm/payment-attempt-fsm.js';
-import { createTenderLineFsm } from '../../../../src/main/payments/fsm/tender-line-fsm.js';
-import { createIdempotencyHelper } from '../../../../src/main/payments/idempotency.js';
 import { createPaymentsStartHandler } from '../../../../src/main/payments/handlers/payments-start.js';
 import { createPaymentsConfirmHandler } from '../../../../src/main/payments/handlers/payments-confirm.js';
 import { realSettlementDeps } from './__fixtures__/real-settlement-deps.js';
+import { bindRealPaymentsCore, freshMigratedDbPerTest } from './__fixtures__/real-payments-core.js';
 import { createPaymentsCancelHandler } from '../../../../src/main/payments/handlers/payments-cancel.js';
 import { createPaymentsForceFailHandler } from '../../../../src/main/payments/handlers/payments-force-fail.js';
 import { createTenderApplyHandler } from '../../../../src/main/payments/handlers/tender-apply.js';
 import { createVouchersValidateHandler } from '../../../../src/main/payments/handlers/vouchers-validate.js';
 import { createTenderReverseHandler } from '../../../../src/main/payments/handlers/tender-reverse.js';
 import { hashActionPayload } from '../../../../src/main/payments/action-payload.js';
-import { makeSqlJsHandle } from '../cart/__helpers__/sql-js-handle.js';
 import { makeAuditEmitterDouble, makeSession } from './__fixtures__/bridge-handler-deps.js';
 import type { OperatorSessionForPayments } from '../../../../src/main/payments/require-operator-session.js';
 import type {
@@ -50,33 +40,13 @@ import type {
 type ValidateVoucherFn = (input: ValidateVoucherInput) => Promise<ValidateVoucherOutcome>;
 type ReverseVoucherFn = (input: ReverseVoucherInput) => Promise<ReverseVoucherOutcome>;
 
-const __dirnameForFile = path.dirname(fileURLToPath(import.meta.url));
-const REPO_ROOT = path.resolve(__dirnameForFile, '..', '..', '..', '..');
-const MIGRATION_DIR = path.join(REPO_ROOT, 'migrations');
-const MIGRATIONS = readdirSync(MIGRATION_DIR)
-  .filter((f) => f.endsWith('.sql'))
-  .sort()
-  .map((f) => readFileSync(path.join(MIGRATION_DIR, f), 'utf8'));
-
-let SQL: SqlJsStatic;
-beforeAll(async () => {
-  SQL = await initSqlJs();
-});
-
-let db: SqlJsDatabase;
-beforeEach(() => {
-  db = new SQL.Database();
-  db.exec('PRAGMA foreign_keys = ON;');
-  for (const sql of MIGRATIONS) db.exec(sql);
-});
+const currentDb = freshMigratedDbPerTest();
 
 // ── Stack ────────────────────────────────────────────────────────────────────
 
 interface StackOptions {
   validateVoucher?: ValidateVoucherFn;
   reverseVoucher?: ReverseVoucherFn;
-  /** RT-700: the card-tender flag; on unless a test says otherwise. */
-  cardTender?: boolean;
 }
 
 /** V-A answers every validate with the same capped value. */
@@ -91,19 +61,10 @@ function cappedVoucherAuthority(applied_amount_minor: number): ValidateVoucherFn
 }
 
 function build(options: StackOptions = {}) {
-  const handle = makeSqlJsHandle(db);
-  const attempts = bindPaymentAttemptsRepository(handle);
-  const lines = bindPaymentTenderLinesRepository(handle);
-  const outbox = bindPaymentActionOutboxRepository(handle);
-  const tenderLineFsm = createTenderLineFsm({ db: handle, attempts, lines, outbox });
-  const paymentAttemptFsm = createPaymentAttemptFsm({ db: handle, attempts, lines, outbox });
-  const idempotency = createIdempotencyHelper({ outbox });
+  const { handle, attempts, lines, outbox, tenderLineFsm, paymentAttemptFsm, idempotency } =
+    bindRealPaymentsCore(currentDb());
   const auditEmitter = makeAuditEmitterDouble();
-  const {
-    validateVoucher = cappedVoucherAuthority(0),
-    reverseVoucher,
-    cardTender = true,
-  } = options;
+  const { validateVoucher = cappedVoucherAuthority(0), reverseVoucher } = options;
   let session: OperatorSessionForPayments = makeSession();
   let n = 0;
   const shared = {
@@ -118,7 +79,6 @@ function build(options: StackOptions = {}) {
   return {
     outbox,
     lines,
-    auditEmitter,
     tenderLineFsm,
     useSession(next: OperatorSessionForPayments): void {
       session = next;
@@ -131,12 +91,13 @@ function build(options: StackOptions = {}) {
       attemptHasLiveTender: () => false,
     }),
     apply: createTenderApplyHandler({
-      isCardTenderEnabled: () => cardTender,
       ...shared,
       linesRepo: lines,
       tenderLineFsm,
       validateVoucher,
       uuid,
+      // RT-700: card tender flag on — the card replay cases apply a card line.
+      isCardTenderEnabled: () => true,
     }),
     validate: createVouchersValidateHandler({
       ...shared,
@@ -502,39 +463,5 @@ describe('RT-339 — cash with nothing owed, through the real tender.apply handl
     expect(original.kind).toBe('ok');
     const settled = await s.confirm({ payment_attempt_id: attempt, idempotency_key: 'k-confirm' });
     expect(settled.kind).toBe('ok');
-  });
-});
-
-describe('RT-700 — card with the flag off, through the real tender.apply handler', () => {
-  it('is refused and audited once; no line, no outbox row; cash still applies', async () => {
-    const s = build({ cardTender: false });
-    const attempt = await startAttempt(s, 'cart-700');
-    const card = {
-      payment_attempt_id: attempt,
-      tender_type: 'external_card_terminal' as const,
-      amount_applied_minor: 1500,
-      external_reference: 'AB12XY',
-      idempotency_key: 'k-card',
-    };
-
-    expect(await s.apply(card)).toEqual({ kind: 'refused', reason: 'card_tender_disabled' });
-    expect(s.lines.findByAttempt(attempt)).toHaveLength(0);
-    expect(s.outbox.findByActionId('k-card')).toBeUndefined();
-    const refused = s.auditEmitter.captured.filter((e) => e.action_category === 'tender.refused');
-    expect(refused).toHaveLength(1);
-    expect(JSON.stringify(refused)).not.toContain('AB12XY');
-
-    // A same-key retry is evaluated again and refused again.
-    expect(await s.apply(card)).toEqual({ kind: 'refused', reason: 'card_tender_disabled' });
-    expect(s.lines.findByAttempt(attempt)).toHaveLength(0);
-
-    const cash = await s.apply({
-      payment_attempt_id: attempt,
-      tender_type: 'cash',
-      amount_applied_minor: 1500,
-      idempotency_key: 'k-cash',
-    });
-    expect(cash.kind).toBe('ok');
-    expect(s.lines.findByAttempt(attempt)).toHaveLength(1);
   });
 });

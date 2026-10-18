@@ -26,12 +26,6 @@ export interface FeatureFlagsState {
    */
   voucherTender: boolean;
   /**
-   * RT-700 (P-26-1): enables the external card terminal tender at checkout.
-   * Fail-closed default: false — card is outside the pilot (RT-536 D4); with it
-   * off the «بطاقة» tile is not rendered. Main refuses a card `tender.apply` too.
-   */
-  cardTender: boolean;
-  /**
    * RT-15 S3: enables the manager/admin return flow at /app/returns.
    * Fail-closed default: false (AC1). Main gates every `returns.*` call too.
    */
@@ -49,6 +43,12 @@ export interface FeatureFlagsState {
    * `saleVoid.*` call is made. Main refuses every call on its own read too.
    */
   saleVoid: boolean;
+  /**
+   * RT-700: renders the «بطاقة» tender tile at checkout. Fail-closed default:
+   * false — card is out of the pilot (RT-536 D4). Main refuses a card
+   * `tender.apply` on its own read too (`card_tender_disabled`).
+   */
+  cardTender: boolean;
   /** Whether the flag map has been hydrated from main (vs. boot defaults). */
   hydrated: boolean;
 }
@@ -60,10 +60,10 @@ export interface FeatureFlagsStore extends FeatureFlagsState {
     saleFinalization?: boolean;
     productSearch?: boolean;
     voucherTender?: boolean;
-    cardTender?: boolean;
     returns?: boolean;
     shiftCashup?: boolean;
     saleVoid?: boolean;
+    cardTender?: boolean;
   }): void;
   reset(): void;
 }
@@ -74,10 +74,10 @@ const INITIAL: FeatureFlagsState = {
   saleFinalization: false,
   productSearch: false,
   voucherTender: false,
-  cardTender: false,
   returns: false,
   shiftCashup: false,
   saleVoid: false,
+  cardTender: false,
   hydrated: false,
 };
 
@@ -90,10 +90,10 @@ export const useFeatureFlagsStore = create<FeatureFlagsStore>((set) => ({
       saleFinalization: flags.saleFinalization === true,
       productSearch: flags.productSearch === true,
       voucherTender: flags.voucherTender === true,
-      cardTender: flags.cardTender === true,
       returns: flags.returns === true,
       shiftCashup: flags.shiftCashup === true,
       saleVoid: flags.saleVoid === true,
+      cardTender: flags.cardTender === true,
       hydrated: true,
     });
   },

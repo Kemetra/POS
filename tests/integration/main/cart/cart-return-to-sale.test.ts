@@ -244,11 +244,12 @@ function buildPaymentHandlers(
       paymentAttemptFsm,
     }),
     cancel: createPaymentsCancelHandler({ ...writeDeps, paymentAttemptFsm }),
+    // RT-700: card tender flag on — these cases use the card terminal.
     apply: createTenderApplyHandler({
-      isCardTenderEnabled: () => true,
       ...writeDeps,
       tenderLineFsm,
       uuid,
+      isCardTenderEnabled: () => true,
     }),
   };
 }

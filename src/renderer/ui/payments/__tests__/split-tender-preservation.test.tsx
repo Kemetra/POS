@@ -159,7 +159,7 @@ beforeEach(() => {
   usePaymentStore.getState().mount(makeEnvelope());
   useFeatureFlagsStore
     .getState()
-    .hydrate({ cardTender: true, cart: true, payments: true, productSearch: true });
+    .hydrate({ cart: true, payments: true, productSearch: true, cardTender: true });
 });
 
 afterEach(() => {

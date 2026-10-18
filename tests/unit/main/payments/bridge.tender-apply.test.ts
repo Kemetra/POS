@@ -39,7 +39,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import { createTenderApplyHandler } from '../../../../src/main/payments/handlers/tender-apply.js';
-import type { TenderApplyHandlerDeps } from '../../../../src/main/payments/handlers/tender-apply.js';
 
 import {
   makeAttemptRow,
@@ -53,11 +52,6 @@ import {
   makeTenderLineFsmDouble,
 } from './__fixtures__/bridge-handler-deps.js';
 import type { TenderApplyRequest } from '../../../../src/shared/bridge-api.js';
-
-/** RT-700: the card flag is on here; its off state is in bridge.tender-apply.card-flag.test.ts. */
-function createHandler(deps: Omit<TenderApplyHandlerDeps, 'isCardTenderEnabled'>) {
-  return createTenderApplyHandler({ ...deps, isCardTenderEnabled: () => true });
-}
 
 function validRequest(overrides: Partial<TenderApplyRequest> = {}): TenderApplyRequest {
   return {
@@ -79,7 +73,7 @@ function setup() {
   const auditEmitter = makeAuditEmitterDouble();
   const uuid = vi.fn<() => string>(() => 'tl-1');
   const clock = vi.fn<() => Date>(() => new Date('2026-05-23T11:00:01.000Z'));
-  const handler = createHandler({
+  const handler = createTenderApplyHandler({
     getCurrentSession: sessionSource.getCurrentSession,
     attemptsRepo,
     linesRepo,
@@ -88,6 +82,8 @@ function setup() {
     auditEmitter,
     uuid,
     clock,
+    // RT-700: card tender flag on; the flag-off path is card-tender-flag.real-stack.test.ts.
+    isCardTenderEnabled: () => true,
   });
   return {
     sessionSource,
@@ -104,7 +100,7 @@ function setup() {
 
 describe('T105 — tender.apply bridge handler', () => {
   it('refuses no_session when there is no active session', async () => {
-    const handler = createHandler({
+    const handler = createTenderApplyHandler({
       getCurrentSession: makeSessionSource(null).getCurrentSession,
       attemptsRepo: makeAttemptsRepoDouble(),
       linesRepo: makeLinesRepoDouble(),
@@ -123,7 +119,7 @@ describe('T105 — tender.apply bridge handler', () => {
   it('refuses tenant_isolation when the attempt is in another tenant scope', async () => {
     const sessionSource = makeSessionSource(makeSession());
     const row = makeAttemptRow({ tenant_id: 'tenant-OTHER' });
-    const handler = createHandler({
+    const handler = createTenderApplyHandler({
       getCurrentSession: sessionSource.getCurrentSession,
       attemptsRepo: makeAttemptsRepoDouble([row]),
       linesRepo: makeLinesRepoDouble(),
@@ -142,7 +138,7 @@ describe('T105 — tender.apply bridge handler', () => {
   it('refuses attempt_terminal when the attempt is settled / cancelled / failed', async () => {
     const sessionSource = makeSessionSource(makeSession());
     const row = makeAttemptRow({ state: 'settled' });
-    const handler = createHandler({
+    const handler = createTenderApplyHandler({
       getCurrentSession: sessionSource.getCurrentSession,
       attemptsRepo: makeAttemptsRepoDouble([row]),
       linesRepo: makeLinesRepoDouble(),
@@ -250,7 +246,7 @@ describe('T105 — tender.apply bridge handler', () => {
 
   it('refuses idempotency_payload_mismatch when the helper signals mismatch', async () => {
     const sessionSource = makeSessionSource(makeSession());
-    const handler = createHandler({
+    const handler = createTenderApplyHandler({
       getCurrentSession: sessionSource.getCurrentSession,
       attemptsRepo: makeAttemptsRepoDouble([makeAttemptRow()]),
       linesRepo: makeLinesRepoDouble(),
@@ -279,7 +275,7 @@ describe('T105 — tender.apply bridge handler', () => {
       }),
     ]);
     const fsm = makeTenderLineFsmDouble();
-    const handler = createHandler({
+    const handler = createTenderApplyHandler({
       getCurrentSession: sessionSource.getCurrentSession,
       attemptsRepo: makeAttemptsRepoDouble([makeAttemptRow()]),
       linesRepo,
@@ -346,7 +342,7 @@ describe('T105 — tender.apply bridge handler', () => {
     const auditEmitter = makeAuditEmitterDouble();
 
     // Replay branch — same idempotency_key, identical payload → no audit.
-    const replayHandler = createHandler({
+    const replayHandler = createTenderApplyHandler({
       getCurrentSession: sessionSource.getCurrentSession,
       attemptsRepo: makeAttemptsRepoDouble([makeAttemptRow()]),
       linesRepo,
@@ -360,7 +356,7 @@ describe('T105 — tender.apply bridge handler', () => {
     expect(auditEmitter.captured).toHaveLength(0);
 
     // Mismatch branch — same idempotency_key, divergent payload → no audit.
-    const mismatchHandler = createHandler({
+    const mismatchHandler = createTenderApplyHandler({
       getCurrentSession: sessionSource.getCurrentSession,
       attemptsRepo: makeAttemptsRepoDouble([makeAttemptRow()]),
       linesRepo: makeLinesRepoDouble(),
@@ -426,7 +422,7 @@ describe('T263 — tender.apply voucher branch (Wave 4)', () => {
     );
     const uuid = vi.fn(() => 'tl-v');
     const clock = vi.fn(() => new Date('2026-05-25T10:00:01.000Z'));
-    const handler = createHandler({
+    const handler = createTenderApplyHandler({
       getCurrentSession: sessionSource.getCurrentSession,
       attemptsRepo,
       linesRepo,
@@ -527,7 +523,7 @@ describe('tender.apply — branch-coverage backfill', () => {
       }),
     ]);
     const fsm = makeTenderLineFsmDouble();
-    const handler = createHandler({
+    const handler = createTenderApplyHandler({
       getCurrentSession: sessionSource.getCurrentSession,
       attemptsRepo: makeAttemptsRepoDouble([makeAttemptRow()]),
       linesRepo,
@@ -582,7 +578,7 @@ describe('tender.apply — branch-coverage backfill', () => {
         redemption_intent_token: 'opaque-intent-token-XYZ',
       }),
     );
-    const handler = createHandler({
+    const handler = createTenderApplyHandler({
       getCurrentSession: sessionSource.getCurrentSession,
       attemptsRepo: makeAttemptsRepoDouble([row]),
       linesRepo,

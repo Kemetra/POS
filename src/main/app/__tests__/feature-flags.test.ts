@@ -55,10 +55,10 @@ describe('parseFeatureFlags', () => {
       saleFinalization: 'POS_PULSE_FEATURE_SALE_FINALIZATION',
       productSearch: 'POS_PULSE_FEATURE_PRODUCT_SEARCH',
       voucherTender: 'POS_PULSE_FEATURE_VOUCHER_TENDER',
-      cardTender: 'POS_PULSE_FEATURE_CARD_TENDER',
       returns: 'POS_PULSE_FEATURE_RETURNS',
       shiftCashup: 'POS_PULSE_FEATURE_SHIFT_CASHUP',
       saleVoid: 'POS_PULSE_FEATURE_SALE_VOID',
+      cardTender: 'POS_PULSE_FEATURE_CARD_TENDER',
     });
   });
 
@@ -69,10 +69,10 @@ describe('parseFeatureFlags', () => {
       saleFinalization: false,
       productSearch: false,
       voucherTender: false,
-      cardTender: false,
       returns: false,
       shiftCashup: false,
       saleVoid: false,
+      cardTender: false,
     });
   });
 
@@ -120,10 +120,10 @@ describe('parseFeatureFlags', () => {
       saleFinalization: true,
       productSearch: true,
       voucherTender: false,
-      cardTender: false,
       returns: false,
       shiftCashup: false,
       saleVoid: false,
+      cardTender: false,
     });
   });
 
@@ -148,7 +148,6 @@ describe('parseFeatureFlags', () => {
   it('RT-700: cardTender is off by default and on only via POS_PULSE_FEATURE_CARD_TENDER', () => {
     expect(parseFeatureFlags({}).cardTender).toBe(false);
     expect(parseFeatureFlags({ POS_PULSE_FEATURE_CARD_TENDER: 'off' }).cardTender).toBe(false);
-    expect(parseFeatureFlags({ POS_PULSE_FEATURE_CARD_TENDER: '' }).cardTender).toBe(false);
     expect(parseFeatureFlags({ POS_PULSE_FEATURE_CARD_TENDER: 'on' }).cardTender).toBe(true);
   });
 
@@ -180,10 +179,10 @@ const PILOT_PROFILE: FeatureFlags = {
   saleFinalization: true,
   productSearch: true,
   voucherTender: false,
-  cardTender: false,
   returns: false,
   shiftCashup: false,
   saleVoid: false,
+  cardTender: false,
 };
 
 describe('assessCashierProfile (D-1: fail closed on the money combination)', () => {

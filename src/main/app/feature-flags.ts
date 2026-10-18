@@ -33,10 +33,10 @@ export const FEATURE_FLAG_ENV: Readonly<Record<keyof FeatureFlags, string>> = Ob
   saleFinalization: 'POS_PULSE_FEATURE_SALE_FINALIZATION',
   productSearch: 'POS_PULSE_FEATURE_PRODUCT_SEARCH',
   voucherTender: 'POS_PULSE_FEATURE_VOUCHER_TENDER',
-  cardTender: 'POS_PULSE_FEATURE_CARD_TENDER',
   returns: 'POS_PULSE_FEATURE_RETURNS',
   shiftCashup: 'POS_PULSE_FEATURE_SHIFT_CASHUP',
   saleVoid: 'POS_PULSE_FEATURE_SALE_VOID',
+  cardTender: 'POS_PULSE_FEATURE_CARD_TENDER',
 });
 
 const TRUTHY_VALUES: ReadonlySet<string> = new Set(['1', 'true', 'yes', 'on']);
@@ -54,10 +54,10 @@ export function parseFeatureFlags(env: Readonly<Record<string, string | undefine
     saleFinalization: isTruthyFlag(env[FEATURE_FLAG_ENV.saleFinalization]),
     productSearch: isTruthyFlag(env[FEATURE_FLAG_ENV.productSearch]),
     voucherTender: isTruthyFlag(env[FEATURE_FLAG_ENV.voucherTender]),
-    cardTender: isTruthyFlag(env[FEATURE_FLAG_ENV.cardTender]),
     returns: isTruthyFlag(env[FEATURE_FLAG_ENV.returns]),
     shiftCashup: isTruthyFlag(env[FEATURE_FLAG_ENV.shiftCashup]),
     saleVoid: isTruthyFlag(env[FEATURE_FLAG_ENV.saleVoid]),
+    cardTender: isTruthyFlag(env[FEATURE_FLAG_ENV.cardTender]),
   };
 }
 

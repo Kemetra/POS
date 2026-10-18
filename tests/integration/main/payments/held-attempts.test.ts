@@ -118,13 +118,7 @@ function boot() {
       checkCartForPayment: () => ({ kind: 'ok' }),
       attemptHasLiveTender: bindAttemptHasLiveTender(handle),
     }),
-    apply: createTenderApplyHandler({
-      isCardTenderEnabled: () => true,
-      ...shared,
-      linesRepo: lines,
-      tenderLineFsm,
-      uuid,
-    }),
+    apply: createTenderApplyHandler({ ...shared, linesRepo: lines, tenderLineFsm, uuid }),
   };
 }
 type App = ReturnType<typeof boot>;

@@ -230,13 +230,7 @@ function boot(opts: BootOptions = {}) {
       checkCartForPayment: bindCartPaymentEligibility(handle),
       attemptHasLiveTender: () => false,
     }),
-    apply: createTenderApplyHandler({
-      isCardTenderEnabled: () => true,
-      ...shared,
-      linesRepo: lines,
-      tenderLineFsm,
-      uuid,
-    }),
+    apply: createTenderApplyHandler({ ...shared, linesRepo: lines, tenderLineFsm, uuid }),
     confirm: createPaymentsConfirmHandler({
       ...shared,
       linesRepo: lines,

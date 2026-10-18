@@ -77,7 +77,7 @@ function makeEnvelope(subtotalMinor = 5000): PaymentIntentEnvelope {
 
 describe('TenderPicker — v3.5 visual recompose', () => {
   it('renders the three tender options in one radiogroup', () => {
-    render(<TenderPicker envelope={makeEnvelope()} onTenderSelect={vi.fn()} />);
+    render(<TenderPicker envelope={makeEnvelope()} onTenderSelect={vi.fn()} cardEnabled />);
     const grid = screen.getByRole('radiogroup', { name: 'طريقة الدفع' });
     expect(grid).toBeInTheDocument();
     // All three buttons must be children of the grid
@@ -90,7 +90,7 @@ describe('TenderPicker — v3.5 visual recompose', () => {
   });
 
   it('Arabic labels are present on the tender method buttons', () => {
-    render(<TenderPicker envelope={makeEnvelope()} onTenderSelect={vi.fn()} />);
+    render(<TenderPicker envelope={makeEnvelope()} onTenderSelect={vi.fn()} cardEnabled />);
     // v3.5 prototype uses Arabic-first labels: نقدي / بطاقة / قسيمة
     expect(screen.getByTestId('tender-cash')).toHaveTextContent('نقدي');
     expect(screen.getByTestId('tender-external-card')).toHaveTextContent('بطاقة');
@@ -99,7 +99,7 @@ describe('TenderPicker — v3.5 visual recompose', () => {
 
   it('activating a tender tile reports the method to the parent', () => {
     const onSelect = vi.fn();
-    render(<TenderPicker envelope={makeEnvelope()} onTenderSelect={onSelect} />);
+    render(<TenderPicker envelope={makeEnvelope()} onTenderSelect={onSelect} cardEnabled />);
     const cashBtn = screen.getByTestId('tender-cash');
     fireEvent.click(cashBtn);
     expect(onSelect).toHaveBeenCalledWith('cash');
@@ -353,7 +353,7 @@ describe('VoucherEntry — v3.5 visual recompose (voucher-field, voucher-error)'
 
 describe('NEGATIVE — rejected prototype behaviours are absent', () => {
   it('N1a: insurance method label (Arabic تأمين) never renders in TenderPicker', () => {
-    render(<TenderPicker envelope={makeEnvelope()} onTenderSelect={vi.fn()} />);
+    render(<TenderPicker envelope={makeEnvelope()} onTenderSelect={vi.fn()} cardEnabled />);
     // Should NOT contain the insurance Arabic label
     expect(screen.queryByText('تأمين')).toBeNull();
     // Should NOT contain the credit Arabic label
@@ -361,13 +361,13 @@ describe('NEGATIVE — rejected prototype behaviours are absent', () => {
   });
 
   it('N1b: insurance / credit method buttons never render (no data-testid for them)', () => {
-    render(<TenderPicker envelope={makeEnvelope()} onTenderSelect={vi.fn()} />);
+    render(<TenderPicker envelope={makeEnvelope()} onTenderSelect={vi.fn()} cardEnabled />);
     expect(screen.queryByTestId('tender-insurance')).toBeNull();
     expect(screen.queryByTestId('tender-credit')).toBeNull();
   });
 
   it('N2: method-grid--four class never appears in the TenderPicker DOM', () => {
-    render(<TenderPicker envelope={makeEnvelope()} onTenderSelect={vi.fn()} />);
+    render(<TenderPicker envelope={makeEnvelope()} onTenderSelect={vi.fn()} cardEnabled />);
     expect(document.querySelector('.method-grid--four')).toBeNull();
   });
 
