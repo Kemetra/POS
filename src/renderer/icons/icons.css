@@ -23,10 +23,11 @@
   --rt-icon-rtl: none;
 }
 
+/* A block box that never shrinks: the box every product glyph had before
+   RT-695 moved it here from the live Sale's global `.v5-icon` rule. */
 .rt-icon {
-  display: inline-block;
-  flex-shrink: 0;
-  vertical-align: middle;
+  display: block;
+  flex: 0 0 auto;
 }
 
 /* A direction-implying meaning flips with the reading direction. */

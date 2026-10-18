@@ -10,7 +10,7 @@ import type { CatalogueSearchState } from '../../stores/catalogueSearchStore';
 import type { ProductSnapshotDisplay } from '../../../shared/catalogue/product-snapshot';
 import { useDebouncedSearch, type DebouncedSearch } from '../../stores/useDebouncedSearch';
 import type { FreshnessState, RefreshFeedback } from '../../sale/useCatalogueFreshness';
-import { V5Icon } from '../foundation/V5Icon';
+import { Icon } from '../../icons/Icon';
 import { LiveSearchResults } from './LiveSearchResults';
 import { SCAN_ANCHOR_ID } from '../../scan/scan-anchor';
 import { formatHumanDateTime } from '../../ui/format/human-format';
@@ -157,7 +157,7 @@ function ScanField(props: Readonly<{ onScan: (barcode: string) => void }>): JSX.
   return (
     <div className="v5-live-scan-field">
       <span aria-hidden="true" className="v5-live-scan-icon">
-        <V5Icon name="scan" size={24} />
+        <Icon name="scan" size="lg" />
       </span>
       <div className="v5-sale-command-input">
         <label htmlFor={SCAN_ANCHOR_ID} className="v5-live-scan-label">
@@ -206,7 +206,7 @@ function SearchField(
   return (
     <div className="v5-sale-search-field">
       <span aria-hidden="true" className="v5-sale-search-icon">
-        <V5Icon name="search" />
+        <Icon name="search" />
       </span>
       <div className="v5-sale-command-input">
         <label htmlFor="v5-live-search">البحث بالاسم أو الباركود</label>

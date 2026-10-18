@@ -23,7 +23,7 @@ import {
 } from './ShiftParts';
 import { ShiftScreen } from './ShiftScreen';
 import { Notice } from '../foundation/Notice';
-import { V5Icon } from '../foundation/V5Icon';
+import { Icon } from '../../icons/Icon';
 
 interface Props {
   /** Tests inject a bridge (null = none); production reads `window.api`. */
@@ -126,7 +126,7 @@ function StatusUnavailable(
         tone="warning"
         action={
           <button type="button" className="v5-shift-btn" onClick={props.onRetry}>
-            <V5Icon name="retry" size={18} />
+            <Icon name="retry" />
             {SHIFT_COPY.retry}
           </button>
         }

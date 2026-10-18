@@ -40,6 +40,8 @@ describe('InventoryPlaceholder', () => {
     expect(link).toHaveTextContent('فحص الكتالوج');
     expect(link).toHaveTextContent('حالة كتالوج الأصناف على هذا الجهاز، والبحث فيه.');
     expect(screen.getByRole('link', { name: /فحص الكتالوج/ })).toBe(link);
+    // RT-695: the tile's magnifier is the registry search glyph (SearchGlyph is gone).
+    expect(link.querySelector('svg[data-icon="search"]')).toHaveAttribute('aria-hidden', 'true');
   });
 
   it('shows no English copy and ignores the retired dev ?state= gallery', () => {

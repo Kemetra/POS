@@ -1,0 +1,5 @@
+/* RT-695 — the brand mark keeps the block box the old `.v5-icon` rule gave it. */
+.v5-brand-cross {
+  display: block;
+  flex: 0 0 auto;
+}

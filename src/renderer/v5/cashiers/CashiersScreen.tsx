@@ -10,7 +10,7 @@ import { ReauthDialog } from '../../ui/operator/ReauthDialog';
 import { REAUTH_COPY, SIGN_IN_REFUSAL_COPY } from '../../ui/operator/messages';
 import { useTerminalLabel } from '../entry/EntryStrip';
 import { Notice } from '../foundation/Notice';
-import { V5Icon } from '../foundation/V5Icon';
+import { Icon } from '../../icons/Icon';
 import { CashierRows } from './CashierRows';
 import { CASHIERS_COPY } from './cashiers-copy';
 import type { RowAction } from './cashiers-model';
@@ -350,7 +350,7 @@ function ListBody({
           testId="cashier-management-error"
           action={
             <button type="button" className="v5-cashiers-btn" disabled={busy} onClick={onRetry}>
-              <V5Icon name="retry" size={18} />
+              <Icon name="retry" />
               {CASHIERS_COPY.retry}
             </button>
           }

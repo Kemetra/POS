@@ -1,5 +1,6 @@
 import { useEffect, type JSX } from 'react';
 
+import { Icon } from '../icons/Icon.js';
 import {
   createScanGuard,
   type ScanGuard,
@@ -99,7 +100,7 @@ export function ScanGuardHost(): JSX.Element | null {
       lang="ar"
     >
       <span aria-hidden="true" className="scan-notice__icon">
-        !
+        <Icon name="status.warning" size="sm" />
       </span>
       <span className="scan-notice__text">{message}</span>
     </div>

@@ -1,6 +1,7 @@
 import type { JSX, ReactNode, Ref } from 'react';
 
-import { V5Icon, type V5IconName } from '../v5/foundation/V5Icon';
+import { Icon } from '../icons/Icon';
+import type { IconName } from '../icons/registry';
 
 /**
  * RT-660 — one Returns step or the journal as a shared v5 manager panel (G6R):
@@ -58,12 +59,12 @@ export function StatePill({
   children,
 }: {
   readonly state: string;
-  readonly icon: V5IconName;
+  readonly icon: IconName;
   readonly children: ReactNode;
 }): JSX.Element {
   return (
     <span className="v5-returns-state" data-state={state}>
-      <V5Icon name={icon} size={16} />
+      <Icon name={icon} size="sm" />
       {children}
     </span>
   );

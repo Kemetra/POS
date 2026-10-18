@@ -1,6 +1,6 @@
 import type { JSX, ReactNode } from 'react';
 
-import { V5Icon } from '../foundation/V5Icon';
+import { Icon } from '../../icons/Icon';
 import { ToneIcon } from '../foundation/ToneIcon';
 import '../foundation/messages.css';
 import { SIGN_IN_COPY, nameInitial } from './entry-copy';
@@ -74,7 +74,7 @@ export function RosterPanel({
           disabled={disabled}
           onClick={onManagerEntry}
         >
-          <V5Icon name="key" />
+          <Icon name="key" />
           {SIGN_IN_COPY.managerEntry}
         </button>
       </div>
@@ -127,7 +127,7 @@ export function BackButton({
       disabled={disabled}
       onClick={onClick}
     >
-      <V5Icon name="back" />
+      <Icon name="back" />
       {SIGN_IN_COPY.back}
     </button>
   );

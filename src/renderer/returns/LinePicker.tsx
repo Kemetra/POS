@@ -89,7 +89,7 @@ function LineRow({ line, currencyCode, quantity, locked, onPick }: LineRowProps)
           }}
         />
       ) : (
-        <StatePill state="done" icon="status-success">
+        <StatePill state="done" icon="status.success">
           أُرجع بالكامل
         </StatePill>
       )}

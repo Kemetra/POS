@@ -1,7 +1,7 @@
 import type { JSX } from 'react';
 import { SCAN_PAUSED_DIALOG_STATUS } from '../../scan/scan-messages';
 import { useModalDialogOpen } from '../../scan/useModalDialogOpen';
-import { V5Icon } from '../foundation/V5Icon';
+import { Icon } from '../../icons/Icon';
 
 /**
  * RT-239 (VNext A2, rule 7) — the visible scan-owner status (15 §5 M-S1).
@@ -32,7 +32,7 @@ export function ScanStatus(props: Readonly<{ available: boolean }>): JSX.Element
   return (
     <output className="v5-live-scan-status" data-state={kind} data-testid="scan-status">
       <span aria-hidden="true" className="v5-live-scan-status-icon">
-        <V5Icon name="scan" />
+        <Icon name="scan" />
       </span>
       <span>{COPY[kind]}</span>
     </output>

@@ -31,11 +31,14 @@ afterEach(() => {
 
 const DIR = resolve(__dirname, '..');
 
-/** Every element under `root` whose class list still names a legacy rt-* class. */
+/**
+ * Every element under `root` whose class list still names a legacy rt-* class.
+ * The icon registry's own `rt-icon*` classes (RT-695) are not legacy.
+ */
 function legacyClassed(root: HTMLElement): string[] {
   return Array.from(root.querySelectorAll('[class]'))
     .flatMap((el) => Array.from(el.classList))
-    .filter((name) => name.startsWith('rt-'));
+    .filter((name) => name.startsWith('rt-') && !name.startsWith('rt-icon'));
 }
 
 function panelOf(headingName: string): HTMLElement {

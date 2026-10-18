@@ -1,4 +1,5 @@
 import type { JSX } from 'react';
+import { Icon } from '../../icons/Icon';
 
 /**
  * RT-243 W1-C (freeze 15 §6 Checkout / cash; VN-B2) — the cash keypad. It
@@ -77,7 +78,7 @@ export function CashKeypad({ valueMinor, onChange }: CashKeypadProps): JSX.Eleme
           onChange(Math.floor(current / 10));
         }}
       >
-        <span aria-hidden="true">⌫</span>
+        <Icon name="backspace" size="lg" />
       </button>
     </div>
   );

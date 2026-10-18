@@ -1,5 +1,6 @@
 import type { JSX } from 'react';
 import type { DemoProduct } from './demo-sale';
+import { Icon } from '../../icons/Icon';
 import { formatHumanCount } from '../../ui/format/human-format';
 
 interface ProductRailProps {
@@ -25,7 +26,7 @@ function ProductRow({ product }: { readonly product: DemoProduct }): JSX.Element
         </span>
         <span className="v5-sale-currency">ج.م</span>
         <span className="v5-sale-add-mark" aria-hidden="true">
-          ＋
+          <Icon name="add" />
         </span>
       </div>
     </li>
@@ -51,7 +52,7 @@ export function ProductRail({ products }: ProductRailProps): JSX.Element {
         <label htmlFor="v5-sale-product-search">البحث بالاسم أو الباركود</label>
         <div className="v5-sale-search-field">
           <span aria-hidden="true" className="v5-sale-search-icon">
-            ⌕
+            <Icon name="search" />
           </span>
           <input
             id="v5-sale-product-search"

@@ -2,7 +2,7 @@ import type { JSX } from 'react';
 
 import type { ReturnJournalView } from '../../shared/returns/types.js';
 import { ToneIcon } from '../v5/foundation/ToneIcon';
-import type { V5IconName } from '../v5/foundation/V5Icon';
+import type { IconName } from '../icons/registry';
 import { ReturnNotice } from './ReturnNotice';
 import { ReturnsPanel, StatePill } from './ReturnsPanel';
 import { formatReturnMoney, formatReturnTime } from './returns-format.js';
@@ -31,12 +31,12 @@ const HEADING_ID = 'v5-returns-history';
 const UNRESOLVED: ReadonlySet<ReturnJournalView['state']> = new Set(['pending', 'unknown']);
 
 /** RD-5: one glyph per state, so a state never rests on colour alone. */
-const STATE_ICON: Readonly<Record<ReturnJournalView['state'], V5IconName>> = {
-  pending: 'manager-shift',
-  confirmed: 'status-success',
-  paid_out: 'tender-cash',
-  refused: 'status-danger',
-  unknown: 'status-unknown',
+const STATE_ICON: Readonly<Record<ReturnJournalView['state'], IconName>> = {
+  pending: 'shift',
+  confirmed: 'status.success',
+  paid_out: 'cash',
+  refused: 'status.danger',
+  unknown: 'status.unknown',
 };
 
 function amountOf(row: ReturnJournalView): string {

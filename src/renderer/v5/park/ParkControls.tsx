@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState, type JSX } from 'react';
 
 import type { CartParkBridgeAPI } from '../../../shared/cart/park-types';
 import { Notice } from '../foundation/Notice';
-import { V5Icon } from '../foundation/V5Icon';
+import { Icon } from '../../icons/Icon';
 import { callPark } from './park-bridge';
 import { PARK_COPY } from './park-copy';
 import { ParkDialog } from './ParkDialog';
@@ -92,7 +92,7 @@ export function ParkAction(props: Readonly<ParkActionProps>): JSX.Element {
           setOpen(true);
         }}
       >
-        <V5Icon name="pause" />
+        <Icon name="park" />
         {PARK_COPY.parkAction}
       </button>
       {open && props.cartId !== null && (

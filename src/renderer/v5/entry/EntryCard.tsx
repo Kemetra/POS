@@ -1,6 +1,7 @@
 import type { JSX, ReactNode } from 'react';
 
-import { V5Icon, type V5IconName } from '../foundation/V5Icon';
+import { Icon } from '../../icons/Icon';
+import type { IconName } from '../../icons/registry';
 import { EntryStrip } from './EntryStrip';
 import './entry.css';
 
@@ -29,10 +30,10 @@ export function EntryCardScreen({
 }
 
 /** The card's leading glyph: decorative, the heading beside it carries the meaning. */
-export function EntryCardIcon({ name }: Readonly<{ name: V5IconName }>): JSX.Element {
+export function EntryCardIcon({ name }: Readonly<{ name: IconName }>): JSX.Element {
   return (
     <span className="v5-entry__card-icon" aria-hidden="true">
-      <V5Icon name={name} size={26} />
+      <Icon name={name} size="lg" />
     </span>
   );
 }

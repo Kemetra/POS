@@ -11,7 +11,7 @@ import type {
 import { formatCheckoutMoney } from '../../ui/payments/format-checkout-money';
 import { Notice } from '../foundation/Notice';
 import { ScreenSection } from '../foundation/ScreenSection';
-import { V5Icon } from '../foundation/V5Icon';
+import { Icon } from '../../icons/Icon';
 import { RECOVERY_COPY, recoveryRefusalMessage } from './recovery-copy';
 import { RecoveryActionDialog, type RecoveryAction } from './RecoveryActionDialog';
 import { RecoveryAlert } from './RecoveryAlert';
@@ -222,7 +222,7 @@ function Panel(
   props: Readonly<{
     id: string;
     title: string;
-    icon: 'tender-cash' | 'manager-held';
+    icon: 'cash' | 'held';
     className?: string;
     children: ReactNode;
   }>,
@@ -232,7 +232,7 @@ function Panel(
     <section className={`v5-recovery-panel${cls}`} aria-labelledby={props.id}>
       <header className="v5-recovery-panel-head">
         <span className="v5-recovery-glyph">
-          <V5Icon name={props.icon} />
+          <Icon name={props.icon} />
         </span>
         <h2 id={props.id}>{props.title}</h2>
       </header>
@@ -245,7 +245,7 @@ function Empty({ text }: Readonly<{ text: string }>): JSX.Element {
   return (
     <div className="v5-recovery-panel-body">
       <p className="v5-recovery-empty">
-        <V5Icon name="dash" />
+        <Icon name="status.neutral" />
         {text}
       </p>
     </div>
@@ -272,7 +272,7 @@ function StuckPanel(
     <Panel
       id="recovery-stuck"
       title={RECOVERY_COPY.stuckTitle}
-      icon="tender-cash"
+      icon="cash"
       className="v5-recovery-panel--stuck"
     >
       {stuck === null ? (
@@ -343,7 +343,7 @@ function HeldPanel(
   }>,
 ): JSX.Element {
   return (
-    <Panel id="recovery-held" title={RECOVERY_COPY.heldTitle} icon="manager-held">
+    <Panel id="recovery-held" title={RECOVERY_COPY.heldTitle} icon="held">
       {props.held.length === 0 ? (
         <Empty text={RECOVERY_COPY.noneHeld} />
       ) : (

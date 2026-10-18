@@ -52,7 +52,7 @@ export function RecoveryLink(): JSX.Element | null {
   return (
     <ManagerTile
       to={RECOVERY_PATH}
-      icon="manager-held"
+      icon="held"
       title={RECOVERY_COPY.link}
       description={HOME_COPY.recovery.description}
       testId="dashboard-recovery-link"

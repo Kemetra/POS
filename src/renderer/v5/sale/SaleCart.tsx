@@ -1,5 +1,6 @@
 import type { JSX } from 'react';
 import type { DemoCartLine } from './demo-sale';
+import { Icon } from '../../icons/Icon';
 import { formatHumanCount } from '../../ui/format/human-format';
 
 interface SaleCartProps {
@@ -34,9 +35,9 @@ function CartLine({
         {line.unitPrice}
       </span>
       <span className="v5-sale-quantity" aria-label={`الكمية ${String(line.quantity)}`}>
-        <span aria-hidden="true">−</span>
+        <Icon name="remove" />
         <strong dir="ltr">{line.quantity}</strong>
-        <span aria-hidden="true">＋</span>
+        <Icon name="add" />
       </span>
       <strong className="v5-sale-line-total" dir="ltr">
         {line.linePrice}
@@ -94,7 +95,7 @@ export function SaleCart({ lines, subtotal, total }: SaleCartProps): JSX.Element
           <p>هذه معاينة مرئية؛ متابعة الدفع غير مفعّلة.</p>
           <button type="button" aria-disabled="true" className="v5-sale-checkout">
             <span>المتابعة إلى الدفع</span>
-            <span aria-hidden="true">←</span>
+            <Icon name="forward" size="lg" />
           </button>
         </div>
       </footer>

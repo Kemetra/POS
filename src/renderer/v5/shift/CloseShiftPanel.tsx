@@ -15,7 +15,7 @@ import {
 } from './ShiftParts';
 import { PARKED_SALES_PATH } from '../park/ParkedSalesRoute';
 import { PARK_COPY, terminalParkedCount } from '../park/park-copy';
-import { V5Icon } from '../foundation/V5Icon';
+import { Icon } from '../../icons/Icon';
 
 /** A recorded close: its variance only when main returned one (an approved close). */
 export interface ShiftClosed {
@@ -149,7 +149,7 @@ function ParkedSalesBlock({ count }: Readonly<{ count: number | null }>): JSX.El
   const navigate = useNavigate();
   return (
     <div className="v5-park-shift-alert" role="alert" data-testid="shift-parked-block">
-      <V5Icon name="status-warning" />
+      <Icon name="status.warning" />
       <div className="v5-park-shift-alert__text">
         <p>{shiftRefusalMessage('parked_sales_present')}</p>
         {count !== null && (

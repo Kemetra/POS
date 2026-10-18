@@ -12,23 +12,24 @@ import {
 } from '../../terminal-status/terminal-status-store';
 import { useAttentionDeadline } from '../../terminal-status/use-attention-deadline';
 import { useBannerState } from '../../ui/receipts/useBannerState';
-import { V5Icon, type V5IconName } from '../foundation/V5Icon';
+import { Icon } from '../../icons/Icon';
+import type { IconName } from '../../icons/registry';
 import './status-indicator.css';
 
 /** Each tone has its own glyph shape, so a row is never told by colour alone. */
-const MARK: Readonly<Record<IndicatorTone, V5IconName>> = {
-  success: 'status-success',
-  warning: 'status-warning',
-  info: 'status-info',
-  danger: 'status-danger',
-  neutral: 'dash',
+const MARK: Readonly<Record<IndicatorTone, IconName>> = {
+  success: 'status.success',
+  warning: 'status.warning',
+  info: 'status.info',
+  danger: 'status.danger',
+  neutral: 'status.neutral',
 };
 
 function RowContent({ row }: Readonly<{ row: IndicatorRow }>): JSX.Element {
   return (
     <>
       <span className="v5-status__mark">
-        <V5Icon name={MARK[row.tone]} size={16} />
+        <Icon name={MARK[row.tone]} size="sm" />
       </span>
       <span className="v5-status__text">
         {row.before}

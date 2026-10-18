@@ -1,4 +1,5 @@
 import type { JSX } from 'react';
+import { PharmacyCross } from '../brand/PharmacyCross';
 import { demoSale } from './demo-sale';
 import { ProductRail } from './ProductRail';
 import { SaleCart } from './SaleCart';
@@ -10,7 +11,7 @@ export function SaleScreen(): JSX.Element {
       <header className="v5-sale-header">
         <div className="v5-sale-brand" aria-label="POS Pulse">
           <span className="v5-sale-brand-mark" aria-hidden="true">
-            ✚
+            <PharmacyCross size={18} />
           </span>
           <div>
             <strong dir="ltr">POS Pulse</strong>

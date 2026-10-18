@@ -204,10 +204,11 @@ describe('CashKeypad — an LTR register keypad', () => {
     const keys = within(pad)
       .getAllByRole('button')
       .map((b) => b.textContent);
-    expect(keys).toEqual(['1', '2', '3', '4', '5', '6', '7', '8', '9', '00', '0', '⌫']);
-    expect(screen.getByRole('button', { name: 'حذف آخر رقم' })).toBe(
-      screen.getByTestId('cash-keypad-delete'),
-    );
+    // RT-695: the delete key shows the registry backspace glyph, not a ⌫ character.
+    expect(keys).toEqual(['1', '2', '3', '4', '5', '6', '7', '8', '9', '00', '0', '']);
+    const del = screen.getByTestId('cash-keypad-delete');
+    expect(screen.getByRole('button', { name: 'حذف آخر رقم' })).toBe(del);
+    expect(del.querySelector('svg[data-icon="backspace"]')).toHaveAttribute('aria-hidden', 'true');
   });
 
   it('has no display of its own: the amount field is the one value', () => {

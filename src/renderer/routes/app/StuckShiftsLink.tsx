@@ -20,7 +20,7 @@ export function StuckShiftsLink(): JSX.Element | null {
   return (
     <ManagerTile
       to={STUCK_SHIFTS_PATH}
-      icon="manager-stuck"
+      icon="stuckShift"
       title={HOME_COPY.stuckShifts.title}
       description={HOME_COPY.stuckShifts.description}
       testId="dashboard-stuck-shifts-link"

@@ -1,6 +1,7 @@
 import type { JSX, ReactNode } from 'react';
 import { ToneIcon, toneRole, type Tone } from './ToneIcon';
-import { V5Icon, type V5IconName } from './V5Icon';
+import { Icon } from '../../icons/Icon';
+import type { IconName } from '../../icons/registry';
 import './messages.css';
 
 interface BannerProps {
@@ -9,8 +10,12 @@ interface BannerProps {
   /** Actions that belong to this state (acknowledge, recover). */
   actions?: ReactNode;
   testId?: string;
-  /** A source glyph in place of the tone's, when the source must be told apart. */
-  icon?: V5IconName;
+  /**
+   * A source glyph, when the source must be told apart (RT-605). It sits
+   * beside the tone's glyph, never in its place, so the tone keeps its own
+   * shape (P8; doc 25 §4.1).
+   */
+  icon?: IconName;
 }
 
 /**
@@ -34,11 +39,10 @@ export function Banner({
       data-tone={tone}
       data-testid={testId}
     >
-      {icon === undefined ? (
-        <ToneIcon tone={tone} />
-      ) : (
-        <span className="v5-tone-icon" data-icon={icon}>
-          <V5Icon name={icon} size={20} />
+      <ToneIcon tone={tone} />
+      {icon !== undefined && (
+        <span className="v5-tone-icon v5-banner__source-icon" data-icon={icon}>
+          <Icon name={icon} />
         </span>
       )}
       <div className="v5-banner__text">{children}</div>

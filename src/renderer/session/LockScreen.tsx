@@ -15,7 +15,7 @@ import type {
 import type { RefusalCategory } from '../../shared/audit/event-shape';
 import { PIN_MAX_LENGTH, PIN_MIN_LENGTH } from '../ui/operator/PinPad';
 import { Dialog, DialogHost } from '../v5/foundation/Dialog';
-import { V5Icon } from '../v5/foundation/V5Icon';
+import { Icon } from '../icons/Icon';
 import '../v5/sale/live-sale.css';
 import '../v5/shift/shift.css';
 import './lock-screen.css';
@@ -164,7 +164,7 @@ export function LockScreen({
         >
           <div className="session-lock__head">
             <span className="session-lock__mark" aria-hidden="true">
-              <V5Icon name="lock" size={28} />
+              <Icon name="lock" size="lg" />
             </span>
             <h2 id={titleId} className="v5-live-dialog-title session-lock__title">
               {LOCK_TITLE}
@@ -240,7 +240,7 @@ export function LockScreen({
             )}
             {error !== null && (
               <p id={errId} role="alert" className="session-lock__error">
-                <V5Icon name="status-danger" size={18} />
+                <Icon name="status.danger" />
                 <span>{error}</span>
               </p>
             )}

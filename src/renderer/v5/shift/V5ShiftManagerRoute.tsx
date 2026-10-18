@@ -3,7 +3,7 @@ import type { JSX } from 'react';
 import type { Role } from '../../../shared/operator/role';
 import type { ShiftCashupBridgeAPI, ShiftStatusView } from '../../../shared/shift-cashup/types';
 import { Notice } from '../foundation/Notice';
-import { V5Icon } from '../foundation/V5Icon';
+import { Icon } from '../../icons/Icon';
 import { ManagerPinEnrollment } from './ManagerPinEnrollment';
 import { useShiftStatus } from './shift-bridge';
 import { SHIFT_COPY, shiftRefusalMessage } from './shift-copy';
@@ -101,7 +101,7 @@ function ReloadButton({
 }: Readonly<{ label: string; onClick: () => void }>): JSX.Element {
   return (
     <button type="button" className="v5-shift-btn" onClick={onClick}>
-      <V5Icon name="retry" size={18} />
+      <Icon name="retry" />
       {label}
     </button>
   );
@@ -117,7 +117,7 @@ function OpenShiftFacts({ status }: Readonly<{ status: ShiftStatusView }>): JSX.
   if (open === null) {
     return (
       <p className="v5-shift-no-shift">
-        <V5Icon name="manager-shift" />
+        <Icon name="shift" />
         {SHIFT_COPY.noOpenShift}
       </p>
     );
