@@ -197,16 +197,6 @@ export function createDeviceRevocationFlow(deps: DeviceRevocationFlowDeps): Devi
     }
   }
 
-  /** The new pairing's scope, or null when the terminal is not paired. */
-  function pairedScope(status: PairingStatus | null): RevokedTerminalScope | null {
-    if (status?.kind !== 'paired') return null;
-    return {
-      tenant_id: status.tenant_id,
-      branch_id: status.branch_id,
-      terminal_id: status.terminal_id,
-    };
-  }
-
   /** Delete other terminals' PIN records; audit a revocation that was cleared. */
   function recoverOnto(scope: RevokedTerminalScope, previouslyRevoked: boolean): void {
     step('pins', () => {
@@ -402,5 +392,15 @@ export function deviceRevocationGrantHooks(grants: {
       invalidateAll();
       grants.setScope(null);
     },
+  };
+}
+
+/** The new pairing's scope, or null when the terminal is not paired. */
+function pairedScope(status: PairingStatus | null): RevokedTerminalScope | null {
+  if (status?.kind !== 'paired') return null;
+  return {
+    tenant_id: status.tenant_id,
+    branch_id: status.branch_id,
+    terminal_id: status.terminal_id,
   };
 }
