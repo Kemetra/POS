@@ -320,7 +320,7 @@ export function createManagerRecovery(deps: ManagerRecoveryDeps): ManagerRecover
                                AND l.state IN ${LIVE}))))
           ORDER BY c.updated_at DESC, c.rowid DESC`,
       ) as All<HeldRow>
-    ).all(...[at.terminal_id, at.session.id, ...(cart_id === undefined ? [] : [cart_id])]);
+    ).all(at.terminal_id, at.session.id, ...(cart_id === undefined ? [] : [cart_id]));
 
   /** Another operator's held cart (never the asker's own), or null. */
   function othersHeldCart(at: Admitted, cart_id: string): HeldRow | null {

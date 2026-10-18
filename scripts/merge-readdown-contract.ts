@@ -46,7 +46,7 @@ function mergeBag(
   readDownBag: ComponentBag | undefined,
 ): ComponentBag | undefined {
   if (readDownBag === undefined) return snapshotBag;
-  const merged: ComponentBag = { ...(snapshotBag ?? {}) };
+  const merged: ComponentBag = { ...snapshotBag };
   for (const [name, def] of Object.entries(readDownBag)) {
     if (name in merged) continue; // collision → keep snapshot's, skip read-down's
     merged[name] = def;

@@ -26,7 +26,7 @@ const MAX_CASH_RECEIVED_MINOR: Readonly<Record<CurrencyCode, number>> = {
 
 /** The operational maximum for one cash line, in minor units; 0 for an unknown currency. */
 export function maxCashReceivedMinor(currency: string): number {
-  return Object.prototype.hasOwnProperty.call(MAX_CASH_RECEIVED_MINOR, currency)
+  return Object.hasOwn(MAX_CASH_RECEIVED_MINOR, currency)
     ? MAX_CASH_RECEIVED_MINOR[currency as CurrencyCode]
     : 0;
 }

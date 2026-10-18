@@ -153,7 +153,10 @@ import {
 } from './shift-cashup/compose-shift-cashup.js';
 import { registerShiftCashupIpc } from './ipc/shift-cashup.js';
 import { createManagerCredentialAudit } from './operator/manager-credential-audit.js';
-import { createManagerPinStore } from './operator/manager-pin-store.js';
+import {
+  createManagerPinStore,
+  purgeOtherTerminalManagerPinRecords,
+} from './operator/manager-pin-store.js';
 import { createManagerApprovalService } from './operator/manager-approval-service.js';
 import { registerManagerApprovalHandlers } from './ipc/manager-approval.js';
 import { postHandoffCancelApprovalResolver } from './cart/post-handoff-approval.js';
@@ -261,7 +264,6 @@ import {
 } from './app/device-revocation-flow.js';
 import { createRevocationRecheck } from './app/revocation-recheck.js';
 import { purgeOtherTerminalPinRecords } from './operator/pin-records-purge.js';
-import { purgeOtherTerminalManagerPinRecords } from './operator/manager-pin-store.js';
 import { managerIdentityOf } from './operator/manager-pin-enrollment.js';
 import { PAIRING_PUSH_CHANNELS, type PairingRecheckResult } from '../shared/pairing-types.js';
 import { createJwtHolder } from './operator/jwt-holder.js';
