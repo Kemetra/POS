@@ -11,6 +11,7 @@ import {
   ALREADY_PAIRED_MESSAGE,
   BRANCH_MISMATCH_MESSAGE,
   RATE_LIMITED_MESSAGE,
+  REPLACEMENT_BLOCKED_MESSAGE,
   GENERIC_FAILURE_MESSAGE,
   NETWORK_ERROR_MESSAGE,
   UNKNOWN_ERROR_MESSAGE,
@@ -754,6 +755,54 @@ describe('PairingForm — BRANCH_MISMATCH outcome (T050)', () => {
       expect(screen.getByTestId('pairing-message')).toBeInTheDocument();
     });
     expect(document.body.textContent).not.toContain('device_token');
+  });
+});
+
+/* ------------------------- RT-591 ------------------------- */
+
+describe('PairingForm — REPLACEMENT_BLOCKED outcome (RT-591)', () => {
+  // The old till still has an open shift. The code stays pending on the server,
+  // so the form keeps the typed code and lets the cashier submit it again
+  // unchanged once the old shift is closed and synced.
+
+  it('renders the approved guidance, keeps the code, and stays on /pairing', async () => {
+    const user = userEvent.setup();
+    const { bridge } = makeBridge({ result: { outcome: 'replacement_blocked' } });
+    const { locations } = renderInRouter(bridge);
+
+    const input = screen.getByRole<HTMLInputElement>('textbox');
+    await user.type(input, 'REPLACE-CODE{Enter}');
+
+    await waitFor(() => {
+      expect(screen.getByRole('status')).toHaveTextContent(REPLACEMENT_BLOCKED_MESSAGE);
+    });
+    expect(input.value).toBe('REPLACE-CODE');
+    expect(input).toBeEnabled();
+    expect(screen.getByRole('button')).not.toBeDisabled();
+    expect(locations).not.toContain('/paired');
+  });
+
+  it('retry with the same code succeeds once the block clears', async () => {
+    const user = userEvent.setup();
+    const results: PairingSubmitResult[] = [{ outcome: 'replacement_blocked' }, SUCCESS_RESULT];
+    const { bridge, submit } = makeBridge({
+      submitImpl: () => Promise.resolve(results.shift() ?? SUCCESS_RESULT),
+    });
+    const { locations } = renderInRouter(bridge);
+
+    await user.type(screen.getByRole('textbox'), 'REPLACE-CODE{Enter}');
+    await waitFor(() => {
+      expect(screen.getByRole('status')).toHaveTextContent(REPLACEMENT_BLOCKED_MESSAGE);
+    });
+
+    await user.click(screen.getByRole('button'));
+
+    await waitFor(() => {
+      expect(locations).toContain('/paired');
+    });
+    expect(submit).toHaveBeenCalledTimes(2);
+    expect(submit).toHaveBeenNthCalledWith(1, 'REPLACE-CODE');
+    expect(submit).toHaveBeenNthCalledWith(2, 'REPLACE-CODE');
   });
 });
 

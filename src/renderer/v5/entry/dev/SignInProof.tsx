@@ -89,6 +89,7 @@ const PAIR_OUTCOMES: ReadonlyArray<PairingOutcome> = [
   'unknown_error',
   'session_active',
   'terminal_already_paired',
+  'replacement_blocked',
 ];
 
 interface HarnessParams {

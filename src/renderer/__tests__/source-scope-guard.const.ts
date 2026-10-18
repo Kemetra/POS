@@ -266,6 +266,40 @@ export const RT_676_REPIN_EXEMPT_FILES = [
   'src/main/pairing/__tests__/failure-mapping.test.ts',
 ] as const satisfies readonly string[];
 
+/**
+ * `claude/rt-591-replacement-blocked-af1e3e` implements Jira RT-591: the
+ * terminal-pairing error `REPLACEMENT_BLOCKED` (409, RT-367) gets its own
+ * `replacement_blocked` outcome and cashier guidance instead of the generic
+ * `unknown_error`. The failure mapping and the service's outcome switch live in
+ * `src/main/pairing/`, so the change necessarily touches four files there.
+ *
+ * Authority: owner approval typed in the RT-591 implementation session,
+ * 2026-10-18 (narrow exemption, exactly these four files, this branch only),
+ * following the RT-676 file-list pattern.
+ *
+ * Exemption is narrow, and deliberately not a prefix exemption: exactly FOUR
+ * files, on exactly ONE branch (exact name, no `startsWith`). No other
+ * `src/main/pairing/` path, and every forbidden prefix stays blocked for every
+ * other file and branch. Narrowness is asserted by
+ * `source-scope-guard-rt591.test.ts`.
+ */
+export const RT_591_REPLACEMENT_BLOCKED_BRANCH =
+  'claude/rt-591-replacement-blocked-af1e3e' as const;
+export const RT_591_REPLACEMENT_BLOCKED_EXEMPT_FILES = [
+  'src/main/pairing/failure-mapping.ts',
+  'src/main/pairing/service.ts',
+  'src/main/pairing/__tests__/failure-mapping.test.ts',
+  'src/main/pairing/__tests__/service.test.ts',
+] as const satisfies readonly string[];
+
+/** True when `file` is one of the files the RT-591 exemption allows on `branch`. */
+export function isRt591ExemptFile(branch: string, file: string): boolean {
+  return (
+    branch === RT_591_REPLACEMENT_BLOCKED_BRANCH &&
+    (RT_591_REPLACEMENT_BLOCKED_EXEMPT_FILES as readonly string[]).includes(file)
+  );
+}
+
 /** True when `file` is the one file the RT-676 exemption allows on `branch`. */
 export function isRt676ExemptFile(branch: string, file: string): boolean {
   return (

@@ -21,6 +21,10 @@ import type { PairingOutcome } from '../../shared/pairing-types.js';
  * US5 (T055) adds:
  *   - RATE_LIMITED   -> 'rate_limited'
  *
+ * RT-591 adds:
+ *   - REPLACEMENT_BLOCKED -> 'replacement_blocked' (409; the replaced device
+ *     still has an open Cash Session, the code stays pending — RT-367)
+ *
  * `retry_after_s` (US5) is NOT touched by this function — it lives on
  * the surrounding `PairResult` envelope, parsed by `network.ts` (only
  * when status === 429). `mapFailure` is a pure status+body→outcome
@@ -111,6 +115,8 @@ export function mapFailure(status: number, body: FailureBody): PairingOutcome {
       return 'branch_mismatch';
     case 'RATE_LIMITED':
       return 'rate_limited';
+    case 'REPLACEMENT_BLOCKED':
+      return 'replacement_blocked';
     default:
       return 'unknown_error';
   }

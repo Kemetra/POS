@@ -70,6 +70,25 @@ describe('mapFailure — success-path guard (T018)', () => {
   });
 });
 
+/* ------------------------- RT-591 ------------------------- */
+
+describe('mapFailure — REPLACEMENT_BLOCKED (RT-591)', () => {
+  it('409 REPLACEMENT_BLOCKED -> "replacement_blocked"', () => {
+    expect(mapFailure(409, { error: { code: 'REPLACEMENT_BLOCKED', message: 'm' } })).toBe(
+      'replacement_blocked',
+    );
+  });
+
+  it('routes by error.code, not HTTP status', () => {
+    expect(mapFailure(422, { error: { code: 'REPLACEMENT_BLOCKED' } })).toBe('replacement_blocked');
+  });
+
+  it('stays distinct from the other 409 codes', () => {
+    expect(mapFailure(409, { error: { code: 'ALREADY_PAIRED' } })).toBe('already_paired');
+    expect(mapFailure(409, { error: { code: 'BRANCH_MISMATCH' } })).toBe('branch_mismatch');
+  });
+});
+
 /* ------------------------- T036 ------------------------- */
 
 describe('mapFailure — recoverable failure branches (T036)', () => {
@@ -365,8 +384,7 @@ describe('mapFailure — canonical { error: { code } } envelope (RT-228)', () =>
       ALREADY_PAIRED: 'already_paired',
       BRANCH_MISMATCH: 'branch_mismatch',
       RATE_LIMITED: 'rate_limited',
-      // RT-591: no dedicated outcome or cashier copy yet, so generic until it lands.
-      REPLACEMENT_BLOCKED: 'unknown_error',
+      REPLACEMENT_BLOCKED: 'replacement_blocked',
       validation_failure: 'unknown_error',
     };
     expect([...documented].sort()).toEqual(Object.keys(expected).sort());

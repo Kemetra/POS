@@ -682,6 +682,52 @@ describe('PairingService.submit — BRANCH_MISMATCH branch (T048, FR-14)', () =>
   });
 });
 
+/* ------------------------- RT-591 ------------------------- */
+
+describe('PairingService.submit — REPLACEMENT_BLOCKED branch (RT-591)', () => {
+  const BLOCKED: PairResult = {
+    ok: false,
+    status: 409,
+    body: { error: { code: 'REPLACEMENT_BLOCKED', message: 'x' } },
+  };
+
+  it('resolves with { outcome: "replacement_blocked" } and mutates no pairing state', async () => {
+    const h = makeHarness({ pairResult: BLOCKED });
+    const result = await h.service.submit('CODE');
+    expect(result).toEqual({ outcome: 'replacement_blocked' });
+    expect(h.store.persist).not.toHaveBeenCalled();
+    expect(h.store.clear).not.toHaveBeenCalled();
+  });
+
+  it('emits exactly ONE record with outcome=replacement_blocked and no code/token', async () => {
+    const code = 'SECRET-REPLACEMENT-CODE-4242';
+    const h = makeHarness({ pairResult: BLOCKED });
+    await h.service.submit(code);
+
+    expect(h.logRecords).toHaveLength(1);
+    expect(h.logRecords[0]).toMatchObject({
+      event: 'pairing_attempt',
+      outcome: 'replacement_blocked',
+    });
+    expect(h.logRecords[0]).not.toHaveProperty('terminal_id');
+    expect(h.logRecords[0]).not.toHaveProperty('retry_after_s');
+    expect(JSON.stringify(h.logRecords)).not.toContain(code);
+  });
+
+  it('the same code pairs once the block clears (the code stays pending server-side)', async () => {
+    const h = makeHarness({ pairResult: BLOCKED });
+    expect(await h.service.submit('CODE')).toEqual({ outcome: 'replacement_blocked' });
+
+    h.network.pair.mockResolvedValueOnce({ ok: true, status: 200, body: SUCCESS_BODY });
+    const retry = await h.service.submit('CODE');
+
+    expect(retry).toMatchObject({ outcome: 'success', terminal_id: SUCCESS_BODY.terminal_id });
+    expect(h.network.pair).toHaveBeenNthCalledWith(1, 'CODE');
+    expect(h.network.pair).toHaveBeenNthCalledWith(2, 'CODE');
+    expect(h.store.persist).toHaveBeenCalledTimes(1);
+  });
+});
+
 /* ------------------------- T054 ------------------------- */
 
 describe('PairingService.submit — RATE_LIMITED branch (T054, US5)', () => {

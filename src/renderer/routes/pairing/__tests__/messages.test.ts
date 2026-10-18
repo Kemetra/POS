@@ -11,6 +11,7 @@ import {
   INVALID_CODE_MESSAGE,
   NETWORK_ERROR_MESSAGE,
   RATE_LIMITED_MESSAGE,
+  REPLACEMENT_BLOCKED_MESSAGE,
   UNKNOWN_ERROR_MESSAGE,
   messageFor,
 } from '../messages';
@@ -198,7 +199,7 @@ describe('messages dictionary — distinct constants', () => {
     }
   });
 
-  it('the ten message constants an operator can see are pairwise distinct', () => {
+  it('the eleven message constants an operator can see are pairwise distinct', () => {
     const set = new Set([
       INVALID_CODE_MESSAGE,
       EXPIRED_CODE_MESSAGE,
@@ -210,8 +211,9 @@ describe('messages dictionary — distinct constants', () => {
       EMPTY_INPUT_MESSAGE,
       SESSION_ACTIVE_MESSAGE,
       TERMINAL_ALREADY_PAIRED_MESSAGE,
+      REPLACEMENT_BLOCKED_MESSAGE,
     ]);
-    expect(set.size).toBe(10);
+    expect(set.size).toBe(11);
   });
 
   it('every PairingOutcome maps to a non-empty message (totality)', () => {
@@ -226,6 +228,7 @@ describe('messages dictionary — distinct constants', () => {
       'unknown_error',
       'session_active',
       'terminal_already_paired',
+      'replacement_blocked',
     ];
     for (const outcome of all) {
       const msg = messageFor(outcome);
@@ -239,6 +242,19 @@ describe('RT-215 review F3 — session_active', () => {
   it('maps to the finish-and-sign-out copy', () => {
     expect(messageFor('session_active')).toBe(SESSION_ACTIVE_MESSAGE);
     expect(SESSION_ACTIVE_MESSAGE).toMatch(/سجّل الخروج/);
+  });
+});
+
+describe('RT-591 — replacement_blocked', () => {
+  it('maps to the owner-approved copy, verbatim', () => {
+    expect(messageFor('replacement_blocked')).toBe(REPLACEMENT_BLOCKED_MESSAGE);
+    expect(REPLACEMENT_BLOCKED_MESSAGE).toBe(
+      'لا يمكن الربط الآن: الجهاز القديم ما زالت عليه وردية مفتوحة. أغلق الوردية على الجهاز القديم وانتظر حتى تكتمل المزامنة، ثم أدخل الرمز نفسه مرة أخرى. إن استمرت المشكلة فاطلب من المشرف.',
+    );
+  });
+
+  it('is not the generic failure copy', () => {
+    expect(REPLACEMENT_BLOCKED_MESSAGE).not.toBe(UNKNOWN_ERROR_MESSAGE);
   });
 });
 
