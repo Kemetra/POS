@@ -59,7 +59,7 @@ Daftra; **LS** for Lightspeed X-Series, added in [§5](#5-lightspeed-x-series-th
 | 4 | Scan / search / add | Sale `/app/cart`, scan field, search, D-C1 direct add | 11 §1.1 | S, P-old (14 #1–2) |
 | 5 | Cart mutations (qty, remove) | Cart row controls | 11 §1.1 | S, P-old (14 #4) |
 | 6 | Park / resume | Park control in the Sale → `/app/cart/parked` (RT-445) | 11 §1.1, LS-1 | S (#730) |
-| 7 | Discount with manager approval | Manager-only, RT-114 approval PIN (RT-608) | 11 §4 | S (#723, #727) |
+| 7 | Discount with manager approval | **No entry point.** Main enforces manager-only on the RT-114 PIN (RT-608), but the Sale offers only «إزالة الخصم»; the renderer never calls `cart.discountPlaceholders.add` | 11 §4 | S (#723, #727) |
 | 8 | Tender: cash, split | `/app/checkout`, `TenderPicker`, `PaymentLedger` split lines | 11 §1.1 | S, P-old (14 #6) |
 | 9 | Card / UNKNOWN outcome | «بطاقة» tile is shown; no outcome input (RT-250). **Out of pilot (D4)** | 11 §1.5 | S, P-old (14 #7–8) |
 | 10 | Receipt, reprint | Completion print. Reprint only from «المبيعات», which the cashier nav does not show | 11 §1.5, LS-2 | S |
@@ -102,7 +102,7 @@ Pilot class from D1–D8 and RT-20.
 | G-16 | Restart with live tender shows the payment | **Implemented (source)** by RT-352 / RT-442 (held cart and its attempt outlive the session) and manager recovery RT-441 / RT-656 | S | Old proof shows the gap (14 #13); no new proof | RT-441 In Review, RT-656 In Review | Money-at-risk path if it regresses | S0 if broken | Pilot must | Needs verification (**P-26-5**) |
 | G-17 | 20+ line cart: newest line in view | **Needs verification.** 14 #3 found the newest line not scrolled into view at `7b68398`; the cart was recomposed since and no new capture exists | P-old | — | Freeze 15 Lane A / RT-243 (reconcile) | Cashier cannot see the item just scanned | S2 | Pilot must | Verification (**P-26-5**) |
 | G-18 | "Printed" means spooled | **Needs verification.** 14 #12 recorded success with a paused queue | P-old | — | Reconcile against RT-159 freeze Lane A | Cashier believes a receipt printed | S2 | Pilot must | Verification (**P-26-5**) |
-| G-19 | Manager-approved discount | **Implemented (source)** on the RT-114 PIN (RT-608) | S | — | RT-608 In Review; RT-114 To Do (contract) | — | — | Pilot must | — |
+| G-19 | Manager-approved discount | **Verified missing (UI).** Main enforcement exists (RT-608, RT-614), but no renderer path adds a discount: `LiveSaleWorkspace` exposes only `onRemoveDiscount` and nothing calls `cart.discountPlaceholders.add` | S | — | RT-28 Done, RT-608 In Review, RT-614 Done: none owns the entry UI | A manager cannot give a discount at the till | S1 | Pilot must (OD-26-4) | POS / Docs → Implementation (new **P-26-6**) |
 | G-20 | Cash drawer optional | **Planned / in review** | J | — | RT-531 In Review | Forced attestation without a drawer | S2 | Pilot must (D6 dependency) | RT-531 |
 | G-21 | Store business day = Africa/Cairo | **Implemented** (RT-550, RT-551, RT-553); lab TZ confirmation open | S | — | RT-544 To Do | Wrong day on sale numbers | S1 if wrong | Pilot must | Pilot ops: RT-544 |
 | G-22 | Customer attach, loyalty, gift card, layaway, on-account | **Unsupported (by scope)**. Not in RT-24 or pilot | — | — | — | — | — | Optional / post-pilot | Not proposed |
@@ -149,8 +149,13 @@ Step counts and timing need a run. The only measured counts are the old ones in 
    [14](14-rt159-packaged-reaudit.md). Both have source fixes and no packaged re-run.
 4. **History is not yet proven end to end (G-03, G-05).** RT-543 (two-terminal packaged walk) is
    To Do and RT-547 (line order) breaks reprint fidelity from Backend-Core.
-5. **Manager follow-up surfaces are half-honest (G-10, G-11).** The catalogue check shows only a
-   count, and two nav entries lead to empty pages. Both are decided (D7, D8) and unticketed.
+5. **A discount cannot be given at the till (G-19, S1).** RT-28 / RT-608 / RT-614 built the
+   manager-only authority and its main-side checks, but no screen starts a discount, so the
+   enforcement is unreachable. No issue owns the entry UI.
+
+Also open but smaller: the manager follow-up surfaces are half-honest (G-10, G-11). The catalogue
+check shows only a count, and two nav entries lead to empty pages. Both are decided (D7, D8) and
+unticketed.
 
 ---
 
@@ -191,6 +196,7 @@ diagram is reproduced. ERPNext POS stays a business reference only (CLAUDE.md §
 |---|---|---|---|
 | OD-26-1 | How is card kept out of pilot use (D4)? | (A) a new card-only feature flag, default **off**, that hides the tile **and** makes main refuse an `external_card_terminal` start; (B) hide the tile in the renderer only; (C) pilot procedure only | **A — Selected, recommended option; owner may revisit.** It is fail-closed in main (CLAUDE.md: main is the load-bearing check), and the freeze drawing stays valid with the flag on. B is bypassable; C is unenforced |
 | OD-26-2 | Where does «إعادة طباعة آخر إيصال» live? | (A) on the Completion panel and as a Sale action while the cart is empty; (B) only inside «المبيعات» | **A — Selected, recommended option; owner may revisit.** D1 asks for a *quick* action; B is the existing path. Reuses RT-542 reprint and the RT-546 own-sale gate, so no new contract |
+| OD-26-4 | Is a manager-approved manual discount in the first pilot? | (A) yes: build the entry UI (P-26-6) before the pilot; (B) post-pilot: keep the main enforcement and add no UI | **A — Selected, recommended option; owner may revisit.** RT-28 / RT-608 were driven for the pilot, and pharmacy tills routinely need a manager-approved price reduction. If the owner picks B, G-19 moves to Post-pilot and P-26-6 is dropped |
 | OD-26-3 | One combined packaged pilot-day walk, or each verification issue alone? | (A) one session runs RT-446, RT-543, RT-276 and the untested journeys J1, J2, J7, J9, J11 on one build; (B) separate sessions | **A — Selected, recommended option; owner may revisit.** One build and one lab setup; each issue still gets its own evidence comment |
 
 ---
@@ -208,6 +214,7 @@ issue.
 | **P-26-3** | Catalogue check lists matched items (D7) | `Kemetra/POS` | Docs (G-6 Diagnostics reference addendum) → Implementation | **Reuse**: amend RT-478 / RT-503 via a child slice | Owner sign-off on the addendum | The result lists name, barcode and price for each match from the existing `catalogue.search`; empty and refused states drawn; no contract change |
 | **P-26-4** | Hide «سجل المراجعة» and «الإعدادات» from the manager nav (D8) | `Kemetra/POS` | Implementation | **New** small child of RT-478 | — | Both entries absent from the nav for every role; routes and guards unchanged; nav-model test updated |
 | **P-26-5** | Packaged pilot cashier-day walk (OD-26-3) | `Kemetra/POS` (lab rt9) | Verification | **Reuse** RT-446, RT-543, RT-276; one **new** issue only for J1, J2, J7, J9, J11 (G-15…G-18) which no issue owns | P-26-1, P-26-2, RT-531 merged; RT-544 confirmed | Each of J1–J12 has packaged evidence on one named SHA or a recorded first failing boundary; G-15…G-18 closed or turned into defects; procedure and lessons recorded on the Lab and Bench Runbook page |
+| **P-26-6** | Discount entry UI on the RT-114 approval (OD-26-4) | `Kemetra/POS` | Docs (visual references for the discount entry and approval states) → Implementation | **New**; scope reconciled against RT-608 first (its enforcement is the dependency, not the owner of the UI) | RT-608 merged; OD-26-4 = A | A manager-only control in the Sale starts `cart.discountPlaceholders.add` through the existing RT-114 approval; a cashier sees no control; main refusals use existing copy; no new bridge channel or contract; the RT-614 trust check still holds at handoff; tests for manager, cashier and refusal paths |
 | — | Receipt line order from `readSale` | `Kemetra/Backend-Core` | Implementation | **Existing** RT-547 | — | As RT-547 |
 
 Already proposed in RT-536 comment 12037 and **not repeated here**: header unification on
@@ -218,7 +225,7 @@ before creating), and removal of orphan components. These are not cashier featur
 
 | Class | Items |
 |---|---|
-| **Pilot must** | G-01, G-02, G-07 (new work); G-10, G-11 (decided, small); G-03, G-06, G-12, G-14, G-15, G-16, G-17, G-18 (verification); G-05, G-20, G-21 (existing issues) |
+| **Pilot must** | G-01, G-02, G-07, G-19 (new work); G-10, G-11 (decided, small); G-03, G-06, G-12, G-14, G-15, G-16, G-17, G-18 (verification); G-05, G-20, G-21 (existing issues) |
 | **Post-pilot** | G-08 card outcome / UNKNOWN (RT-250), card-to-original refunds, G-23, G-24 |
 | **Optional** | G-09 split tender in the pilot (cash only), LS-5 discrepancy cause hint, G-22 customer features |
 
