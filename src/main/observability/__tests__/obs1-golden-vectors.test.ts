@@ -40,8 +40,8 @@ function scrubValue(value: string): string | undefined {
 }
 
 describe('OBS-1 §3.5 golden vectors (Bearer/Authorization and phones)', () => {
-  it('carries all 43 contract vectors', () => {
-    expect(golden.vectors).toHaveLength(43);
+  it('carries all 46 contract vectors', () => {
+    expect(golden.vectors).toHaveLength(46);
   });
 
   it.each(golden.vectors.map((v) => [v.id, v.input, v.expected] as const))(
