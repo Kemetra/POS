@@ -15,7 +15,7 @@ import {
 import type { ManagerPinVerdict } from '../../../operator/manager-pin-store.js';
 import { composeShiftCashupService, type ShiftCashupSession } from '../../compose-shift-cashup.js';
 import type { ShiftCashupService } from '../../shift-cashup-service.js';
-import type { ShiftScope } from '../../shift-cashup-repo.js';
+import { createShiftCashupRepo, type ShiftScope } from '../../shift-cashup-repo.js';
 import { SCOPE, USER } from './shift-sync-fixture.js';
 
 export const OPENED_AT = '2026-10-05T08:00:00.000Z';
@@ -149,6 +149,47 @@ export function serviceHarness(
     },
   });
   return { service, state };
+}
+
+export const PRE_ROLLOUT_SHIFT = '0192f5a2-3b4c-7d8e-9f01-a11a11a11a11';
+
+/**
+ * RT-278 S1 — a shift recorded before the plausibility caps shipped: its open
+ * (and any pay-ins) written straight through the repository, which has no cap
+ * of its own, at `OPENED_AT`. The service caps new inputs only, never these.
+ */
+export function seedPreRolloutShift(
+  db: SqlJsDatabase,
+  input: { openingFloatMinor: number; payInsMinor?: ReadonlyArray<number>; currencyCode?: string },
+): string {
+  const repo = createShiftCashupRepo(handleFor(db));
+  repo.recordOpen({
+    scope: SCOPE,
+    fact: {
+      shiftId: PRE_ROLLOUT_SHIFT,
+      openedAt: OPENED_AT,
+      openingUserId: USER,
+      currencyCode: input.currencyCode ?? 'EGP',
+      openingFloatMinor: input.openingFloatMinor,
+    },
+    now: OPENED_AT,
+  });
+  (input.payInsMinor ?? []).forEach((amountMinor, index) => {
+    repo.recordMovement({
+      scope: SCOPE,
+      fact: {
+        movementId: `0192f5a2-3b4c-7d8e-9f01-b22b22b22${String(index).padStart(3, '0')}`,
+        shiftId: PRE_ROLLOUT_SHIFT,
+        kind: 'pay_in',
+        amountMinor,
+        reasonCode: 'other',
+        occurredAt: OPENED_AT,
+        operatorUserId: USER,
+      },
+      now: OPENED_AT,
+    });
+  });
+  return PRE_ROLLOUT_SHIFT;
 }
 
 /** One cash tender line: `applied` handed over, `change` given back. */
