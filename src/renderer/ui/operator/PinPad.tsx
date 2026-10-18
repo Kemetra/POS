@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, type JSX, type KeyboardEvent, type ReactNod
 
 import { useRefuseSurface } from '../../scan/ScanGuardHost';
 import type { RefuseSurface } from '../../scan/scan-guard';
-import { V5Icon } from '../../v5/foundation/V5Icon';
+import { Icon } from '../../icons/Icon';
 
 /**
  * 004-operator-session T074 — PinPad component (Surface 4).
@@ -159,7 +159,7 @@ export function PinPad(props: Readonly<PinPadProps>): JSX.Element {
             }
           }}
         >
-          <V5Icon name="backspace" size={24} />
+          <Icon name="backspace" size="lg" />
         </button>
       </div>
 
@@ -285,7 +285,7 @@ export function PinPadPreview({
           0
         </button>
         <button type="button" className="v5-entry__key" aria-label="حذف" disabled>
-          <V5Icon name="backspace" size={24} />
+          <Icon name="backspace" size="lg" />
         </button>
       </div>
       <div className="v5-entry__auth-actions">

@@ -664,7 +664,7 @@
   }
 
   .v5-entry__who[aria-pressed='true'] .v5-entry__name,
-  .v5-entry__btn[aria-pressed='true'] .v5-icon {
+  .v5-entry__btn[aria-pressed='true'] .rt-icon {
     color: HighlightText;
   }
 

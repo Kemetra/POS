@@ -1,0 +1,1042 @@
+[
+  {
+    "file": "ic2-nav-panel-manager-home-1024x768.png",
+    "case": "nav-panel-manager-home",
+    "viewport": "1024x768",
+    "forced": false,
+    "glyphs": {
+      "before": {
+        "registry": 0,
+        "legacy": 13,
+        "brand": 0
+      },
+      "after": {
+        "registry": 12,
+        "legacy": 0,
+        "brand": 1
+      }
+    },
+    "axe": {
+      "before": [],
+      "after": []
+    },
+    "errors": {
+      "before": [],
+      "after": []
+    }
+  },
+  {
+    "file": "ic2-nav-panel-manager-home-1024x768-forced.png",
+    "case": "nav-panel-manager-home",
+    "viewport": "1024x768",
+    "forced": true,
+    "glyphs": {
+      "before": {
+        "registry": 0,
+        "legacy": 13,
+        "brand": 0
+      },
+      "after": {
+        "registry": 12,
+        "legacy": 0,
+        "brand": 1
+      }
+    },
+    "axe": {
+      "before": [],
+      "after": []
+    },
+    "errors": {
+      "before": [],
+      "after": []
+    }
+  },
+  {
+    "file": "ic2-nav-panel-manager-home-1280x800.png",
+    "case": "nav-panel-manager-home",
+    "viewport": "1280x800",
+    "forced": false,
+    "glyphs": {
+      "before": {
+        "registry": 0,
+        "legacy": 13,
+        "brand": 0
+      },
+      "after": {
+        "registry": 12,
+        "legacy": 0,
+        "brand": 1
+      }
+    },
+    "axe": {
+      "before": [],
+      "after": []
+    },
+    "errors": {
+      "before": [],
+      "after": []
+    }
+  },
+  {
+    "file": "ic2-nav-panel-manager-home-1280x800-forced.png",
+    "case": "nav-panel-manager-home",
+    "viewport": "1280x800",
+    "forced": true,
+    "glyphs": {
+      "before": {
+        "registry": 0,
+        "legacy": 13,
+        "brand": 0
+      },
+      "after": {
+        "registry": 12,
+        "legacy": 0,
+        "brand": 1
+      }
+    },
+    "axe": {
+      "before": [],
+      "after": []
+    },
+    "errors": {
+      "before": [],
+      "after": []
+    }
+  },
+  {
+    "file": "ic2-nav-rail-sale-1024x768.png",
+    "case": "nav-rail-sale",
+    "viewport": "1024x768",
+    "forced": false,
+    "glyphs": {
+      "before": {
+        "registry": 0,
+        "legacy": 13,
+        "brand": 0
+      },
+      "after": {
+        "registry": 12,
+        "legacy": 0,
+        "brand": 1
+      }
+    },
+    "axe": {
+      "before": [],
+      "after": []
+    },
+    "errors": {
+      "before": [],
+      "after": []
+    }
+  },
+  {
+    "file": "ic2-nav-rail-sale-1024x768-forced.png",
+    "case": "nav-rail-sale",
+    "viewport": "1024x768",
+    "forced": true,
+    "glyphs": {
+      "before": {
+        "registry": 0,
+        "legacy": 13,
+        "brand": 0
+      },
+      "after": {
+        "registry": 12,
+        "legacy": 0,
+        "brand": 1
+      }
+    },
+    "axe": {
+      "before": [],
+      "after": []
+    },
+    "errors": {
+      "before": [],
+      "after": []
+    }
+  },
+  {
+    "file": "ic2-nav-rail-sale-1280x800.png",
+    "case": "nav-rail-sale",
+    "viewport": "1280x800",
+    "forced": false,
+    "glyphs": {
+      "before": {
+        "registry": 0,
+        "legacy": 13,
+        "brand": 0
+      },
+      "after": {
+        "registry": 12,
+        "legacy": 0,
+        "brand": 1
+      }
+    },
+    "axe": {
+      "before": [],
+      "after": []
+    },
+    "errors": {
+      "before": [],
+      "after": []
+    }
+  },
+  {
+    "file": "ic2-nav-rail-sale-1280x800-forced.png",
+    "case": "nav-rail-sale",
+    "viewport": "1280x800",
+    "forced": true,
+    "glyphs": {
+      "before": {
+        "registry": 0,
+        "legacy": 13,
+        "brand": 0
+      },
+      "after": {
+        "registry": 12,
+        "legacy": 0,
+        "brand": 1
+      }
+    },
+    "axe": {
+      "before": [],
+      "after": []
+    },
+    "errors": {
+      "before": [],
+      "after": []
+    }
+  },
+  {
+    "file": "ic2-checkout-tenders-1024x768.png",
+    "case": "checkout-tenders",
+    "viewport": "1024x768",
+    "forced": false,
+    "glyphs": {
+      "before": {
+        "registry": 0,
+        "legacy": 7,
+        "brand": 0
+      },
+      "after": {
+        "registry": 6,
+        "legacy": 0,
+        "brand": 1
+      }
+    },
+    "axe": {
+      "before": [],
+      "after": []
+    },
+    "errors": {
+      "before": [],
+      "after": []
+    }
+  },
+  {
+    "file": "ic2-checkout-tenders-1024x768-forced.png",
+    "case": "checkout-tenders",
+    "viewport": "1024x768",
+    "forced": true,
+    "glyphs": {
+      "before": {
+        "registry": 0,
+        "legacy": 7,
+        "brand": 0
+      },
+      "after": {
+        "registry": 6,
+        "legacy": 0,
+        "brand": 1
+      }
+    },
+    "axe": {
+      "before": [],
+      "after": []
+    },
+    "errors": {
+      "before": [],
+      "after": []
+    }
+  },
+  {
+    "file": "ic2-checkout-tenders-1280x800.png",
+    "case": "checkout-tenders",
+    "viewport": "1280x800",
+    "forced": false,
+    "glyphs": {
+      "before": {
+        "registry": 0,
+        "legacy": 7,
+        "brand": 0
+      },
+      "after": {
+        "registry": 6,
+        "legacy": 0,
+        "brand": 1
+      }
+    },
+    "axe": {
+      "before": [],
+      "after": []
+    },
+    "errors": {
+      "before": [],
+      "after": []
+    }
+  },
+  {
+    "file": "ic2-checkout-tenders-1280x800-forced.png",
+    "case": "checkout-tenders",
+    "viewport": "1280x800",
+    "forced": true,
+    "glyphs": {
+      "before": {
+        "registry": 0,
+        "legacy": 7,
+        "brand": 0
+      },
+      "after": {
+        "registry": 6,
+        "legacy": 0,
+        "brand": 1
+      }
+    },
+    "axe": {
+      "before": [],
+      "after": []
+    },
+    "errors": {
+      "before": [],
+      "after": []
+    }
+  },
+  {
+    "file": "ic2-checkout-tenders-cash-selected-1024x768.png",
+    "case": "checkout-tenders-cash-selected",
+    "viewport": "1024x768",
+    "forced": false,
+    "glyphs": {
+      "before": {
+        "registry": 0,
+        "legacy": 9,
+        "brand": 0
+      },
+      "after": {
+        "registry": 9,
+        "legacy": 0,
+        "brand": 1
+      }
+    },
+    "axe": {
+      "before": [],
+      "after": []
+    },
+    "errors": {
+      "before": [],
+      "after": []
+    }
+  },
+  {
+    "file": "ic2-checkout-tenders-cash-selected-1024x768-forced.png",
+    "case": "checkout-tenders-cash-selected",
+    "viewport": "1024x768",
+    "forced": true,
+    "glyphs": {
+      "before": {
+        "registry": 0,
+        "legacy": 9,
+        "brand": 0
+      },
+      "after": {
+        "registry": 9,
+        "legacy": 0,
+        "brand": 1
+      }
+    },
+    "axe": {
+      "before": [],
+      "after": []
+    },
+    "errors": {
+      "before": [],
+      "after": []
+    }
+  },
+  {
+    "file": "ic2-checkout-tenders-cash-selected-1280x800.png",
+    "case": "checkout-tenders-cash-selected",
+    "viewport": "1280x800",
+    "forced": false,
+    "glyphs": {
+      "before": {
+        "registry": 0,
+        "legacy": 9,
+        "brand": 0
+      },
+      "after": {
+        "registry": 9,
+        "legacy": 0,
+        "brand": 1
+      }
+    },
+    "axe": {
+      "before": [],
+      "after": []
+    },
+    "errors": {
+      "before": [],
+      "after": []
+    }
+  },
+  {
+    "file": "ic2-checkout-tenders-cash-selected-1280x800-forced.png",
+    "case": "checkout-tenders-cash-selected",
+    "viewport": "1280x800",
+    "forced": true,
+    "glyphs": {
+      "before": {
+        "registry": 0,
+        "legacy": 9,
+        "brand": 0
+      },
+      "after": {
+        "registry": 9,
+        "legacy": 0,
+        "brand": 1
+      }
+    },
+    "axe": {
+      "before": [],
+      "after": []
+    },
+    "errors": {
+      "before": [],
+      "after": []
+    }
+  },
+  {
+    "file": "ic2-banner-printer-1024x768.png",
+    "case": "banner-printer",
+    "viewport": "1024x768",
+    "forced": false,
+    "glyphs": {
+      "before": {
+        "registry": 0,
+        "legacy": 14,
+        "brand": 0
+      },
+      "after": {
+        "registry": 14,
+        "legacy": 0,
+        "brand": 1
+      }
+    },
+    "axe": {
+      "before": [],
+      "after": []
+    },
+    "errors": {
+      "before": [],
+      "after": []
+    }
+  },
+  {
+    "file": "ic2-banner-printer-1024x768-forced.png",
+    "case": "banner-printer",
+    "viewport": "1024x768",
+    "forced": true,
+    "glyphs": {
+      "before": {
+        "registry": 0,
+        "legacy": 14,
+        "brand": 0
+      },
+      "after": {
+        "registry": 14,
+        "legacy": 0,
+        "brand": 1
+      }
+    },
+    "axe": {
+      "before": [],
+      "after": []
+    },
+    "errors": {
+      "before": [],
+      "after": []
+    }
+  },
+  {
+    "file": "ic2-banner-printer-1280x800.png",
+    "case": "banner-printer",
+    "viewport": "1280x800",
+    "forced": false,
+    "glyphs": {
+      "before": {
+        "registry": 0,
+        "legacy": 14,
+        "brand": 0
+      },
+      "after": {
+        "registry": 14,
+        "legacy": 0,
+        "brand": 1
+      }
+    },
+    "axe": {
+      "before": [],
+      "after": []
+    },
+    "errors": {
+      "before": [],
+      "after": []
+    }
+  },
+  {
+    "file": "ic2-banner-printer-1280x800-forced.png",
+    "case": "banner-printer",
+    "viewport": "1280x800",
+    "forced": true,
+    "glyphs": {
+      "before": {
+        "registry": 0,
+        "legacy": 14,
+        "brand": 0
+      },
+      "after": {
+        "registry": 14,
+        "legacy": 0,
+        "brand": 1
+      }
+    },
+    "axe": {
+      "before": [],
+      "after": []
+    },
+    "errors": {
+      "before": [],
+      "after": []
+    }
+  },
+  {
+    "file": "ic2-banner-stack-1024x768.png",
+    "case": "banner-stack",
+    "viewport": "1024x768",
+    "forced": false,
+    "glyphs": {
+      "before": {
+        "registry": 0,
+        "legacy": 18,
+        "brand": 0
+      },
+      "after": {
+        "registry": 18,
+        "legacy": 0,
+        "brand": 1
+      }
+    },
+    "axe": {
+      "before": [],
+      "after": []
+    },
+    "errors": {
+      "before": [],
+      "after": []
+    }
+  },
+  {
+    "file": "ic2-banner-stack-1024x768-forced.png",
+    "case": "banner-stack",
+    "viewport": "1024x768",
+    "forced": true,
+    "glyphs": {
+      "before": {
+        "registry": 0,
+        "legacy": 18,
+        "brand": 0
+      },
+      "after": {
+        "registry": 18,
+        "legacy": 0,
+        "brand": 1
+      }
+    },
+    "axe": {
+      "before": [],
+      "after": []
+    },
+    "errors": {
+      "before": [],
+      "after": []
+    }
+  },
+  {
+    "file": "ic2-banner-stack-1280x800.png",
+    "case": "banner-stack",
+    "viewport": "1280x800",
+    "forced": false,
+    "glyphs": {
+      "before": {
+        "registry": 0,
+        "legacy": 18,
+        "brand": 0
+      },
+      "after": {
+        "registry": 18,
+        "legacy": 0,
+        "brand": 1
+      }
+    },
+    "axe": {
+      "before": [],
+      "after": []
+    },
+    "errors": {
+      "before": [],
+      "after": []
+    }
+  },
+  {
+    "file": "ic2-banner-stack-1280x800-forced.png",
+    "case": "banner-stack",
+    "viewport": "1280x800",
+    "forced": true,
+    "glyphs": {
+      "before": {
+        "registry": 0,
+        "legacy": 18,
+        "brand": 0
+      },
+      "after": {
+        "registry": 18,
+        "legacy": 0,
+        "brand": 1
+      }
+    },
+    "axe": {
+      "before": [],
+      "after": []
+    },
+    "errors": {
+      "before": [],
+      "after": []
+    }
+  },
+  {
+    "file": "ic2-entry-sign-in-1024x768.png",
+    "case": "entry-sign-in",
+    "viewport": "1024x768",
+    "forced": false,
+    "glyphs": {
+      "before": {
+        "registry": 0,
+        "legacy": 3,
+        "brand": 0
+      },
+      "after": {
+        "registry": 2,
+        "legacy": 0,
+        "brand": 1
+      }
+    },
+    "axe": {
+      "before": [],
+      "after": []
+    },
+    "errors": {
+      "before": [],
+      "after": []
+    }
+  },
+  {
+    "file": "ic2-entry-sign-in-1024x768-forced.png",
+    "case": "entry-sign-in",
+    "viewport": "1024x768",
+    "forced": true,
+    "glyphs": {
+      "before": {
+        "registry": 0,
+        "legacy": 3,
+        "brand": 0
+      },
+      "after": {
+        "registry": 2,
+        "legacy": 0,
+        "brand": 1
+      }
+    },
+    "axe": {
+      "before": [],
+      "after": []
+    },
+    "errors": {
+      "before": [],
+      "after": []
+    }
+  },
+  {
+    "file": "ic2-entry-sign-in-1280x800.png",
+    "case": "entry-sign-in",
+    "viewport": "1280x800",
+    "forced": false,
+    "glyphs": {
+      "before": {
+        "registry": 0,
+        "legacy": 3,
+        "brand": 0
+      },
+      "after": {
+        "registry": 2,
+        "legacy": 0,
+        "brand": 1
+      }
+    },
+    "axe": {
+      "before": [],
+      "after": []
+    },
+    "errors": {
+      "before": [],
+      "after": []
+    }
+  },
+  {
+    "file": "ic2-entry-sign-in-1280x800-forced.png",
+    "case": "entry-sign-in",
+    "viewport": "1280x800",
+    "forced": true,
+    "glyphs": {
+      "before": {
+        "registry": 0,
+        "legacy": 3,
+        "brand": 0
+      },
+      "after": {
+        "registry": 2,
+        "legacy": 0,
+        "brand": 1
+      }
+    },
+    "axe": {
+      "before": [],
+      "after": []
+    },
+    "errors": {
+      "before": [],
+      "after": []
+    }
+  },
+  {
+    "file": "ic2-entry-ready-1024x768.png",
+    "case": "entry-ready",
+    "viewport": "1024x768",
+    "forced": false,
+    "glyphs": {
+      "before": {
+        "registry": 0,
+        "legacy": 2,
+        "brand": 0
+      },
+      "after": {
+        "registry": 1,
+        "legacy": 0,
+        "brand": 1
+      }
+    },
+    "axe": {
+      "before": [],
+      "after": []
+    },
+    "errors": {
+      "before": [],
+      "after": []
+    }
+  },
+  {
+    "file": "ic2-entry-ready-1024x768-forced.png",
+    "case": "entry-ready",
+    "viewport": "1024x768",
+    "forced": true,
+    "glyphs": {
+      "before": {
+        "registry": 0,
+        "legacy": 2,
+        "brand": 0
+      },
+      "after": {
+        "registry": 1,
+        "legacy": 0,
+        "brand": 1
+      }
+    },
+    "axe": {
+      "before": [],
+      "after": []
+    },
+    "errors": {
+      "before": [],
+      "after": []
+    }
+  },
+  {
+    "file": "ic2-entry-ready-1280x800.png",
+    "case": "entry-ready",
+    "viewport": "1280x800",
+    "forced": false,
+    "glyphs": {
+      "before": {
+        "registry": 0,
+        "legacy": 2,
+        "brand": 0
+      },
+      "after": {
+        "registry": 1,
+        "legacy": 0,
+        "brand": 1
+      }
+    },
+    "axe": {
+      "before": [],
+      "after": []
+    },
+    "errors": {
+      "before": [],
+      "after": []
+    }
+  },
+  {
+    "file": "ic2-entry-ready-1280x800-forced.png",
+    "case": "entry-ready",
+    "viewport": "1280x800",
+    "forced": true,
+    "glyphs": {
+      "before": {
+        "registry": 0,
+        "legacy": 2,
+        "brand": 0
+      },
+      "after": {
+        "registry": 1,
+        "legacy": 0,
+        "brand": 1
+      }
+    },
+    "axe": {
+      "before": [],
+      "after": []
+    },
+    "errors": {
+      "before": [],
+      "after": []
+    }
+  },
+  {
+    "file": "ic2-entry-pairing-1024x768.png",
+    "case": "entry-pairing",
+    "viewport": "1024x768",
+    "forced": false,
+    "glyphs": {
+      "before": {
+        "registry": 0,
+        "legacy": 2,
+        "brand": 0
+      },
+      "after": {
+        "registry": 1,
+        "legacy": 0,
+        "brand": 1
+      }
+    },
+    "axe": {
+      "before": [],
+      "after": []
+    },
+    "errors": {
+      "before": [],
+      "after": []
+    }
+  },
+  {
+    "file": "ic2-entry-pairing-1024x768-forced.png",
+    "case": "entry-pairing",
+    "viewport": "1024x768",
+    "forced": true,
+    "glyphs": {
+      "before": {
+        "registry": 0,
+        "legacy": 2,
+        "brand": 0
+      },
+      "after": {
+        "registry": 1,
+        "legacy": 0,
+        "brand": 1
+      }
+    },
+    "axe": {
+      "before": [],
+      "after": []
+    },
+    "errors": {
+      "before": [],
+      "after": []
+    }
+  },
+  {
+    "file": "ic2-entry-pairing-1280x800.png",
+    "case": "entry-pairing",
+    "viewport": "1280x800",
+    "forced": false,
+    "glyphs": {
+      "before": {
+        "registry": 0,
+        "legacy": 2,
+        "brand": 0
+      },
+      "after": {
+        "registry": 1,
+        "legacy": 0,
+        "brand": 1
+      }
+    },
+    "axe": {
+      "before": [],
+      "after": []
+    },
+    "errors": {
+      "before": [],
+      "after": []
+    }
+  },
+  {
+    "file": "ic2-entry-pairing-1280x800-forced.png",
+    "case": "entry-pairing",
+    "viewport": "1280x800",
+    "forced": true,
+    "glyphs": {
+      "before": {
+        "registry": 0,
+        "legacy": 2,
+        "brand": 0
+      },
+      "after": {
+        "registry": 1,
+        "legacy": 0,
+        "brand": 1
+      }
+    },
+    "axe": {
+      "before": [],
+      "after": []
+    },
+    "errors": {
+      "before": [],
+      "after": []
+    }
+  },
+  {
+    "file": "ic2-entry-locked-1024x768.png",
+    "case": "entry-locked",
+    "viewport": "1024x768",
+    "forced": false,
+    "glyphs": {
+      "before": {
+        "registry": 0,
+        "legacy": 4,
+        "brand": 0
+      },
+      "after": {
+        "registry": 3,
+        "legacy": 0,
+        "brand": 1
+      }
+    },
+    "axe": {
+      "before": [],
+      "after": []
+    },
+    "errors": {
+      "before": [],
+      "after": []
+    }
+  },
+  {
+    "file": "ic2-entry-locked-1024x768-forced.png",
+    "case": "entry-locked",
+    "viewport": "1024x768",
+    "forced": true,
+    "glyphs": {
+      "before": {
+        "registry": 0,
+        "legacy": 4,
+        "brand": 0
+      },
+      "after": {
+        "registry": 3,
+        "legacy": 0,
+        "brand": 1
+      }
+    },
+    "axe": {
+      "before": [],
+      "after": []
+    },
+    "errors": {
+      "before": [],
+      "after": []
+    }
+  },
+  {
+    "file": "ic2-entry-locked-1280x800.png",
+    "case": "entry-locked",
+    "viewport": "1280x800",
+    "forced": false,
+    "glyphs": {
+      "before": {
+        "registry": 0,
+        "legacy": 4,
+        "brand": 0
+      },
+      "after": {
+        "registry": 3,
+        "legacy": 0,
+        "brand": 1
+      }
+    },
+    "axe": {
+      "before": [],
+      "after": []
+    },
+    "errors": {
+      "before": [],
+      "after": []
+    }
+  },
+  {
+    "file": "ic2-entry-locked-1280x800-forced.png",
+    "case": "entry-locked",
+    "viewport": "1280x800",
+    "forced": true,
+    "glyphs": {
+      "before": {
+        "registry": 0,
+        "legacy": 4,
+        "brand": 0
+      },
+      "after": {
+        "registry": 3,
+        "legacy": 0,
+        "brand": 1
+      }
+    },
+    "axe": {
+      "before": [],
+      "after": []
+    },
+    "errors": {
+      "before": [],
+      "after": []
+    }
+  }
+]

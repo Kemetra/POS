@@ -10,7 +10,7 @@ import type { JSX } from 'react';
 import { Link } from 'react-router-dom';
 
 import { ScreenSection } from '../../v5/foundation/ScreenSection';
-import { SearchGlyph } from '../../v5/manager/honest/SearchGlyph';
+import { Icon } from '../../icons/Icon';
 import { HonestNotice } from '../../v5/manager/honest/HonestNotice';
 import { HONEST_COPY, MANAGER_PATHS } from '../../v5/manager/honest/honest-copy';
 
@@ -28,7 +28,7 @@ export function InventoryPlaceholder(): JSX.Element {
               data-testid="inventory-diagnostics-link"
             >
               <span className="v5-manager-tile__glyph" aria-hidden="true">
-                <SearchGlyph />
+                <Icon name="search" />
               </span>
               <span className="v5-manager-tile__title">{copy.diagnosticsTitle}</span>
               <span className="v5-manager-tile__hint">{copy.diagnosticsHint}</span>

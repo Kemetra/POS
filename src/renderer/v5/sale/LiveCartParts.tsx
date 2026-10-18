@@ -1,7 +1,7 @@
 import { useRef, useState, type JSX, type MouseEvent } from 'react';
 import type { CartLineItem } from '../../sale/useSaleCartController';
 import { formatHumanMoney } from '../../ui/format/human-format';
-import { V5Icon } from '../foundation/V5Icon';
+import { Icon } from '../../icons/Icon';
 import { ConfirmDialog } from '../foundation/ConfirmDialog';
 import { Dialog } from '../foundation/Dialog';
 import { focusScanOwner } from '../../scan/scan-anchor';
@@ -130,7 +130,7 @@ function QuantityControl(props: Readonly<LineProps>): JSX.Element {
           aria-label={`إنقاص كمية ${line.displayName}`}
           onClick={decrement}
         >
-          <V5Icon name="minus" />
+          <Icon name="remove" />
         </button>
       )}
       <strong dir="ltr">{line.quantity}</strong>
@@ -144,7 +144,7 @@ function QuantityControl(props: Readonly<LineProps>): JSX.Element {
             props.onIncrement(line);
           }}
         >
-          <V5Icon name="plus" />
+          <Icon name="add" />
         </button>
       )}
     </div>

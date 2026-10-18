@@ -1,7 +1,7 @@
 import { useEffect, useState, type JSX } from 'react';
 
 import type { PairingBridgeAPI } from '../../../shared/bridge-api';
-import { V5Icon } from '../foundation/V5Icon';
+import { PharmacyCross } from '../brand/PharmacyCross';
 import { SIGN_IN_COPY } from './entry-copy';
 
 /**
@@ -19,7 +19,7 @@ export function EntryStrip({ terminalLabel }: Readonly<{ terminalLabel?: string 
     <header className="v5-entry__bar" data-testid="entry-strip">
       <span className="v5-entry__brand">
         <span className="v5-entry__brand-mark" aria-hidden="true">
-          <V5Icon name="cross" size={14} />
+          <PharmacyCross size={14} />
         </span>
         <span className="v5-ltr">POS Pulse</span>
       </span>

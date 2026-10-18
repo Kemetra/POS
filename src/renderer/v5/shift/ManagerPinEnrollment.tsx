@@ -6,7 +6,7 @@ import {
   type ShiftManagerPinEnrollRequest,
 } from '../../../shared/shift-cashup/types';
 import { Notice } from '../foundation/Notice';
-import { V5Icon } from '../foundation/V5Icon';
+import { Icon } from '../../icons/Icon';
 import { callShift, useSingleFlight } from './shift-bridge';
 import { SHIFT_COPY, shiftRefusalMessage } from './shift-copy';
 import { normalizeDigits } from './shift-format';
@@ -95,7 +95,7 @@ export function ManagerPinEnrollment({
     >
       <div className="v5-shift-lead">
         <span className="v5-shift-glyph" aria-hidden="true">
-          <V5Icon name="lock" />
+          <Icon name="lock" />
         </span>
         <div>
           <h2 id={headingId}>{SHIFT_COPY.enrollHeading}</h2>

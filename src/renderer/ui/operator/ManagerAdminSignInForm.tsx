@@ -4,7 +4,7 @@ import type { OperatorBridgeAPI } from '../../../shared/bridge-api.js';
 import { useOperatorSessionStore } from '../../stores/operator-session-store.js';
 import { completeSignIn } from '../../session/complete-sign-in.js';
 import { SIGN_IN_REFUSAL_COPY, EMPTY_INPUT_MESSAGE } from './messages.js';
-import { V5Icon } from '../../v5/foundation/V5Icon.js';
+import { Icon } from '../../icons/Icon.js';
 import { SIGN_IN_COPY } from '../../v5/entry/entry-copy.js';
 import { RefusalNotice } from '../../v5/entry/RefusalNotice.js';
 
@@ -155,7 +155,7 @@ export function ManagerAdminSignInForm(props: Readonly<ManagerAdminSignInFormPro
           data-testid="sign-in-back"
           onClick={onBack}
         >
-          <V5Icon name="back" />
+          <Icon name="back" />
           {SIGN_IN_COPY.back}
         </button>
       )}

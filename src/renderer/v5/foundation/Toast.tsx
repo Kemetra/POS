@@ -1,5 +1,5 @@
 import { useEffect, type JSX } from 'react';
-import { V5Icon } from './V5Icon';
+import { Icon } from '../../icons/Icon';
 import './messages.css';
 
 interface ToastProps {
@@ -37,7 +37,7 @@ export function Toast({
         aria-label="إغلاق الإشعار"
         onClick={onDismiss}
       >
-        <V5Icon name="close" size={16} />
+        <Icon name="close" size="sm" />
       </button>
     </div>
   );

@@ -11,7 +11,7 @@ import { SCAN_PAUSED_DIALOG_STATUS } from '../../scan/scan-messages';
 import { useScanNoticeStore } from '../../scan/scan-notice-store';
 import { formatHumanMoney } from '../../ui/format/human-format';
 import { Notice } from '../foundation/Notice';
-import { V5Icon } from '../foundation/V5Icon';
+import { Icon } from '../../icons/Icon';
 import { callPark, type ParkUnreachable } from './park-bridge';
 import { PARK_COPY, itemsLabel, parkedTime } from './park-copy';
 import { ResumeReview } from './ResumeReview';
@@ -251,7 +251,7 @@ function ParkedRow(
       <span className="v5-park-row__stale">
         {sale.stale && (
           <span className="v5-park-tag v5-park-tag--stale">
-            <V5Icon name="manager-shift" size={16} />
+            <Icon name="shift" size="sm" />
             {PARK_COPY.stale}
           </span>
         )}

@@ -189,7 +189,7 @@ export function PrinterFailureBanner({
   return (
     <Banner
       tone="warning"
-      icon="printer"
+      icon="print"
       testId="printer-failure-banner"
       actions={
         <>

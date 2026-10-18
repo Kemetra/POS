@@ -2,7 +2,7 @@ import { useId, type JSX, type ReactNode } from 'react';
 
 import type { StuckShiftSummary } from '../../../../shared/bridge-api';
 import { Notice } from '../../foundation/Notice';
-import { V5Icon } from '../../foundation/V5Icon';
+import { Icon } from '../../../icons/Icon';
 import { STUCK_SHIFTS_COPY as COPY } from './stuck-shifts-copy';
 import { displayNameOf, formatOpenFor, initialOf } from './stuck-shifts-model';
 import type { StuckShiftFocus } from './use-stuck-shift-focus';
@@ -79,7 +79,7 @@ export function StuckShiftsUnreachable({
         testId="stuck-shift-surface-error"
         action={
           <button type="button" className="v5-stuck-btn" onClick={onRetry}>
-            <V5Icon name="retry" size={18} />
+            <Icon name="retry" />
             {COPY.retry}
           </button>
         }

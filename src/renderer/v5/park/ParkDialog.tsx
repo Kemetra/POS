@@ -4,7 +4,7 @@ import { PARK_LABEL_MAX_LENGTH, type CartParkBridgeAPI } from '../../../shared/c
 import { formatHumanMoney } from '../../ui/format/human-format';
 import { Dialog } from '../foundation/Dialog';
 import { Notice } from '../foundation/Notice';
-import { V5Icon } from '../foundation/V5Icon';
+import { Icon } from '../../icons/Icon';
 import { callPark, newIdempotencyKey } from './park-bridge';
 import { PARK_COPY, itemsLabel, parkRefusalView, type ParkRefusalView } from './park-copy';
 
@@ -141,7 +141,7 @@ export function ParkDialog(props: Readonly<Props>): JSX.Element {
             }}
           />
           <p className="v5-park-pii" id={piiId}>
-            <V5Icon name="status-warning" />
+            <Icon name="status.warning" />
             <span>{PARK_COPY.pii}</span>
           </p>
         </div>

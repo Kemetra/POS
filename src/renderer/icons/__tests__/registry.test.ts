@@ -1,5 +1,5 @@
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
+import { join, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 import { FLUENT_PATHS } from '../fluent-paths';
@@ -11,7 +11,7 @@ import { ICON_NAMES, ICON_REGISTRY, assetKey, type IconGrid, type IconName } fro
  * mirroring, and it declares only the grids its call sites use.
  */
 
-/** Doc 25 §3: each `V5Icon` key (bar the brand `cross`) and the name it becomes. */
+/** Doc 25 §3: each former `V5Icon` key (bar the brand `cross`) and the name it became. */
 const FROM_V5: Readonly<Record<string, IconName>> = {
   search: 'search',
   scan: 'scan',
@@ -68,18 +68,37 @@ const SLIM_RAIL: readonly IconName[] = [
   'settings',
 ];
 
-function v5Keys(): string[] {
-  const source = readFileSync(resolve(__dirname, '../../v5/foundation/V5Icon.tsx'), 'utf-8');
-  const body = /const PATHS = \{([\s\S]*?)\n\} as const;/.exec(source)?.[1] ?? '';
-  return [...body.matchAll(/^ {2}'?([a-z-]+)'?:/gm)].map((m) => m[1] ?? '');
+/** Production renderer sources, outside the registry module itself. */
+function consumerSources(): string[] {
+  const renderer = resolve(__dirname, '../..');
+  const out: string[] = [];
+  const walk = (dir: string): void => {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      const path = join(dir, entry.name);
+      if (entry.isDirectory()) {
+        if (entry.name !== '__tests__' && path !== resolve(renderer, 'icons')) walk(path);
+      } else if (/\.tsx?$/.test(entry.name) && !/\.test\.tsx?$/.test(entry.name)) {
+        out.push(readFileSync(path, 'utf-8'));
+      }
+    }
+  };
+  walk(renderer);
+  return out;
 }
 
 describe('icon registry names', () => {
-  it('covers every V5Icon glyph except the brand cross, one meaning each', () => {
-    const keys = v5Keys();
-    expect(keys).toHaveLength(39);
-    expect(keys.filter((k) => k !== 'cross').sort()).toEqual(Object.keys(FROM_V5).sort());
+  it('replaces every former V5Icon glyph except the brand cross, one meaning each', () => {
+    // RT-695 (IC-2) deleted V5Icon; FROM_V5 keeps its 38 non-brand keys as the record.
+    expect(existsSync(resolve(__dirname, '../../v5/foundation/V5Icon.tsx'))).toBe(false);
+    expect(Object.keys(FROM_V5)).toHaveLength(38);
     expect([...ICON_NAMES].sort()).toEqual([...new Set(Object.values(FROM_V5))].sort());
+  });
+
+  it('declares no name that no renderer call site uses (doc 25 §6)', () => {
+    const source = consumerSources().join('\n');
+    for (const name of ICON_NAMES) {
+      expect(source, name).toMatch(new RegExp(`['"\`]${name.replace('.', '\\.')}['"\`]`));
+    }
   });
 
   it('names meanings, never screens, shapes or the vendor', () => {

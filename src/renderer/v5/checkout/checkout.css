@@ -451,6 +451,11 @@
   color: var(--color-text-muted);
 }
 
+/* RT-695: the registry glyph is a block box; centre it where the ⌫ text was. */
+.v5-cash-keypad__key--delete .rt-icon {
+  margin-inline: auto;
+}
+
 /* ── Card terminal entry (CardTerminalEntry) ──────────────────────────────
  * The instruction, the amount to key into the terminal (a fact, not a field)
  * and the optional reference. The commit lives in the ledger's pinned slot.

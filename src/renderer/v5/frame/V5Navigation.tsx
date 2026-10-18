@@ -2,21 +2,26 @@ import type { JSX } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import type { ShellNavEntryId } from '../../../../specs/003-pos-ui-shell/contracts/shell-routes';
 import { useOperatorSessionStore } from '../../stores/operator-session-store';
-import { V5Icon, type V5IconName } from '../foundation/V5Icon';
+import { Icon } from '../../icons/Icon';
+import { PharmacyCross } from '../brand/PharmacyCross';
 import { isNavEntryCurrent, roleLabelAr, visibleNavEntries } from './nav-model';
 import { StatusIndicator } from './StatusIndicator';
 import { V5SignOut } from './V5SignOut';
 
-/** RT-242: the slim rail's glyph per entry (decorative; the label beside it names the entry). */
-const NAV_ICON: Readonly<Record<ShellNavEntryId, V5IconName>> = {
-  dashboard: 'nav-dashboard',
-  cart: 'nav-cart',
-  sales: 'nav-sales',
-  returns: 'nav-returns',
-  audit: 'nav-audit',
-  inventory: 'nav-inventory',
-  settings: 'nav-settings',
-};
+/**
+ * RT-242: the slim rail's glyph per entry (decorative; the label beside it
+ * names the entry). RT-695: the current entry takes the Filled glyph
+ * (D-263-8); the labelled panel shows no glyph at all (frame.css).
+ */
+const NAV_ICON = {
+  dashboard: 'dashboard',
+  cart: 'cart',
+  sales: 'sale',
+  returns: 'return',
+  audit: 'audit',
+  inventory: 'inventory',
+  settings: 'settings',
+} as const satisfies Readonly<Record<ShellNavEntryId, string>>;
 
 /**
  * Primary v5 navigation. Owns the only brand mark and the operator identity,
@@ -39,7 +44,7 @@ export function V5Navigation(): JSX.Element {
     <nav className="v5-frame__nav" aria-label="التنقل الرئيسي">
       <div className="v5-frame__brand">
         <span className="v5-frame__brand-mark" aria-hidden="true">
-          <V5Icon name="cross" size={18} />
+          <PharmacyCross size={18} />
         </span>
         <span className="v5-frame__brand-name v5-ltr">POS Pulse</span>
       </div>
@@ -53,7 +58,7 @@ export function V5Navigation(): JSX.Element {
               className={`v5-frame__link${isNavEntryCurrent(entry, pathname) ? ' v5-frame__link--active' : ''}`}
             >
               <span className="v5-frame__link-icon">
-                <V5Icon name={NAV_ICON[entry.id]} />
+                <Icon name={NAV_ICON[entry.id]} selected={isNavEntryCurrent(entry, pathname)} />
               </span>
               <span className="v5-frame__link-label">{entry.label}</span>
             </Link>

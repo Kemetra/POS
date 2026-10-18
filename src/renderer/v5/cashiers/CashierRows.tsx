@@ -1,7 +1,8 @@
 import { useId, type JSX } from 'react';
 
 import type { CashierPinState, CashierPinStatus } from '../../../shared/bridge-api';
-import { V5Icon, type V5IconName } from '../foundation/V5Icon';
+import { Icon } from '../../icons/Icon';
+import type { IconName } from '../../icons/registry';
 import { CASHIERS_COPY } from './cashiers-copy';
 import { formatLockTime, rowActions, type RowAction } from './cashiers-model';
 
@@ -13,9 +14,9 @@ import { formatLockTime, rowActions, type RowAction } from './cashiers-model';
  * reaches the DOM (PR-1).
  */
 
-const BADGE_GLYPH: Record<CashierPinState, V5IconName> = {
-  no_pin: 'dash',
-  ready: 'check',
+const BADGE_GLYPH: Record<CashierPinState, IconName> = {
+  no_pin: 'status.neutral',
+  ready: 'confirm',
   locked: 'lock',
 };
 
@@ -82,7 +83,7 @@ function PinBadge({ cashier }: Readonly<{ cashier: CashierPinStatus }>): JSX.Ele
   const until = cashier.pin === 'locked' ? lockTime(cashier.locked_until) : null;
   return (
     <span className="v5-cashiers-badge" data-pin={cashier.pin} data-testid="cashier-pin-badge">
-      <V5Icon name={BADGE_GLYPH[cashier.pin]} size={16} />
+      <Icon name={BADGE_GLYPH[cashier.pin]} size="sm" />
       {CASHIERS_COPY.badge[cashier.pin]}
       {until !== null && (
         <>

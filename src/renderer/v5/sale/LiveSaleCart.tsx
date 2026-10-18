@@ -1,7 +1,7 @@
 import { useState, type JSX, type ReactNode } from 'react';
 import type { CartLineItem, DiscountPlaceholderSeed } from '../../sale/useSaleCartController';
 import { formatHumanCount } from '../../ui/format/human-format';
-import { V5Icon } from '../foundation/V5Icon';
+import { Icon } from '../../icons/Icon';
 import { CartLineRow, NoteDialog, VoidControl, money } from './LiveCartParts';
 import { useRemovalFocus } from './useRemovalFocus';
 import type { LineFlags } from '../../stores/line-flags-store';
@@ -269,7 +269,7 @@ function PrimaryAction(props: Readonly<Props>): JSX.Element {
         onClick={props.onContinue}
       >
         <span>المتابعة إلى الدفع</span>
-        <V5Icon name="forward" size={24} />
+        <Icon name="forward" size="lg" />
       </button>
     );
   if (props.cancelled) return <p className="v5-live-notice">تم إلغاء البيع.</p>;
@@ -281,7 +281,7 @@ function PrimaryAction(props: Readonly<Props>): JSX.Element {
       onClick={props.onHandoff}
     >
       <span>{props.handingOff ? 'جارٍ تسليم السلة…' : 'تسليم السلة للدفع'}</span>
-      {!props.handingOff && <V5Icon name="forward" size={24} />}
+      {!props.handingOff && <Icon name="forward" size="lg" />}
     </button>
   );
 }

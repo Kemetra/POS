@@ -17,7 +17,8 @@ import type {
 } from '../../../shared/sale-void/types';
 import { Notice } from '../foundation/Notice';
 import { ScreenSection } from '../foundation/ScreenSection';
-import { V5Icon, type V5IconName } from '../foundation/V5Icon';
+import { Icon } from '../../icons/Icon';
+import type { IconName } from '../../icons/registry';
 import { useSingleFlight } from '../shift/shift-bridge';
 import { formatShiftTime } from '../shift/shift-format';
 import { VOID_COPY, voidRefusalMessage, voidStateLabel, voidWaitingMessage } from './void-copy';
@@ -332,20 +333,20 @@ function HistoryBody(props: {
 
 /** Each state has its own tone and glyph, so it never rests on colour alone (OD-3). */
 const STATE_LOOK: Readonly<
-  Record<SaleVoidState, { tone: 'neutral' | 'success' | 'danger'; icon: V5IconName }>
+  Record<SaleVoidState, { tone: 'neutral' | 'success' | 'danger'; icon: IconName }>
 > = {
   // The clock glyph (the same path as the manager-home shift card).
-  pending: { tone: 'neutral', icon: 'manager-shift' },
+  pending: { tone: 'neutral', icon: 'shift' },
   unknown: { tone: 'neutral', icon: 'retry' },
-  confirmed: { tone: 'success', icon: 'status-success' },
-  refused: { tone: 'danger', icon: 'status-warning' },
+  confirmed: { tone: 'success', icon: 'status.success' },
+  refused: { tone: 'danger', icon: 'status.warning' },
 };
 
 function StatePill({ state }: { state: SaleVoidState }): JSX.Element {
   const look = STATE_LOOK[state];
   return (
     <span className="v5-void-state" data-tone={look.tone}>
-      <V5Icon name={look.icon} size={16} />
+      <Icon name={look.icon} size="sm" />
       {voidStateLabel(state)}
     </span>
   );
@@ -384,7 +385,7 @@ function HistoryRow(props: {
       </p>
       {entry.waiting_for !== null && (
         <output className="v5-void-row__full v5-void-row__waiting">
-          <V5Icon name="manager-shift" size={16} />
+          <Icon name="shift" size="sm" />
           <span>{voidWaitingMessage(entry.waiting_for, entry.requester_display_name)}</span>
         </output>
       )}

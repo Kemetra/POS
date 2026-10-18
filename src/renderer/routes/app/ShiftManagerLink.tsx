@@ -29,7 +29,7 @@ export function ShiftManagerLink(): JSX.Element | null {
   return (
     <ManagerTile
       to={MANAGER_PATH}
-      icon="manager-shift"
+      icon="shift"
       title={SHIFT_COPY.managerLink}
       description={HOME_COPY.shift.description}
       testId="dashboard-shift-link"

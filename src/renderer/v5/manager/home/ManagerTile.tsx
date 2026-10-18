@@ -1,12 +1,13 @@
 import { useId, type JSX } from 'react';
 import { Link } from 'react-router-dom';
 
-import { V5Icon, type V5IconName } from '../../foundation/V5Icon';
+import { Icon } from '../../../icons/Icon';
+import type { IconName } from '../../../icons/registry';
 import './manager-home.css';
 
 interface ManagerTileProps {
   to: string;
-  icon: V5IconName;
+  icon: IconName;
   title: string;
   description: string;
   testId: string;
@@ -36,7 +37,7 @@ export function ManagerTile({
         data-testid={testId}
       >
         <span className="v5-manager-tile__glyph">
-          <V5Icon name={icon} />
+          <Icon name={icon} />
         </span>
         <span id={`${id}-title`} className="v5-manager-tile__title">
           {title}

@@ -187,7 +187,7 @@
   font-size: var(--font-size-sm);
 }
 
-.v5-park-pii .v5-icon {
+.v5-park-pii .rt-icon {
   flex: none;
   color: var(--color-warning);
 }
@@ -478,7 +478,7 @@
   font-weight: var(--font-weight-semibold);
 }
 
-.v5-park-conflict__head .v5-icon {
+.v5-park-conflict__head .rt-icon {
   flex: none;
   color: var(--color-warning);
 }
@@ -501,7 +501,7 @@
   background: var(--color-warning-soft);
 }
 
-.v5-park-shift-alert > .v5-icon {
+.v5-park-shift-alert > .rt-icon {
   flex: none;
   margin-block-start: 2px;
   color: var(--color-warning);

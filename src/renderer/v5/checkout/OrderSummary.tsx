@@ -2,7 +2,7 @@ import { useId, useState, type FocusEvent, type JSX, type KeyboardEvent } from '
 
 import type { PaymentIntentEnvelope } from '../../../shared/cart/handoff-envelope';
 import { formatHumanCount, formatHumanMoney } from '../../ui/format/human-format';
-import { V5Icon } from '../foundation/V5Icon';
+import { Icon } from '../../icons/Icon';
 
 /**
  * RT-243 W1-C (freeze 15 §4, 06 `OrderSummary`; DESIGN.md Frame — Direction B)
@@ -63,7 +63,7 @@ export function OrderSummary({ envelope }: Readonly<OrderSummaryProps>): JSX.Ele
           ملخص الطلب
         </h2>
         <span className="v5-order-summary__frozen">
-          <V5Icon name="lock" size={16} />
+          <Icon name="lock" size="sm" />
           مجمّدة
         </span>
         <p className="v5-order-summary__counts">

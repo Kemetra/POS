@@ -117,8 +117,12 @@ describe('PrinterFailureBanner — V5 warning banner', () => {
 
   it('keeps its own printer glyph, so it is never mistaken for the offline banner', () => {
     const banner = renderBanner();
-    expect(banner.querySelector('[data-icon="printer"]')).not.toBeNull();
-    expect(banner.querySelector('[data-icon="warning"]')).toBeNull();
+    const tone = banner.querySelector('[data-icon="warning"]');
+    const source = banner.querySelector('[data-icon="print"]');
+    expect(source).not.toBeNull();
+    // RT-695 (doc 25 §4.1): the printer sits beside the tone's own glyph, tone first.
+    expect(tone).not.toBeNull();
+    expect(tone?.compareDocumentPosition(source as Node)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
   });
 
   it('keeps the copy and the three actions as V5 banner buttons', () => {

@@ -59,7 +59,7 @@ export function PairingScreen(props: Readonly<PairingScreenProps>): JSX.Element 
   return (
     <EntryCardScreen rootProps={{ 'data-testid': 'route-pairing', ...reasonAttr }}>
       <div className="v5-entry__card">
-        <EntryCardIcon name="link" />
+        <EntryCardIcon name="pair" />
         <div className="v5-entry__card-head">
           <h1 id="pairing-title" className="v5-entry__card-title">
             {PAIRING_COPY.title}

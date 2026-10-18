@@ -28,7 +28,7 @@ export function CashierManagementLink(): JSX.Element | null {
   return (
     <ManagerTile
       to={CASHIER_MANAGEMENT_PATH}
-      icon="manager-cashiers"
+      icon="people"
       title={CASHIER_MANAGEMENT_LINK_LABEL}
       description={HOME_COPY.cashiers.description}
       testId="dashboard-cashier-management-link"

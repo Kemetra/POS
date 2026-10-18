@@ -3,7 +3,7 @@ import { useEffect, useRef, type JSX, type RefObject } from 'react';
 import type { ResumePriceChange, ResumeUnavailableLine } from '../../../shared/cart/park-types';
 import { formatHumanMoney } from '../../ui/format/human-format';
 import { Notice } from '../foundation/Notice';
-import { V5Icon } from '../foundation/V5Icon';
+import { Icon } from '../../icons/Icon';
 import { PARK_COPY, conflictLead, parkedTime } from './park-copy';
 import { useCatalogueFreshness } from '../../sale/useCatalogueFreshness';
 import type { CurrentSale, ResumeFlow, ResumePreview } from './useResumeFlow';
@@ -140,7 +140,7 @@ function ConflictBlock({ sale }: Readonly<{ sale: CurrentSale }>): JSX.Element {
   return (
     <div className="v5-park-conflict" role="group" aria-labelledby="v5-park-conflict-head">
       <p className="v5-park-conflict__head" id="v5-park-conflict-head">
-        <V5Icon name="status-warning" />
+        <Icon name="status.warning" />
         <span>
           {conflictLead(sale.lineCount)} <bdi dir="ltr">{formatHumanMoney(sale.totalMinor)}</bdi>.
         </span>
@@ -165,7 +165,7 @@ function Difference({ change }: Readonly<{ change: ResumePriceChange }>): JSX.El
   const amount = formatHumanMoney(Math.abs(delta)).replace(' EGP', '');
   return (
     <span className="v5-park-diff" data-direction={up ? 'up' : 'down'}>
-      <V5Icon name={up ? 'arrow-up' : 'arrow-down'} size={16} />
+      <Icon name={up ? 'increase' : 'decrease'} size="sm" />
       <span className="v5-park-num" dir="ltr">{`${up ? '+' : '\u2212'}${amount}`}</span>
       <span className="v5-park-diff__word">{up ? PARK_COPY.rose : PARK_COPY.fell}</span>
     </span>
@@ -215,7 +215,7 @@ function RemovedTable({
           </span>
           <span role="cell">
             <span className="v5-park-tag v5-park-tag--gone">
-              <V5Icon name="status-danger" size={16} />
+              <Icon name="status.danger" size="sm" />
               {PARK_COPY.removedTag}
             </span>
           </span>

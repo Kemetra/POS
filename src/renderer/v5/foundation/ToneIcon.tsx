@@ -1,5 +1,5 @@
 import type { JSX } from 'react';
-import { V5Icon } from './V5Icon';
+import { Icon } from '../../icons/Icon';
 
 /**
  * Status roles (freeze 15 §4): success = proven only · warning = degraded ·
@@ -12,7 +12,7 @@ export type Tone = 'info' | 'success' | 'warning' | 'danger';
 export function ToneIcon({ tone }: Readonly<{ tone: Tone }>): JSX.Element {
   return (
     <span className="v5-tone-icon" data-icon={tone}>
-      <V5Icon name={`status-${tone}`} size={20} />
+      <Icon name={`status.${tone}`} />
     </span>
   );
 }

@@ -1,7 +1,8 @@
 import type { JSX } from 'react';
 
 import type { PaymentIntentEnvelope } from '../../../shared/cart/handoff-envelope';
-import { V5Icon, type V5IconName } from '../foundation/V5Icon';
+import { Icon } from '../../icons/Icon';
+import type { IconName } from '../../icons/registry';
 
 /**
  * RT-243 W1-C (freeze 15 §4 `TenderPicker`, 06) — the payment method tiles.
@@ -37,7 +38,7 @@ interface Tile {
   readonly testId: string;
   readonly label: string;
   readonly detail: string;
-  readonly icon: V5IconName;
+  readonly icon: IconName;
 }
 
 const CASH: Tile = {
@@ -45,7 +46,7 @@ const CASH: Tile = {
   testId: 'tender-cash',
   label: 'نقدي',
   detail: 'العملات الورقية والمعدنية',
-  icon: 'tender-cash',
+  icon: 'cash',
 };
 
 const CARD: Tile = {
@@ -53,7 +54,7 @@ const CARD: Tile = {
   testId: 'tender-external-card',
   label: 'بطاقة',
   detail: 'جهاز الشبكة الخارجي',
-  icon: 'tender-card',
+  icon: 'card',
 };
 
 function voucherTile(enabled: boolean): Tile {
@@ -62,7 +63,7 @@ function voucherTile(enabled: boolean): Tile {
     testId: 'tender-voucher',
     label: 'قسيمة',
     detail: enabled ? 'قسيمة داخلية' : 'غير متاحة حاليًا',
-    icon: 'tender-voucher',
+    icon: 'voucher',
   };
 }
 
@@ -107,11 +108,11 @@ export function TenderPicker({
             >
               <span className="v5-tender-tile__head">
                 <span className="v5-tender-tile__icon" aria-hidden="true">
-                  <V5Icon name={tile.icon} size={20} />
+                  <Icon name={tile.icon} />
                 </span>
                 {selected && (
                   <span className="v5-tender-tile__check" aria-hidden="true">
-                    <V5Icon name="check" size={16} />
+                    <Icon name="confirm" size="sm" />
                   </span>
                 )}
               </span>

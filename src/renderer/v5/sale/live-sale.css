@@ -330,11 +330,6 @@
 
 /* ── Polish pass (v5 live Sale only; the static proof keeps sale-screen.css) ── */
 
-.v5-icon {
-  display: block;
-  flex: 0 0 auto;
-}
-
 /* Region headings: one line, the heading speaks for itself. */
 .v5-live-sale .v5-sale-region-heading,
 .v5-live-sale .v5-sale-cart-heading {

@@ -116,6 +116,22 @@ describe('a burst is a scan wherever focus is (F-01)', () => {
     expect(screen.getByRole('status')).toHaveTextContent(SCAN_UNAVAILABLE_MESSAGE);
     expect(screen.getByTestId('scan-notice')).toHaveTextContent(SCAN_UNAVAILABLE_MESSAGE);
   });
+
+  it('marks the notice with the registry warning glyph, not a "!" character (RT-695)', () => {
+    render(
+      <>
+        <ScanGuardHost />
+        <button type="button">x</button>
+      </>,
+    );
+    burst(screen.getByRole('button', { name: 'x' }), '123');
+    const notice = screen.getByTestId('scan-notice');
+    expect(notice.querySelector('svg[data-icon="status.warning"]')).toHaveAttribute(
+      'aria-hidden',
+      'true',
+    );
+    expect(notice).not.toHaveTextContent('!');
+  });
 });
 
 describe('money, PIN and card-reference fields (M-S5)', () => {
