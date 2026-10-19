@@ -1,4 +1,4 @@
-import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
@@ -12,23 +12,7 @@ import { V5AppLayout } from '../../../src/renderer/v5/frame/V5AppLayout.js';
 import { SalesWorkspace } from '../../../src/renderer/routes/app/SalesWorkspace.js';
 import { useOperatorSessionStore } from '../../../src/renderer/stores/operator-session-store.js';
 import type { OperatorSessionView } from '../../../src/renderer/stores/operator-session-store.js';
-import {
-  CashierSignInHandler,
-  makeShiftDismissKey,
-} from '../../../src/main/operator/sign-in-handler.js';
-import type { CashierSignInRequest } from '../../../src/main/operator/sign-in-handler.js';
-import { hashPin } from '../../../src/main/operator/pin-credential.js';
-import { sealPinMaterial } from '../../../src/main/operator/pin-seal.js';
-import type { SafeStorageLike } from '../../../src/main/secrets/safe-storage.js';
-import type { DatabaseHandle } from '../../../src/main/db/client.js';
 import type { PairingStore } from '../../../src/main/pairing/store.js';
-import { SessionManager } from '../../../src/main/operator/session-manager.js';
-import { ProtoSessionStore } from '../../../src/main/operator/takeover-handler.js';
-import {
-  FAKE_USER_ID,
-  fakeCashierAdmission,
-} from '../../../src/main/operator/__tests__/__helpers__/fake-cashier-admission.js';
-import type { SecretKey, SecretStore } from '../../../src/shared/secret-store.js';
 
 /**
  * 004-operator-session T091 — ShiftClosedBanner + forced-close notice tests.
@@ -41,10 +25,11 @@ import type { SecretKey, SecretStore } from '../../../src/shared/secret-store.js
  *  - OperatorSessionStore.dismissShiftClosedNotice clears notice + calls bridge.
  *  - DashboardPlaceholder renders banner when notice is present.
  *  - DashboardPlaceholder does not render banner when notice is absent.
- *  - CashierSignInHandler.dismissForcedCloseNotice writes dismiss record.
- *  - CashierSignInHandler.signIn returns notice when forced-close shift exists.
- *  - CashierSignInHandler.signIn omits notice when dismiss record matches.
- *  - CashierSignInHandler.signIn omits notice when no forced-close shift.
+ *  - DISMISS_SHIFT_CLOSED_NOTICE IPC handler.
+ *
+ * The main-side notice resolution (sign-in) and dismiss record read the real
+ * cash-up tables and are covered in
+ * tests/integration/main/operator/forced-close-notice.test.ts (RT-554).
  */
 
 // ── Constants ──────────────────────────────────────────────────────────────
@@ -54,7 +39,6 @@ const TENANT = 't1';
 const BRANCH = 'b1';
 const TERMINAL = 'term1';
 const CASHIER_ID = 'cashier-t091';
-const PIN = '4321';
 
 const SESSION_VIEW: OperatorSessionView = {
   id: 'sess-t091',
@@ -65,122 +49,6 @@ const SESSION_VIEW: OperatorSessionView = {
   branch_id: BRANCH,
   started_at: '2026-05-10T09:00:00.000Z',
 };
-
-// ── Fake safeStorage (prefix-seal scheme matching existing tests) ──────────
-
-const PREFIX = Buffer.from('SEALED:', 'utf8');
-
-function makeFakeSafeStorage(): SafeStorageLike {
-  return {
-    isEncryptionAvailable: () => true,
-    encryptString: (plain) => Buffer.concat([PREFIX, Buffer.from(plain, 'utf8')]),
-    decryptString: (buf) => {
-      if (!buf.subarray(0, PREFIX.length).equals(PREFIX)) {
-        throw new Error('invalid ciphertext');
-      }
-      return buf.subarray(PREFIX.length).toString('utf8');
-    },
-  };
-}
-
-const ss = makeFakeSafeStorage();
-
-// ── DB row type ────────────────────────────────────────────────────────────
-
-interface TestDbRow {
-  tenant_id: string;
-  branch_id: string;
-  terminal_id: string;
-  cashier_clerk_user_id: string;
-  user_id: string;
-  pin_hash: Buffer;
-  pin_salt: Buffer;
-  failed_attempt_count: number;
-  lockout_until: string | null;
-}
-
-interface TestShiftRow {
-  tenant_id: string;
-  branch_id: string;
-  originating_terminal_id: string;
-  opening_operator_id: string;
-  closed_at: string;
-}
-
-let baseRow: TestDbRow;
-
-beforeAll(async () => {
-  const { pin_hash, pin_salt } = await hashPin(PIN);
-  const sealed = sealPinMaterial({ pin_hash, pin_salt }, ss);
-  baseRow = {
-    tenant_id: TENANT,
-    branch_id: BRANCH,
-    terminal_id: TERMINAL,
-    cashier_clerk_user_id: CASHIER_ID,
-    user_id: FAKE_USER_ID,
-    pin_hash: sealed.pin_hash,
-    pin_salt: sealed.pin_salt,
-    failed_attempt_count: 0,
-    lockout_until: null,
-  };
-}, 15_000);
-
-// ── Fakes ──────────────────────────────────────────────────────────────────
-
-function makeShiftRow(overrides: Partial<TestShiftRow> = {}): TestShiftRow {
-  return {
-    tenant_id: TENANT,
-    branch_id: BRANCH,
-    originating_terminal_id: TERMINAL,
-    opening_operator_id: CASHIER_ID,
-    closed_at: CLOSED_AT,
-    ...overrides,
-  };
-}
-
-function makeDb(pinRow: TestDbRow, shiftRow: TestShiftRow | undefined): DatabaseHandle {
-  return {
-    pragma: () => undefined,
-    prepare(sql: string) {
-      if (/shifts/i.test(sql)) {
-        return {
-          get: (tenantId: string, branchId: string, terminalId: string, cashierId: string) => {
-            if (shiftRow === undefined) return undefined;
-            if (shiftRow.tenant_id !== tenantId) return undefined;
-            if (shiftRow.branch_id !== branchId) return undefined;
-            if (shiftRow.originating_terminal_id !== terminalId) return undefined;
-            if (shiftRow.opening_operator_id !== cashierId) return undefined;
-            return { closed_at: shiftRow.closed_at };
-          },
-        };
-      }
-      if (/^\s*SELECT/i.test(sql)) {
-        return { get: () => pinRow };
-      }
-      return { run: () => undefined };
-    },
-    exec: () => undefined,
-    transaction: <T,>(fn: T) => fn,
-    close: () => undefined,
-  };
-}
-
-function makeMemorySecretStore(): SecretStore & { data: Map<string, string> } {
-  const data = new Map<string, string>();
-  return {
-    data,
-    get: vi.fn((key: SecretKey) => Promise.resolve(data.get(key) ?? null)),
-    set: vi.fn((key: SecretKey, val: string) => {
-      data.set(key, val);
-      return Promise.resolve();
-    }),
-    delete: vi.fn((key: SecretKey) => {
-      data.delete(key);
-      return Promise.resolve();
-    }),
-    isProductionBacked: () => false,
-  };
-}
 
 function makePairedStore(): PairingStore {
   return {
@@ -196,30 +64,6 @@ function makePairedStore(): PairingStore {
     persist: () => Promise.resolve(),
     clear: () => Promise.resolve(),
   };
-}
-
-function makeRequest(): CashierSignInRequest {
-  return {
-    kind: 'cashier',
-    cashier_clerk_user_id: CASHIER_ID,
-    pin: PIN,
-    display_name: 'Terry Cashier',
-  };
-}
-
-function makeHandler(
-  shiftRow: TestShiftRow | undefined,
-  store?: SecretStore,
-): CashierSignInHandler {
-  return new CashierSignInHandler({
-    db: makeDb(baseRow, shiftRow),
-    safeStorage: ss,
-    sessionManager: new SessionManager(),
-    admission: fakeCashierAdmission().deps,
-    pairingStore: makePairedStore(),
-    protoStore: new ProtoSessionStore(),
-    secretStore: store,
-  });
 }
 
 // ── IPC test helper ────────────────────────────────────────────────────────
@@ -407,125 +251,6 @@ describe('OperatorSessionStore — notice lifecycle', () => {
       expect(state.forced_close_notice).toBeUndefined();
     }
     expect(dismissFn).toHaveBeenCalledOnce();
-  });
-});
-
-// ── CashierSignInHandler — forced-close notice injection ───────────────────
-
-describe('CashierSignInHandler.signIn — notice injection', () => {
-  it('returns forced_close_notice when forced-close shift exists and no dismiss record', async () => {
-    const store = makeMemorySecretStore();
-    const handler = makeHandler(makeShiftRow(), store);
-    const result = await handler.signIn(makeRequest());
-    expect(result.kind).toBe('signed_in');
-    if (result.kind === 'signed_in') {
-      expect(result.forced_close_notice).toEqual({ closed_at: CLOSED_AT });
-    }
-  });
-
-  it('omits forced_close_notice when dismiss record matches closed_at', async () => {
-    const store = makeMemorySecretStore();
-    const dismissKey = makeShiftDismissKey(TENANT, BRANCH, TERMINAL, CASHIER_ID);
-    await store.set(dismissKey, JSON.stringify({ dismissed_closed_at: CLOSED_AT }));
-    const handler = makeHandler(makeShiftRow(), store);
-    const result = await handler.signIn(makeRequest());
-    expect(result.kind).toBe('signed_in');
-    if (result.kind === 'signed_in') {
-      expect(result.forced_close_notice).toBeUndefined();
-    }
-  });
-
-  it('shows notice when dismiss record exists for a different closed_at', async () => {
-    const store = makeMemorySecretStore();
-    const dismissKey = makeShiftDismissKey(TENANT, BRANCH, TERMINAL, CASHIER_ID);
-    await store.set(
-      dismissKey,
-      JSON.stringify({ dismissed_closed_at: '2026-01-01T00:00:00.000Z' }),
-    );
-    const handler = makeHandler(makeShiftRow(), store);
-    const result = await handler.signIn(makeRequest());
-    expect(result.kind).toBe('signed_in');
-    if (result.kind === 'signed_in') {
-      expect(result.forced_close_notice).toEqual({ closed_at: CLOSED_AT });
-    }
-  });
-
-  it('omits forced_close_notice when no forced-close shift exists', async () => {
-    const store = makeMemorySecretStore();
-    const handler = makeHandler(undefined, store);
-    const result = await handler.signIn(makeRequest());
-    expect(result.kind).toBe('signed_in');
-    if (result.kind === 'signed_in') {
-      expect(result.forced_close_notice).toBeUndefined();
-    }
-  });
-
-  it('ignores forced-close notices from another branch', async () => {
-    const store = makeMemorySecretStore();
-    const handler = makeHandler(makeShiftRow({ branch_id: 'branch-other' }), store);
-    const result = await handler.signIn(makeRequest());
-    expect(result.kind).toBe('signed_in');
-    if (result.kind === 'signed_in') {
-      expect(result.forced_close_notice).toBeUndefined();
-    }
-  });
-
-  it('ignores forced-close notices from another terminal', async () => {
-    const store = makeMemorySecretStore();
-    const handler = makeHandler(makeShiftRow({ originating_terminal_id: 'terminal-other' }), store);
-    const result = await handler.signIn(makeRequest());
-    expect(result.kind).toBe('signed_in');
-    if (result.kind === 'signed_in') {
-      expect(result.forced_close_notice).toBeUndefined();
-    }
-  });
-});
-
-// ── CashierSignInHandler.dismissForcedCloseNotice ─────────────────────────
-
-describe('CashierSignInHandler.dismissForcedCloseNotice', () => {
-  it('writes dismiss record to secretStore with correct key and closed_at', async () => {
-    const store = makeMemorySecretStore();
-    const handler = makeHandler(makeShiftRow(), store);
-    await handler.dismissForcedCloseNotice(TENANT, BRANCH, TERMINAL, CASHIER_ID);
-    // eslint-disable-next-line @typescript-eslint/unbound-method
-    expect(vi.mocked(store.set)).toHaveBeenCalledOnce();
-    const dismissKey = makeShiftDismissKey(TENANT, BRANCH, TERMINAL, CASHIER_ID);
-    const stored = store.data.get(dismissKey);
-    expect(stored).toBeDefined();
-    const parsed = JSON.parse(String(stored)) as { dismissed_closed_at: string };
-    expect(parsed.dismissed_closed_at).toBe(CLOSED_AT);
-  });
-
-  it('is a no-op when no forced-close shift exists', async () => {
-    const store = makeMemorySecretStore();
-    const handler = makeHandler(undefined, store);
-    await handler.dismissForcedCloseNotice(TENANT, BRANCH, TERMINAL, CASHIER_ID);
-    // eslint-disable-next-line @typescript-eslint/unbound-method
-    expect(vi.mocked(store.set)).not.toHaveBeenCalled();
-  });
-
-  it('is a no-op when secretStore is absent (test environments)', async () => {
-    const handler = makeHandler(makeShiftRow(), undefined);
-    await expect(
-      handler.dismissForcedCloseNotice(TENANT, BRANCH, TERMINAL, CASHIER_ID),
-    ).resolves.toBeUndefined();
-  });
-
-  it('does not dismiss a notice from another branch or terminal', async () => {
-    const store = makeMemorySecretStore();
-    const handler = makeHandler(makeShiftRow({ branch_id: 'branch-other' }), store);
-    await handler.dismissForcedCloseNotice(TENANT, BRANCH, TERMINAL, CASHIER_ID);
-    // eslint-disable-next-line @typescript-eslint/unbound-method
-    expect(vi.mocked(store.set)).not.toHaveBeenCalled();
-
-    const terminalHandler = makeHandler(
-      makeShiftRow({ originating_terminal_id: 'terminal-other' }),
-      store,
-    );
-    await terminalHandler.dismissForcedCloseNotice(TENANT, BRANCH, TERMINAL, CASHIER_ID);
-    // eslint-disable-next-line @typescript-eslint/unbound-method
-    expect(vi.mocked(store.set)).not.toHaveBeenCalled();
   });
 });
 

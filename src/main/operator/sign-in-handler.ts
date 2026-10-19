@@ -549,7 +549,7 @@ export class CashierSignInHandler {
     });
 
     // T091 — check for an undismissed forced-close shift on this cashier.
-    const forced_close_notice = await this.resolveForcedCloseNotice(scope);
+    const forced_close_notice = await this.resolveForcedCloseNotice(scope, user_id);
 
     // Codex P2 4179701431 — the keeper armed at create; the session may have
     // been latched or ended during the await above. Never answer it signed_in.
@@ -672,26 +672,11 @@ export class CashierSignInHandler {
    */
   private async resolveForcedCloseNotice(
     scope: PinScope,
+    userId: string,
   ): Promise<{ closed_at: string } | undefined> {
-    interface ShiftRow {
-      closed_at: string;
-    }
-    type ShiftSelectStmt = { get(...p: unknown[]): ShiftRow | undefined };
-    const shiftRow = (
-      this.deps.db.prepare(
-        `SELECT closed_at FROM shifts
-         WHERE lifecycle_state = 'closed_forced'
-           AND tenant_id = ?
-           AND branch_id = ?
-           AND originating_terminal_id = ?
-           AND opening_operator_id = ?
-          ORDER BY closed_at DESC
-          LIMIT 1`,
-      ) as ShiftSelectStmt
-    ).get(scope.tenant_id, scope.branch_id, scope.terminal_id, scope.cashier_clerk_user_id);
-
-    if (shiftRow === undefined || typeof shiftRow.closed_at !== 'string') return undefined;
-    const notice = { closed_at: shiftRow.closed_at };
+    const closedAt = this.latestForcedCloseAt(scope, userId);
+    if (closedAt === undefined) return undefined;
+    const notice = { closed_at: closedAt };
 
     if (this.deps.secretStore === undefined) return notice;
 
@@ -706,10 +691,49 @@ export class CashierSignInHandler {
 
     try {
       const parsed = JSON.parse(dismissRaw) as { dismissed_closed_at?: unknown };
-      return parsed.dismissed_closed_at !== shiftRow.closed_at ? notice : undefined;
+      return parsed.dismissed_closed_at !== closedAt ? notice : undefined;
     } catch {
       return notice;
     }
+  }
+
+  /**
+   * RT-554 — when a manager last force-closed a shift THIS cashier opened on
+   * THIS terminal: the forced `shift_cashup_closes` row of a
+   * `shift_cashup_opens` shift (0043; the 0007 `shifts` table is never written
+   * in production). The cashier is matched by the provider-neutral `users.id`
+   * the shift was opened under. Only the instant is read: no totals, count,
+   * reason or manager id (FR-013).
+   */
+  private latestForcedCloseAt(scope: PinScope, userId: string): string | undefined {
+    type CloseSelectStmt = { get(...p: unknown[]): { closed_at: unknown } | undefined };
+    const row = (
+      this.deps.db.prepare(
+        `SELECT c.closed_at AS closed_at
+           FROM shift_cashup_closes c
+           JOIN shift_cashup_opens o ON o.shift_id = c.shift_id
+          WHERE c.close_kind = 'forced'
+            AND o.tenant_id = ?
+            AND o.branch_id = ?
+            AND o.terminal_id = ?
+            AND o.opening_user_id = ?
+          ORDER BY c.closed_at DESC
+          LIMIT 1`,
+      ) as CloseSelectStmt
+    ).get(scope.tenant_id, scope.branch_id, scope.terminal_id, userId);
+    return typeof row?.closed_at === 'string' ? row.closed_at : undefined;
+  }
+
+  /** The `users.id` provisioned for this cashier on this terminal, if any. */
+  private cashierUserId(scope: PinScope): string | undefined {
+    type UserSelectStmt = { get(...p: unknown[]): { user_id: unknown } | undefined };
+    const row = (
+      this.deps.db.prepare(
+        `SELECT user_id FROM cashier_pin_records
+          WHERE tenant_id = ? AND branch_id = ? AND terminal_id = ? AND cashier_clerk_user_id = ?`,
+      ) as UserSelectStmt
+    ).get(scope.tenant_id, scope.branch_id, scope.terminal_id, scope.cashier_clerk_user_id);
+    return typeof row?.user_id === 'string' && row.user_id.length > 0 ? row.user_id : undefined;
   }
 
   /**
@@ -727,28 +751,18 @@ export class CashierSignInHandler {
     cashierId: string,
   ): Promise<void> {
     if (this.deps.secretStore === undefined) return;
-    interface ShiftRow {
-      closed_at: string;
-    }
-    type ShiftSelectStmt = { get(...p: unknown[]): ShiftRow | undefined };
-    const shiftRow = (
-      this.deps.db.prepare(
-        `SELECT closed_at FROM shifts
-         WHERE lifecycle_state = 'closed_forced'
-           AND tenant_id = ?
-           AND branch_id = ?
-           AND originating_terminal_id = ?
-           AND opening_operator_id = ?
-          ORDER BY closed_at DESC
-          LIMIT 1`,
-      ) as ShiftSelectStmt
-    ).get(tenantId, branchId, terminalId, cashierId);
-    if (shiftRow === undefined || typeof shiftRow.closed_at !== 'string') return;
+    const scope: PinScope = {
+      tenant_id: tenantId,
+      branch_id: branchId,
+      terminal_id: terminalId,
+      cashier_clerk_user_id: cashierId,
+    };
+    const userId = this.cashierUserId(scope);
+    if (userId === undefined) return;
+    const closedAt = this.latestForcedCloseAt(scope, userId);
+    if (closedAt === undefined) return;
     const dismissKey = makeShiftDismissKey(tenantId, branchId, terminalId, cashierId);
-    await this.deps.secretStore.set(
-      dismissKey,
-      JSON.stringify({ dismissed_closed_at: shiftRow.closed_at }),
-    );
+    await this.deps.secretStore.set(dismissKey, JSON.stringify({ dismissed_closed_at: closedAt }));
   }
 
   /** Write failed_attempt_count and lockout_until to cashier_pin_records. */
