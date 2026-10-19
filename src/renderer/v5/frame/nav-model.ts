@@ -62,12 +62,14 @@ export function isNavEntryCurrent(entry: V5NavEntry, pathname: string): boolean 
 }
 
 /**
- * RT-241 / OD-6 — what the cashier's v5 nav may show. An allowlist, so a new
- * placeholder never reaches the cashier by default. The Dashboard refuses the
- * cashier role, and Sales, Inventory and Settings are placeholders (freeze 15
- * §1: manager/admin only). Navigation only: route guards are unchanged.
+ * RT-241 / OD-6, amended by D1 (RT-536, 2026-10-16; RT-249 scope note) — what
+ * the cashier's v5 nav may show. An allowlist, so a new placeholder never
+ * reaches the cashier by default. The Dashboard refuses the cashier role and
+ * Inventory is a placeholder (freeze 15 §1: manager/admin only). «المبيعات» is
+ * the cashier's own sales: main limits every read and reprint to their own
+ * sales (RT-546). Navigation only: route guards are unchanged.
  */
-const CASHIER_NAV: ReadonlySet<ShellNavEntryId> = new Set<ShellNavEntryId>(['cart']);
+const CASHIER_NAV: ReadonlySet<ShellNavEntryId> = new Set<ShellNavEntryId>(['cart', 'sales']);
 
 /**
  * RT-701 (P-26-4, D8) — entries no role sees: Audit and Settings are empty

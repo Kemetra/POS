@@ -19,6 +19,7 @@ import { useLiveSaleActions } from './useLiveSaleActions';
 import { FitGuard } from '../foundation/FitGuard';
 import { ParkAction, ParkedNotice, ParkedSalesButton, useParkedCount } from '../park/ParkControls';
 import { parkBridgeOf, windowCartBridge } from '../park/park-bridge';
+import { ReprintLastSlot } from './ReprintLastReceipt';
 import './sale-screen.css';
 import './live-sale.css';
 import './sale-direction-b.css';
@@ -207,6 +208,7 @@ function LiveSaleActive(props: Props & { catalogueEnabled: boolean; role: Role }
         onUndo={() => void actions.undo.undo()}
       />
       {parkedButton}
+      <ReprintLastSlot role={props.role} cartState={cartState} lineCount={cart.lines.length} />
     </>
   );
   const parkControl =

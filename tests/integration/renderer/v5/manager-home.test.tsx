@@ -174,7 +174,7 @@ describe('a cashier who opens /app/dashboard', () => {
       within(nav)
         .getAllByRole('link')
         .map((l) => l.textContent),
-    ).toEqual(['نقطة البيع']);
+    ).toEqual(['نقطة البيع', 'المبيعات']);
     await expectNoAxeViolations(document.body);
   });
 

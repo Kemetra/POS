@@ -110,7 +110,7 @@ describe('one frame — every former AppShell route renders in the v5 frame', ()
     ).toBeInTheDocument();
   });
 
-  it('a cashier who opens /app/dashboard sees the refusal inside the frame, with only the Sale in the nav', async () => {
+  it('a cashier who opens /app/dashboard sees the refusal inside the frame, with only the Sale and Sales in the nav (D1)', async () => {
     signInAs('cashier');
     renderAppAt('/app/dashboard');
     const v5 = await frame();
@@ -121,7 +121,7 @@ describe('one frame — every former AppShell route renders in the v5 frame', ()
       within(nav)
         .getAllByRole('link')
         .map((l) => l.textContent),
-    ).toEqual(['نقطة البيع']);
+    ).toEqual(['نقطة البيع', 'المبيعات']);
   });
 
   it('moving between manager screens keeps the one frame mounted', async () => {
