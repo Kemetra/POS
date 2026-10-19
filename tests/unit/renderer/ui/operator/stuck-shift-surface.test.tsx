@@ -613,6 +613,16 @@ describe('StuckShiftSurface — RT-554 (b) outcomes', () => {
     });
   });
 
+  it('closed_here_unsent shows the «not at the server yet» copy, keeps the card, no re-read', async () => {
+    const op = await submitClose({ kind: 'refused', category: 'closed_here_unsent' });
+
+    await expectRefusalCopy({
+      op,
+      copy: COPY.queuedNotice,
+      never: [COPY.changed, COPY.failed, COPY.notClosableHere, COPY.closeBlocked],
+    });
+  });
+
   it('delivery queued: the card goes, and an honest notice says it is waiting to be sent', async () => {
     await submitClose({ kind: 'forced_closed', audit_event_id: 'evt-q', delivery: 'queued' }, [
       SHIFT_0,

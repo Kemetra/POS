@@ -57,15 +57,17 @@ export interface ForcedCloseFormSubmitPayload {
 /**
  * `changed`: `state_invalid` (the list was read again). `notClosable`:
  * `not_closable_here` (RT-554; the shift belongs to another device). `blocked`:
- * `close_blocked` (RT-554 (b); parked sales or drawer cash in flight). `failed`:
+ * `close_blocked` (RT-554 (b); parked sales or drawer cash in flight). `unsent`:
+ * `closed_here_unsent` (closed on this terminal, not at the server yet). `failed`:
  * any other refusal.
  */
-export type ForcedCloseRefusal = 'changed' | 'notClosable' | 'blocked' | 'failed';
+export type ForcedCloseRefusal = 'changed' | 'notClosable' | 'blocked' | 'unsent' | 'failed';
 
 const REFUSAL_COPY: Readonly<Record<ForcedCloseRefusal, string>> = {
   changed: COPY.changed,
   notClosable: COPY.notClosableHere,
   blocked: COPY.closeBlocked,
+  unsent: COPY.queuedNotice,
   failed: COPY.failed,
 };
 

@@ -47,9 +47,11 @@ export const STUCK_SHIFTS_COPY = Object.freeze({
   /** `close_blocked`: parked sales or drawer cash in flight on this terminal. */
   closeBlocked:
     'لا يمكن إغلاق الوردية الآن: توجد مبيعات معلّقة أو حركة نقدية جارية على هذا الجهاز. أنهِها ثم أعد المحاولة.',
-  /** `delivery: queued`: closed on this terminal, not yet sent to the server. */
-  queuedNotice:
-    'أُغلقت الوردية على هذا الجهاز وهي بانتظار الإرسال إلى الخادم. تُرسل تلقائيًا عند توفر الاتصال وتسجيل دخول مدير.',
+  /**
+   * `delivery: queued` and `closed_here_unsent`: closed on this terminal, not at
+   * the server yet. It promises nothing about when (a stuck earlier fact can hold it).
+   */
+  queuedNotice: 'أُغلقت الوردية على هذا الجهاز ولم تصل إلى الخادم بعد.',
   /** Any other refusal: the list is not re-read. */
   failed: 'تعذّر إغلاق هذه الوردية. حاول مرة أخرى.',
   /** The five FORCED_CLOSE_REASONS, in enum order. */

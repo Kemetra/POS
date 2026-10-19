@@ -4,7 +4,11 @@ import type { Logger } from 'pino';
 
 import type { AuditEvent } from '../../../../src/shared/audit/event-shape.js';
 import type { ForceCloseShiftRequest } from '../../../../src/shared/bridge-api.js';
-import { initSalesSyncSql } from '../../../../src/main/sales-sync/__tests__/__helpers__/sales-sync-fixture.js';
+import {
+  handleFor,
+  initSalesSyncSql,
+} from '../../../../src/main/sales-sync/__tests__/__helpers__/sales-sync-fixture.js';
+import { createShiftCashupRepo } from '../../../../src/main/shift-cashup/shift-cashup-repo.js';
 import {
   cashLine,
   factCounts,
@@ -19,6 +23,7 @@ import {
   USER,
 } from '../../../../src/main/shift-cashup/__tests__/__helpers__/shift-sync-fixture.js';
 import {
+  CLOSE_AT,
   FLOAT,
   setupForcedClose,
   type ForcedCloseFixture,
@@ -42,6 +47,8 @@ import {
  */
 
 const OTHER_SHIFT = '0192f5a2-3b4c-7d8e-9f01-eeeeeeeeeeee';
+/** The close is the second outbox row: the open is seq 1. */
+const CLOSE_SEQ = 2;
 
 let db: SqlJsDatabase;
 let harness: ServiceHarness;
@@ -192,14 +199,51 @@ describe('T085 — idempotency and atomicity', () => {
     expect(calls).toHaveLength(2);
   });
 
-  it('another event_id on a shift this terminal already closed is state_invalid, audit once', async () => {
+  // RT-554 (b): the close is recorded here, but until the server has it the stuck
+  // list still shows the shift. A retry must say so: never «state changed».
+  it('another event_id on a shift closed here but NOT at the server yet is closed_here_unsent, audit once', async () => {
     const handler = makeHandler();
     await handler.forceCloseShift(request());
 
     const result = await handler.forceCloseShift(request());
 
-    expect(result).toEqual({ kind: 'refused', category: 'state_invalid' });
+    expect(result).toEqual({ kind: 'refused', category: 'closed_here_unsent' });
     expect(captured).toHaveLength(1);
+  });
+
+  it('the same retry is state_invalid once the server has the close (the list is only stale)', async () => {
+    const handler = makeHandler();
+    await handler.forceCloseShift(request());
+    createShiftCashupRepo(handleFor(db)).markSynced({ seq: CLOSE_SEQ, now: CLOSE_AT });
+
+    const result = await handler.forceCloseShift(request());
+
+    expect(result).toEqual({ kind: 'refused', category: 'state_invalid' });
+  });
+
+  it('a retry first kicks delivery: if that sends the close, it is state_invalid, not unsent', async () => {
+    const repo = createShiftCashupRepo(handleFor(db));
+    await makeHandler().forceCloseShift(request());
+    const handler = makeHandler({
+      deliverNow: () => {
+        repo.markSynced({ seq: CLOSE_SEQ, now: CLOSE_AT });
+        return Promise.resolve(true);
+      },
+    });
+
+    const result = await handler.forceCloseShift(request());
+
+    expect(result).toEqual({ kind: 'refused', category: 'state_invalid' });
+  });
+
+  it('a retry whose delivery throws still answers closed_here_unsent', async () => {
+    await makeHandler().forceCloseShift(request());
+    const handler = makeHandler({ deliverNow: () => Promise.reject(new Error('offline')) });
+
+    expect(await handler.forceCloseShift(request())).toEqual({
+      kind: 'refused',
+      category: 'closed_here_unsent',
+    });
   });
 
   it('an audit failure is invalid_input and leaves the shift open: no close row, no outbox row', async () => {

@@ -15,8 +15,9 @@
  *
  * Refusals: a shift this terminal does not hold → `not_closable_here`
  * (Backend-Core resolves a shift only for the device that opened it); one this
- * terminal already closed → `state_invalid`; in-flight drawer cash or parked
- * sales → `close_blocked`. The count, the reason and every id stay out of the
+ * terminal already closed → `state_invalid` once Backend-Core has the close
+ * (the list is only stale) and `closed_here_unsent` before that (it is still
+ * on the list); in-flight drawer cash or parked sales → `close_blocked`. The count, the reason and every id stay out of the
  * logs (P7).
  */
 
@@ -136,7 +137,7 @@ export class ForcedCloseHandler {
         },
       });
     } catch (err) {
-      return this.refuse(this.categoryOf({ err, shiftId }));
+      return this.refuse(await this.categoryOf({ err, shiftId }));
     }
 
     return this.forcedClosed({ req, outcome: 'forced_closed' });
@@ -160,15 +161,24 @@ export class ForcedCloseHandler {
     }
   }
 
-  private categoryOf(input: { err: unknown; shiftId: string }): RefusalCategory {
+  private async categoryOf(input: { err: unknown; shiftId: string }): Promise<RefusalCategory> {
     const { err } = input;
-    if (err instanceof ShiftCashupStateError) {
-      // Not this terminal's open shift: already closed here, or never held here.
-      return this.closedHere(input.shiftId) ? 'state_invalid' : 'not_closable_here';
-    }
+    if (err instanceof ShiftCashupStateError) return this.notOpenCategory(input.shiftId);
     if (err instanceof ShiftCashupRefusedError) return CATEGORY_OF_REASON[err.reason];
     // A fact the POS refuses to record, or a failing audit (nothing was written).
     return 'invalid_input';
+  }
+
+  /**
+   * Not this terminal's open shift: never held here, or already closed here.
+   * Closed here and not at the server yet, the stuck list still shows it, so a
+   * "state changed" would be false: say it is not at the server yet.
+   */
+  private async notOpenCategory(shiftId: string): Promise<RefusalCategory> {
+    if (!this.closedHere(shiftId)) return 'not_closable_here';
+    // The first answer may have been lost, or the drain not run yet: try once more.
+    await this.deliver();
+    return this.closeReachedServer(shiftId) ? 'state_invalid' : 'closed_here_unsent';
   }
 
   private async originatingTerminalId(): Promise<string> {
@@ -193,6 +203,17 @@ export class ForcedCloseHandler {
       this.deps.db.prepare(`SELECT 1 FROM shift_cashup_closes WHERE shift_id = ?`) as PrepareGet<{
         '1': number;
       }>
+    ).get(shiftId);
+    return row !== undefined;
+  }
+
+  /** True when Backend-Core has the shift's close (its outbox row, or a repair of it, is synced). */
+  private closeReachedServer(shiftId: string): boolean {
+    const row = (
+      this.deps.db.prepare(
+        `SELECT 1 FROM shift_sync_outbox o JOIN shift_sync_state s ON s.seq = o.seq
+          WHERE o.fact_kind = 'close' AND o.shift_id = ? AND s.sync_status = 'synced'`,
+      ) as PrepareGet<{ '1': number }>
     ).get(shiftId);
     return row !== undefined;
   }

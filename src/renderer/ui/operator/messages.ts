@@ -45,6 +45,8 @@ export const SIGN_IN_REFUSAL_COPY: Readonly<Record<RefusalCategory, string>> = O
   not_closable_here: STUCK_SHIFTS_COPY.notClosableHere,
   // RT-554 (b) — forced close of this terminal's shift blocked by parked sales / drawer cash in flight.
   close_blocked: STUCK_SHIFTS_COPY.closeBlocked,
+  // RT-554 (b) — closed on this terminal, not at the server yet.
+  closed_here_unsent: STUCK_SHIFTS_COPY.queuedNotice,
 });
 
 export const EMPTY_INPUT_MESSAGE = 'أدخل بيانات الدخول للمتابعة.';

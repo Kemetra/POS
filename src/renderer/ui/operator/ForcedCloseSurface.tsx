@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, type JSX } from 'react';
 
+import type { RefusalCategory } from '../../../shared/audit/event-shape.js';
 import { Notice } from '../../v5/foundation/Notice.js';
 
 import type {
@@ -101,6 +102,29 @@ function surfaceOf(res: ListStuckShiftsResponse, afterReauth: boolean): SurfaceS
     : { kind: 'error' };
 }
 
+/**
+ * Which dialog message each refusal shows; any other category is `failed`. Only
+ * `state_invalid` re-reads the list: every other refusal here leaves the shift
+ * exactly as it was (still open, or closed here and not at the server yet), so a
+ * re-read could only show it again.
+ */
+const REFUSAL_OF_CATEGORY: Partial<Record<RefusalCategory, ForcedCloseRefusal>> = {
+  state_invalid: 'changed',
+  // RT-554: still open on the backend, and no re-read can change that.
+  not_closable_here: 'notClosable',
+  // RT-554 (b): parked sales or drawer cash in flight; the shift is still open.
+  close_blocked: 'blocked',
+  // RT-554 (b): closed on this terminal, not at the server yet.
+  closed_here_unsent: 'unsent',
+};
+
+/** The list without `shiftId` (the empty state when it was the last one). */
+function withoutShift(prev: SurfaceState, shiftId: string): SurfaceState {
+  if (prev.kind !== 'list') return prev;
+  const remaining = prev.shifts.filter((s) => s.shift_id !== shiftId);
+  return remaining.length === 0 ? { kind: 'empty' } : { kind: 'list', shifts: remaining };
+}
+
 type DialogState =
   | { kind: 'idle' }
   | {
@@ -175,6 +199,24 @@ export function StuckShiftSurface({ operator }: Readonly<StuckShiftSurfaceProps>
     };
   }, [openShiftId, closeDialog]);
 
+  /** The forced close succeeded: the dialog closes, the shift leaves the list. */
+  function showClosed(input: { shiftId: string; delivery: 'sent' | 'queued' }): void {
+    if (input.delivery === 'queued') setQueued(true);
+    closeDialog(input.shiftId);
+    setSurface((prev) => withoutShift(prev, input.shiftId));
+  }
+
+  /** A refusal: its dialog message; only `state_invalid` re-reads the list. */
+  function showRefusal(input: { shift: StuckShiftSummary; category: RefusalCategory }): void {
+    setDialog({
+      kind: 'open',
+      shift: input.shift,
+      submitting: false,
+      refusal: REFUSAL_OF_CATEGORY[input.category] ?? 'failed',
+    });
+    if (input.category === 'state_invalid') void fetchShifts();
+  }
+
   async function handleSubmit(
     shift: StuckShiftSummary,
     payload: ForcedCloseFormSubmitPayload,
@@ -190,24 +232,9 @@ export function StuckShiftSurface({ operator }: Readonly<StuckShiftSurfaceProps>
     });
 
     if (res.kind === 'forced_closed') {
-      if (res.delivery === 'queued') setQueued(true);
-      closeDialog(shift.shift_id);
-      setSurface((prev) => {
-        if (prev.kind !== 'list') return prev;
-        const remaining = prev.shifts.filter((s) => s.shift_id !== shift.shift_id);
-        return remaining.length === 0 ? { kind: 'empty' } : { kind: 'list', shifts: remaining };
-      });
-    } else if (res.category === 'state_invalid') {
-      setDialog({ kind: 'open', shift, submitting: false, refusal: 'changed' });
-      void fetchShifts();
-    } else if (res.category === 'close_blocked') {
-      // RT-554 (b): parked sales or drawer cash in flight; the shift is still open.
-      setDialog({ kind: 'open', shift, submitting: false, refusal: 'blocked' });
-    } else if (res.category === 'not_closable_here') {
-      // RT-554: still open on the backend, and no re-read can change that.
-      setDialog({ kind: 'open', shift, submitting: false, refusal: 'notClosable' });
+      showClosed({ shiftId: shift.shift_id, delivery: res.delivery });
     } else {
-      setDialog({ kind: 'open', shift, submitting: false, refusal: 'failed' });
+      showRefusal({ shift, category: res.category });
     }
   }
 
