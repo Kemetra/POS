@@ -154,6 +154,20 @@ const MAIN_ONLY_AUDIT_CATEGORIES: ReadonlySet<string> = new Set([
   'sale.number_day_rule.switched',
   // RT-542 — emitted only by the store-history reprint (sale-history-reprint).
   'sale.history.reprinted',
+  // RT-15 S2/S4 — the cashier-return facts, written only by main's returns-audit
+  // (journal, Backend-Core answer, payout, drawer kick, return slip). A forged
+  // row would fake a confirmed return or a paid-out cash refund.
+  'sale.return.attempted',
+  'sale.return.refused',
+  'sale.return.confirmed',
+  'sale.return.payout_ready',
+  'sale.return.payout_started',
+  'sale.return.drawer_opened',
+  'sale.return.drawer_failed',
+  'sale.return.paid_out',
+  'sale.return.slip_printed',
+  'sale.return.slip_print_failed',
+  'sale.return.slip_reprinted',
 ]);
 
 function asEmitAuditEventRequest(value: unknown): EmitAuditEventRequest | null {
