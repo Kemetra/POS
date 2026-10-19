@@ -505,7 +505,7 @@ describe('SalesLookup — not allowed (RT-741)', () => {
   it('has no axe violations', async () => {
     const { container } = renderLookup(salesBridge(() => Promise.resolve(DENIED)));
     search();
-    await screen.findByTestId('sale-not-allowed');
+    expect(await screen.findByTestId('sale-not-allowed')).toBeInTheDocument();
     await expectNoAxeViolations(container);
   });
 });
