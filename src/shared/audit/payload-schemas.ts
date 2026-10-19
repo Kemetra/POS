@@ -456,8 +456,26 @@ export interface SaleReturnRefusedPayload {
   return_id: string | null;
   sale_id: string | null;
   sale_ref: string | null;
-  operation: 'lookup' | 'quote' | 'submit' | 'resolve' | 'list' | 'payout' | 'reprint';
+  operation: 'lookup' | 'quote' | 'submit' | 'resolve' | 'list' | 'payout' | 'reprint' | 'resend';
   reason: string;
+}
+
+/**
+ * RT-196 S1 — `sale.return.attempt_unknown`: one send left the return unknown.
+ * `attempt_no` is the journal's attempt count at that send; `cause` is one of
+ * `RETURN_UNKNOWN_CAUSES`; `operation` is how it was sent.
+ */
+export interface SaleReturnAttemptUnknownPayload {
+  return_id: string;
+  sale_id: string;
+  attempt_no: number;
+  cause: string;
+  operation: 'submit' | 'resolve' | 'resend';
+}
+
+/** RT-196 S1 — `sale.return.resend_requested`: a manager resent one return. */
+export interface SaleReturnResendRequestedPayload {
+  return_id: string;
 }
 
 /** `sale.return.confirmed` — Backend-Core answered 201/200 (a replay counts). */
@@ -750,6 +768,9 @@ export type AuditPayloadMap = {
   'sale.return.slip_printed': SaleReturnSlipPrintedPayload;
   'sale.return.slip_print_failed': SaleReturnSlipPrintFailedPayload;
   'sale.return.slip_reprinted': SaleReturnSlipPrintedPayload;
+  // RT-196 S1
+  'sale.return.attempt_unknown': SaleReturnAttemptUnknownPayload;
+  'sale.return.resend_requested': SaleReturnResendRequestedPayload;
   // RT-215
   'pairing.device_revoked': PairingDeviceRevokedPayload;
   'pairing.device_revoked_cleared': PairingDeviceRevokedClearedPayload;

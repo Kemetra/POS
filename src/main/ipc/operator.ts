@@ -143,6 +143,10 @@ const MAIN_ONLY_AUDIT_CATEGORIES: ReadonlySet<string> = new Set([
   'cart.held_cancelled_by_manager',
   'payment.recovery_completed',
   'payment.recovery_cancelled',
+  // RT-196 S1 — the unknown-cause record feeds what the returns list shows
+  // (`lastCause`); emitted only by the returns dispatcher / service.
+  'sale.return.attempt_unknown',
+  'sale.return.resend_requested',
   // RT-546 — emitted only by the sales/receipts role gate (sale-access-policy).
   'sale.access.refused',
   // RT-551 — the sale-number day-rule switch, written only by the finalize

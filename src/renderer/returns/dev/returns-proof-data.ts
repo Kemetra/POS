@@ -101,6 +101,9 @@ function journalView(
     confirmedAt: ref === null ? null : at,
     lines: [],
     payout,
+    attemptCount: 1,
+    lastAttemptAt: at,
+    lastCause: state === 'unknown' ? 'timeout' : null,
   };
 }
 

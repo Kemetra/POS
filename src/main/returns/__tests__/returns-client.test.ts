@@ -13,7 +13,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
-import type { ServerReturnRefusal } from '../../../shared/returns/types.js';
+import type { ReturnUnknownCause, ServerReturnRefusal } from '../../../shared/returns/types.js';
 import {
   classifyRefusal,
   createReturnsClient,
@@ -66,6 +66,9 @@ describe('classifyRefusal', () => {
     [400, 'validation_error', 'validation_error'],
     [401, 'unauthorized', 'unauthorized'],
     [403, null, 'unauthorized'],
+    // RT-196 S1 (OD-196-9): RT-577's credit refusal is its own terminal reason.
+    [403, 'credit_sale_reversal_restricted', 'credit_sale_reversal_restricted'],
+    [403, 'forbidden', 'unauthorized'],
     [404, 'not_found', 'returns_unavailable'],
     [409, 'over_return', 'over_return'],
     [409, 'already_reversed', 'already_reversed'],
@@ -120,11 +123,17 @@ describe('recordReturn', () => {
     await expect(record(backend)).resolves.toEqual({ kind: 'refused', reason: 'over_return' });
   });
 
-  it.each<[string, () => Response | Promise<Response>]>([
-    ['a timeout', () => Promise.reject(new DOMException('timed out', 'TimeoutError'))],
-    ['a refused connection', () => Promise.reject(new TypeError('ECONNREFUSED'))],
-    ['a 500', () => jsonResponse(500, errorBody('internal_error'))],
-    ['a 201 whose body is not a SaleReturn', () => jsonResponse(201, { ok: true })],
+  it.each<[string, () => Response | Promise<Response>, ReturnUnknownCause]>([
+    ['a timeout', () => Promise.reject(new DOMException('timed out', 'TimeoutError')), 'timeout'],
+    ['a refused connection', () => Promise.reject(new TypeError('ECONNREFUSED')), 'network'],
+    ['a 500', () => jsonResponse(500, errorBody('internal_error')), 'server_5xx'],
+    ['a 503', () => jsonResponse(503, errorBody('unavailable')), 'server_5xx'],
+    ['a 429', () => jsonResponse(429, errorBody('rate_limited')), 'rate_limited'],
+    [
+      'a 201 whose body is not a SaleReturn',
+      () => jsonResponse(201, { ok: true }),
+      'unreadable_body',
+    ],
     [
       'a body stream that fails mid-read',
       () =>
@@ -136,15 +145,18 @@ describe('recordReturn', () => {
           }),
           { status: 201 },
         ),
+      'network',
     ],
     [
       'a 425 idempotency_in_progress (RT-194)',
       () => jsonResponse(425, errorBody('idempotency_in_progress')),
+      'unexpected_status',
     ],
-  ])('%s is unknown, never success', async (_label, respond) => {
+    ['a 302', () => new Response(null, { status: 302 }), 'unexpected_status'],
+  ])('%s is unknown, never success (cause %s)', async (_label, respond, cause) => {
     const backend = new FakeBackend();
     backend.onReturn = respond;
-    await expect(record(backend)).resolves.toEqual({ kind: 'unknown' });
+    await expect(record(backend)).resolves.toEqual({ kind: 'unknown', cause });
   });
 
   it('a real timeout aborts the request and is unknown', async () => {
@@ -163,7 +175,7 @@ describe('recordReturn', () => {
         { saleRef: SALE_REF, bodyJson: BODY, idempotencyKey: KEY, resend: false },
         ENVELOPE,
       ),
-    ).resolves.toEqual({ kind: 'unknown' });
+    ).resolves.toEqual({ kind: 'unknown', cause: 'timeout' });
   });
 
   it.each<[string, string | null]>([
@@ -179,7 +191,7 @@ describe('recordReturn', () => {
         idempotencyKey: KEY,
         resend: false,
       }),
-    ).resolves.toEqual({ kind: 'unknown' });
+    ).resolves.toEqual({ kind: 'unknown', cause: 'no_credential' });
     await expect(client.readSale(SALE_REF)).resolves.toEqual({ kind: 'unavailable' });
     expect(backend.calls).toHaveLength(0);
   });
@@ -200,14 +212,39 @@ describe('recordReturn', () => {
 });
 
 describe('recordReturn — a resend never turns a pre-replay answer into a refusal (P1)', () => {
-  it.each<[number, string]>([
-    [401, 'unauthorized'],
-    [403, 'forbidden'],
-    [404, 'not_found'],
-  ])('a resend that gets %s (%s) is unknown, not refused', async (status, code) => {
+  it.each<[number, string, ReturnUnknownCause]>([
+    [401, 'unauthorized', 'pre_replay_401'],
+    [403, 'forbidden', 'pre_replay_403'],
+    [403, 'operator_not_authorized', 'pre_replay_403'],
+    [404, 'not_found', 'pre_replay_404'],
+  ])('a resend that gets %s (%s) is unknown, not refused', async (status, code, cause) => {
     const backend = new FakeBackend();
     backend.onReturn = () => jsonResponse(status, errorBody(code));
-    await expect(record(backend, true)).resolves.toEqual({ kind: 'unknown' });
+    await expect(record(backend, true)).resolves.toEqual({ kind: 'unknown', cause });
+  });
+
+  it('RT-196 S1 (OD-196-9): a resend that gets the credit 403 is refused (decided after the replay)', async () => {
+    const backend = new FakeBackend();
+    backend.onReturn = () => jsonResponse(403, errorBody('credit_sale_reversal_restricted'));
+    await expect(record(backend, true)).resolves.toEqual({
+      kind: 'refused',
+      reason: 'credit_sale_reversal_restricted',
+    });
+  });
+
+  it('RT-196 S1: a first send that gets the credit 403 is that refusal, not unauthorized', async () => {
+    const backend = new FakeBackend();
+    backend.onReturn = () => jsonResponse(403, errorBody('credit_sale_reversal_restricted'));
+    await expect(record(backend)).resolves.toEqual({
+      kind: 'refused',
+      reason: 'credit_sale_reversal_restricted',
+    });
+  });
+
+  it('a first send that gets an operator-guard 403 is still unauthorized', async () => {
+    const backend = new FakeBackend();
+    backend.onReturn = () => jsonResponse(403, errorBody('forbidden'));
+    await expect(record(backend)).resolves.toEqual({ kind: 'refused', reason: 'unauthorized' });
   });
 
   it.each<[number, string, ServerReturnRefusal]>([

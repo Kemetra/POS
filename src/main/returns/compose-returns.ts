@@ -7,7 +7,12 @@
  */
 import { randomUUID } from 'node:crypto';
 
-import type { ReturnJournalView, ReturnsBridgeAPI } from '../../shared/returns/types.js';
+import type {
+  ReturnJournalView,
+  ReturnsBridgeAPI,
+  ReturnsResendRequest,
+  ReturnsResendResponse,
+} from '../../shared/returns/types.js';
 import type { DatabaseHandle } from '../db/client.js';
 import type { DrawerKickTransport } from '../drawer/drawer-kick-transport.js';
 import type { PrintPipeline } from '../receipts/print-pipeline.js';
@@ -16,6 +21,7 @@ import { createSaleVoidRepository } from '../sale-void/sale-void-repository.js';
 import { DEFAULT_CURRENCY_CODE } from '../sales-sync/create-sale-sync-client.js';
 import { createSaleSyncStateRepo } from '../sales-sync/sale-sync-state-repo.js';
 import { createReturnsAudit, type ReturnsAuditSink } from './returns-audit.js';
+import { createReturnCauseReader, type ReturnCauseReader } from './returns-causes.js';
 import { DRAIN_MARGIN_MS } from '../sales-sync/settled-within.js';
 import {
   createReturnsClient,
@@ -71,6 +77,12 @@ export interface ComposeReturnsDeps {
 
 export interface ComposedReturns {
   readonly service: ReturnsBridgeAPI;
+  /**
+   * RT-196 S1: resend one unresolved return. Deliberately NOT a member of
+   * `service` (the `returns.*` bridge): no IPC channel exists for it until the
+   * §A4 bridge review (see the RT-196 S1 notes).
+   */
+  readonly resend: (req: ReturnsResendRequest) => Promise<ReturnsResendResponse>;
   readonly resolver: ReturnsResolver;
   /**
    * Latch the domain stopped (RT-198): every `returns.*` call answers
@@ -81,12 +93,20 @@ export interface ComposedReturns {
   readonly stop: () => void;
 }
 
-/** Renderer views of journal rows, each with its payout (one query). */
-function viewsWithPayouts(payouts: ReturnPayoutsRepository, now: () => string) {
+/** Renderer views of journal rows, each with its payout and last cause (one query each). */
+function viewsWithPayouts(
+  payouts: ReturnPayoutsRepository,
+  causes: ReturnCauseReader,
+  now: () => string,
+) {
   return (entries: readonly JournalEntry[]): ReturnJournalView[] => {
     const rows = payouts.readMany(entries.map((e) => e.returnId));
+    const unresolved = entries.filter((e) => e.state === 'pending' || e.state === 'unknown');
+    const lastCauses = causes.lastCauses(unresolved.map((e) => e.returnId));
     const at = now();
-    return entries.map((e) => toJournalView(e, rows.get(e.returnId) ?? null, at));
+    return entries.map((e) =>
+      toJournalView(e, rows.get(e.returnId) ?? null, at, lastCauses.get(e.returnId) ?? null),
+    );
   };
 }
 
@@ -98,7 +118,7 @@ export function composeReturns(deps: ComposeReturnsDeps): ComposedReturns {
   const client = createReturnsClient(deps.http);
   const repo = createReturnsRepository(deps.db);
   const payouts = createReturnPayoutsRepository(deps.db);
-  const views = viewsWithPayouts(payouts, now);
+  const views = viewsWithPayouts(payouts, createReturnCauseReader(deps.db), now);
   const sales = bindSalesRepository(deps.db);
   const audit = createReturnsAudit({ sink: deps.auditSink, now, newEventId: randomUUID });
   // RT-530: a sale with a live void (requested, sent or confirmed) is not returnable.
@@ -165,7 +185,7 @@ export function composeReturns(deps: ComposeReturnsDeps): ComposedReturns {
   const stop = (): void => {
     stopped = true;
   };
-  return { service, resolver, stop };
+  return { service, resend: (req) => core.resend(req), resolver, stop };
 }
 
 /**

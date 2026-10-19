@@ -39,6 +39,8 @@ import type {
   ReturnsQuoteResponse,
   ReturnsRefusalReason,
   ReturnsRefused,
+  ReturnsResendRequest,
+  ReturnsResendResponse,
   ReturnsResolveResponse,
   ReturnsSubmitRequest,
   ReturnsSubmitResponse,
@@ -61,6 +63,7 @@ import type { LineDetail } from './returns-payout-repository.js';
 import type { JournalEntry, ReturnsRepository } from './returns-repository.js';
 import type { ResolveSummary } from './returns-resolver.js';
 import { isExpectedSale } from './returns-verify.js';
+import { isUuid } from './returns-wire.js';
 import { slipLineName } from './returns-slip.js';
 import { cashOnlyVerdict, localTenderEvidence, serverTenderEvidence } from './returns-tender.js';
 import { toJournalView } from './returns-views.js';
@@ -70,6 +73,14 @@ export type { ReturnsSession } from './returns-auth.js';
 
 /** The journal-side bridge methods (S2); payout and slip live in `returns-payout` (S4). */
 export type ReturnsCoreAPI = Omit<ReturnsBridgeAPI, 'payout' | 'reprintSlip'>;
+
+/**
+ * RT-196 S1 — the per-row resend. A main-process method only: it is NOT on
+ * `ReturnsBridgeAPI` (a new `returns:*` channel needs its §A4 bridge review).
+ */
+export interface ReturnsResendAPI {
+  resend(req: ReturnsResendRequest): Promise<ReturnsResendResponse>;
+}
 
 export interface ReturnsServiceDeps {
   /** The terminal's capture currency (the sale-sync capture's own source). */
@@ -107,7 +118,7 @@ export interface ReturnsServiceDeps {
 /** How many journal rows `returns.list` shows. */
 export const RETURNS_LIST_LIMIT = 50;
 
-type Operation = 'lookup' | 'quote' | 'submit' | 'resolve' | 'list';
+type Operation = 'lookup' | 'quote' | 'submit' | 'resolve' | 'list' | 'resend';
 
 /** A live, returnable sale: the local row, its server ref and the server view. */
 interface LiveSale {
@@ -117,6 +128,7 @@ interface LiveSale {
 }
 
 interface Ids {
+  readonly returnId?: string;
   readonly saleId?: string;
   readonly saleRef?: string;
 }
@@ -151,7 +163,9 @@ function lineDetails(sale: WireSale, quote: ReturnQuoteView): LineDetail[] {
 }
 
 function toSubmitResponse(outcome: DispatchOutcome): ReturnsSubmitResponse {
-  const ret = toJournalView(outcome.entry);
+  // RT-196 S1: a send that left the row unknown names why (never a body).
+  const cause = outcome.kind === 'unconfirmed' ? outcome.cause : null;
+  const ret = toJournalView(outcome.entry, null, null, cause);
   if (outcome.kind === 'confirmed') return { kind: 'confirmed', ret, replayed: outcome.replayed };
   if (outcome.kind === 'refused') return { kind: 'refused', reason: outcome.reason, ret };
   // `unconfirmed` (answer lost) and `deferred` (not sent: authorization lost
@@ -159,14 +173,25 @@ function toSubmitResponse(outcome: DispatchOutcome): ReturnsSubmitResponse {
   return { kind: 'unconfirmed', ret };
 }
 
-class ReturnsService implements ReturnsCoreAPI {
+/** A return of this terminal that is still `pending` / `unknown` (resendable). */
+function isResendable(entry: JournalEntry): boolean {
+  return entry.state === 'pending' || entry.state === 'unknown';
+}
+
+function isOwnScope(entry: JournalEntry, actor: ReturnActor): boolean {
+  const a = entry.scope;
+  const b = actor.scope;
+  return a.tenantId === b.tenantId && a.branchId === b.branchId && a.terminalId === b.terminalId;
+}
+
+class ReturnsService implements ReturnsCoreAPI, ReturnsResendAPI {
   constructor(private readonly deps: ReturnsServiceDeps) {}
 
   private refuse(actor: ReturnActor, op: Operation, reason: ReturnsRefusalReason, ids: Ids = {}) {
     // Shutdown is not an operator refusal: never audited (the DB may be closed).
     if (reason === 'shutting_down') return SHUTTING_DOWN;
     this.deps.audit.refused(actor, {
-      return_id: null,
+      return_id: ids.returnId ?? null,
       sale_id: ids.saleId ?? null,
       sale_ref: ids.saleRef ?? null,
       operation: op,
@@ -399,6 +424,44 @@ class ReturnsService implements ReturnsCoreAPI {
     return entry;
   }
 
+  /**
+   * RT-196 S1 — resend ONE unresolved return of this terminal, directly (C6):
+   * the identical journaled bytes under the same key, through the shared
+   * dispatcher (which re-checks the actor right before the POST and confirms
+   * only on its own match check). Not delayed by the row's backoff. A return
+   * that is already confirmed, paid out or refused is `already_resolved`.
+   * `resend_requested` is attributed to the requesting operator, not the one
+   * who journaled the row. Like `submit`, the answer is withheld if the
+   * session changed while the POST was awaited.
+   *
+   * Ownership (RT-741 own-sales rule): not applied here, on purpose. The rule
+   * narrows a cashier to their own sales, and a cashier never passes `admit`
+   * (D-b: manager/admin only, `role_denied`); for a manager or admin the rule is
+   * the terminal scope, which `isOwnScope` enforces on the journaled row. This
+   * acts on a journal row, not on a sale lookup.
+   */
+  async resend(req: ReturnsResendRequest): Promise<ReturnsResendResponse> {
+    const admitted = this.admit('resend');
+    if (admitted.kind !== 'ok') return { ...admitted, ret: null };
+    const { actor } = admitted;
+    if (!isUuid(req.returnId)) {
+      return { ...this.refuse(actor, 'resend', 'invalid_input'), ret: null };
+    }
+    const ids: Ids = { returnId: req.returnId };
+    const entry = this.deps.repo.read(req.returnId);
+    if (entry === null || !isOwnScope(entry, actor)) {
+      return { ...this.refuse(actor, 'resend', 'return_not_found', ids), ret: null };
+    }
+    const known: Ids = { ...ids, saleId: entry.saleId, saleRef: entry.serverSaleRef };
+    if (!isResendable(entry)) {
+      const refused = this.refuse(actor, 'resend', 'already_resolved', known);
+      return { ...refused, ret: this.deps.views([entry])[0] ?? null };
+    }
+    this.deps.audit.resendRequested(actor, entry);
+    const outcome = await this.deps.dispatcher.send(entry, 'resend', actor);
+    return this.submitResponseFor(actor, outcome);
+  }
+
   async resolve(): Promise<ReturnsResolveResponse> {
     const admitted = this.admit('resolve');
     if (admitted.kind !== 'ok') return admitted;
@@ -414,6 +477,6 @@ class ReturnsService implements ReturnsCoreAPI {
   }
 }
 
-export function createReturnsService(deps: ReturnsServiceDeps): ReturnsCoreAPI {
+export function createReturnsService(deps: ReturnsServiceDeps): ReturnsCoreAPI & ReturnsResendAPI {
   return new ReturnsService(deps);
 }

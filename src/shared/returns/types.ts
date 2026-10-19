@@ -39,6 +39,32 @@ export const RETURN_DRAWER_FAILURES = [
 export type ReturnDrawerFailure = (typeof RETURN_DRAWER_FAILURES)[number];
 
 /**
+ * RT-196 S1 — why one send of a return left it `unknown`. A closed set of
+ * codes (never a body, a status text or an envelope): the audit payload and the
+ * renderer both carry only these.
+ *
+ * Deviation from the RT-196 plan §3.7 list (flagged in the S1 report):
+ * `no_credential` (the till had no envelope to send with) and
+ * `unexpected_status` (any other status: 3xx, 4xx outside the contract) are
+ * added so nothing is folded into `server_5xx`.
+ */
+export const RETURN_UNKNOWN_CAUSES = [
+  'timeout',
+  'network',
+  'server_5xx',
+  'rate_limited',
+  'pre_replay_401',
+  'pre_replay_403',
+  'pre_replay_404',
+  'confirmation_mismatch',
+  'unreadable_body',
+  'local_commit_failed',
+  'no_credential',
+  'unexpected_status',
+] as const;
+export type ReturnUnknownCause = (typeof RETURN_UNKNOWN_CAUSES)[number];
+
+/**
  * Refusals Backend-Core can answer for `recordReturn` / `readSale`, each kept
  * distinct (AC10). `returns_unavailable` is the contract's non-disclosing 404:
  * the `POS_RETURNS_ENABLED` gate is off, or the sale is unknown in this scope.
@@ -51,6 +77,9 @@ export const SERVER_RETURN_REFUSALS = [
   'validation_error',
   'unauthorized',
   'returns_unavailable',
+  // RT-196 S1 (OD-196-9): RT-577's 403 — the sale has payer responsibilities,
+  // so the ordinary return route refuses it for every operator. Terminal.
+  'credit_sale_reversal_restricted',
 ] as const;
 export type ServerReturnRefusal = (typeof SERVER_RETURN_REFUSALS)[number];
 
@@ -112,6 +141,8 @@ export const LOCAL_RETURN_REFUSALS = [
   // The slip's line amounts do not add up to the confirmed refund: no slip is
   // printed (fail closed); the payout itself is unaffected.
   'slip_total_mismatch',
+  // RT-196 S1 — a resend of a return that is already confirmed, paid out or refused.
+  'already_resolved',
 ] as const;
 export type LocalReturnRefusal = (typeof LOCAL_RETURN_REFUSALS)[number];
 
@@ -206,6 +237,15 @@ export interface ReturnJournalView {
   readonly lines: readonly { readonly lineRef: string; readonly quantity: number }[];
   /** RT-15 S4: null until a payout of this return is started. */
   readonly payout: ReturnPayoutView | null;
+  /** RT-196 S1: how many sends were attempted (each counted before it is sent). */
+  readonly attemptCount: number;
+  /** RT-196 S1: when the last send was attempted; null if never sent. */
+  readonly lastAttemptAt: string | null;
+  /**
+   * RT-196 S1: why the last send left the return unknown, from the local audit;
+   * null once resolved, when never sent, or when no cause was recorded.
+   */
+  readonly lastCause: ReturnUnknownCause | null;
 }
 
 export interface ReturnsLookupRequest {
@@ -250,6 +290,16 @@ export type ReturnsResolveResponse =
       readonly unresolved: number;
     }
   | ReturnsRefused;
+
+/**
+ * RT-196 S1 — resend ONE unresolved return (main-process service method; not
+ * on `ReturnsBridgeAPI` until its §A4 review). Same answer shape as `submit`.
+ */
+export interface ReturnsResendRequest {
+  readonly returnId: string;
+}
+
+export type ReturnsResendResponse = ReturnsSubmitResponse;
 
 export type ReturnsListResponse =
   | { readonly kind: 'ok'; readonly returns: readonly ReturnJournalView[] }
