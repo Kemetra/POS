@@ -103,10 +103,7 @@ function surfaceOf(res: ListStuckShiftsResponse, afterReauth: boolean): SurfaceS
 }
 
 /**
- * Which dialog message each refusal shows; any other category is `failed`. Only
- * `state_invalid` re-reads the list: every other refusal here leaves the shift
- * exactly as it was (still open, or closed here and not at the server yet), so a
- * re-read could only show it again.
+ * Which dialog message each refusal shows; any other category is `failed`.
  */
 const REFUSAL_OF_CATEGORY: Partial<Record<RefusalCategory, ForcedCloseRefusal>> = {
   state_invalid: 'changed',
@@ -124,6 +121,18 @@ function withoutShift(prev: SurfaceState, shiftId: string): SurfaceState {
   const remaining = prev.shifts.filter((s) => s.shift_id !== shiftId);
   return remaining.length === 0 ? { kind: 'empty' } : { kind: 'list', shifts: remaining };
 }
+
+/**
+ * The refusals that re-read the stuck list: `state_invalid` (the shift changed under
+ * the manager) and `not_closable_here` (local absence cannot prove the backend shift
+ * is still open: its opening terminal may have closed it since the list loaded).
+ * Every other refusal leaves the shift exactly where it was (still open on this
+ * terminal, or closed here and not at the server yet), so a re-read could only show it again.
+ */
+const REREADS_LIST: ReadonlySet<RefusalCategory> = new Set<RefusalCategory>([
+  'state_invalid',
+  'not_closable_here',
+]);
 
 type DialogState =
   | { kind: 'idle' }
@@ -201,12 +210,13 @@ export function StuckShiftSurface({ operator }: Readonly<StuckShiftSurfaceProps>
 
   /** The forced close succeeded: the dialog closes, the shift leaves the list. */
   function showClosed(input: { shiftId: string; delivery: 'sent' | 'queued' }): void {
-    if (input.delivery === 'queued') setQueued(true);
+    // Follows the latest outcome: the drain is causal, so a later `sent` means the queue is empty.
+    setQueued(input.delivery === 'queued');
     closeDialog(input.shiftId);
     setSurface((prev) => withoutShift(prev, input.shiftId));
   }
 
-  /** A refusal: its dialog message; only `state_invalid` re-reads the list. */
+  /** A refusal: its dialog message; `REREADS_LIST` refusals also re-read the list. */
   function showRefusal(input: { shift: StuckShiftSummary; category: RefusalCategory }): void {
     setDialog({
       kind: 'open',
@@ -214,7 +224,7 @@ export function StuckShiftSurface({ operator }: Readonly<StuckShiftSurfaceProps>
       submitting: false,
       refusal: REFUSAL_OF_CATEGORY[input.category] ?? 'failed',
     });
-    if (input.category === 'state_invalid') void fetchShifts();
+    if (REREADS_LIST.has(input.category)) void fetchShifts();
   }
 
   async function handleSubmit(

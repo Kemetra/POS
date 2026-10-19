@@ -211,9 +211,10 @@ describe('ReprintLastReceipt', () => {
 
   it('is axe-clean in every state', async () => {
     const user = renderButton(bridges());
+    expect(screen.getByRole('button', { name: LABEL })).toBeEnabled();
     await expectNoAxeViolations(document.body);
     await user.click(screen.getByRole('button', { name: LABEL }));
-    await screen.findByTestId('reprint-last-sent');
+    expect(await screen.findByTestId('reprint-last-sent')).toBeInTheDocument();
     await expectNoAxeViolations(document.body);
   });
 
@@ -222,7 +223,7 @@ describe('ReprintLastReceipt', () => {
       bridges(undefined, { kind: 'refused', reason: 'printer_unavailable' }),
     );
     await user.click(screen.getByRole('button', { name: LABEL }));
-    await screen.findByTestId('reprint-last-failed');
+    expect(await screen.findByTestId('reprint-last-failed')).toBeInTheDocument();
     await expectNoAxeViolations(document.body);
   });
 });

@@ -40,7 +40,7 @@ describe('main/index.ts wires the RT-17 shift sync engine', () => {
 
   it('uses the sale-sync device sources and the RT-215 detector', () => {
     expect(source).toMatch(
-      /startShiftSync\(\{\s*db,\s*terminal,\s*client: \{\s*baseUrl: resolveApiBaseUrl\(\),\s*fetch: backendFetch,\s*detector: deviceAuthDetector,\s*getDeviceToken: readSendableDeviceToken,\s*currentTerminalId: \(\) => pairingStore\.getCurrentTerminalId\(\),\s*(?:\/\/[^\n]*\s*)*getEnvelope: createManagerEnvelopeReader\(\s*operatorSessionManager,\s*operatorEnvelopeHolder,?\s*\),\s*\},\s*resolveTerminalId: createCurrentTerminalResolver\(\(\) => pairingStore\.getStatus\(\)\),\s*logger: mainLogger,\s*onDrainNow: \(drainNow\) => \{\s*shiftSyncDrainNowRef\.current = drainNow;\s*\},\s*\}\)/,
+      /startShiftSync\(\{\s*db,\s*terminal,\s*client: \{\s*baseUrl: resolveApiBaseUrl\(\),\s*fetch: backendFetch,\s*detector: deviceAuthDetector,\s*getDeviceToken: readSendableDeviceToken,\s*currentTerminalId: \(\) => pairingStore\.getCurrentTerminalId\(\),\s*(?:\/\/[^\n]*\n\s*)?getEnvelope: createManagerEnvelopeReader\(\s*operatorSessionManager,\s*operatorEnvelopeHolder,?\s*\),\s*\},\s*resolveTerminalId: createCurrentTerminalResolver\(\(\) => pairingStore\.getStatus\(\)\),\s*logger: mainLogger,\s*onDrainNow: \(drainNow\) => \{\s*shiftSyncDrainNowRef\.current = drainNow;\s*\},\s*\}\)/,
     );
   });
 

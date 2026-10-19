@@ -267,6 +267,14 @@ describe('StuckShiftSurface — duration formatting', () => {
 
 type Answer = Awaited<ReturnType<OperatorBridgeAPI['forceCloseShift']>>;
 
+/** Opens `shiftId`'s dialog, picks a reason, types the blind count and commits. */
+async function closeThroughDialog(shiftId: string): Promise<void> {
+  await userEvent.click(cardButton(shiftId));
+  await userEvent.click(screen.getByRole('radio', { name: COPY.reasons.cashier_no_show }));
+  await enterCount();
+  await userEvent.click(dialogButton(COPY.close));
+}
+
 /**
  * Renders the surface over `shifts`, force-closes SHIFT_0 with a count, and answers
  * with `answer` (RT-554). The one path every outcome test below takes.
@@ -274,31 +282,38 @@ type Answer = Awaited<ReturnType<OperatorBridgeAPI['forceCloseShift']>>;
 async function submitClose(
   answer: Answer,
   shifts: StuckShiftSummary[] = [SHIFT_0],
+  op: Pick<OperatorBridgeAPI, 'listStuckShifts' | 'forceCloseShift'> = makeOperator(
+    { kind: 'stuck_shifts', shifts },
+    answer,
+  ),
 ): Promise<Pick<OperatorBridgeAPI, 'listStuckShifts' | 'forceCloseShift'>> {
-  const op = makeOperator({ kind: 'stuck_shifts', shifts }, answer);
   render(<StuckShiftSurface operator={op} />);
   await waitFor(() => screen.getByText('Nour Al-Hassan'));
-  await userEvent.click(cardButton('shift-111'));
-  await userEvent.click(screen.getByRole('radio', { name: COPY.reasons.cashier_no_show }));
-  await enterCount();
-  await userEvent.click(dialogButton(COPY.close));
+  await closeThroughDialog('shift-111');
   return op;
 }
 
-/** The refusal outcome tests share one shape: its own copy, never another's, no re-read. */
+/**
+ * The refusal outcome tests share one shape: its own copy, never another's, and
+ * `reads` list reads in all (1 = no re-read; `state_invalid` and `not_closable_here`
+ * re-read, the refusals that leave the shift where it was do not).
+ */
 async function expectRefusalCopy(input: {
   op: Awaited<ReturnType<typeof submitClose>>;
   copy: string;
   never: readonly string[];
+  reads?: number;
 }): Promise<void> {
   const error = await screen.findByTestId('stuck-shift-submit-error');
   expect(error).toHaveTextContent(input.copy);
   for (const other of input.never) {
     expect(error).not.toHaveTextContent(other);
   }
-  // The shift is still stuck on the backend: the list is not re-read and the card stays.
-  expect(input.op.listStuckShifts).toHaveBeenCalledTimes(1);
-  expect(screen.getByTestId('stuck-shift-card-shift-111')).toBeInTheDocument();
+  // The shift is still stuck on the backend: the (re-read) list still shows its card.
+  await waitFor(() => {
+    expect(input.op.listStuckShifts).toHaveBeenCalledTimes(input.reads ?? 1);
+  });
+  expect(await screen.findByTestId('stuck-shift-card-shift-111')).toBeInTheDocument();
 }
 
 describe('StuckShiftSurface — dialog flow', () => {
@@ -401,10 +416,36 @@ describe('StuckShiftSurface — dialog flow', () => {
     expect(op.listStuckShifts).toHaveBeenCalledTimes(2);
   });
 
-  it('RT-554: not_closable_here shows the clear «cannot close from this device» copy, no refetch, never «state changed»', async () => {
+  // Local absence cannot prove the backend shift is still open (the opening terminal
+  // may have closed it since the list loaded), so the list is re-read, as for state_invalid.
+  it('RT-554: not_closable_here shows the clear «cannot close from this device» copy, re-reads the list, never «state changed»', async () => {
     const op = await submitClose({ kind: 'refused', category: 'not_closable_here' });
 
-    await expectRefusalCopy({ op, copy: COPY.notClosableHere, never: [COPY.changed, COPY.failed] });
+    await expectRefusalCopy({
+      op,
+      copy: COPY.notClosableHere,
+      never: [COPY.changed, COPY.failed],
+      reads: 2,
+    });
+  });
+
+  it('RT-554: a shift closed meanwhile on its opening terminal leaves the list on the re-read', async () => {
+    const op = {
+      listStuckShifts: vi
+        .fn()
+        .mockResolvedValueOnce({ kind: 'stuck_shifts', shifts: [SHIFT_0] })
+        .mockResolvedValueOnce({ kind: 'stuck_shifts', shifts: [] }),
+      forceCloseShift: vi.fn(() =>
+        Promise.resolve({ kind: 'refused', category: 'not_closable_here' }),
+      ),
+    } as unknown as Pick<OperatorBridgeAPI, 'listStuckShifts' | 'forceCloseShift'>;
+
+    await submitClose({ kind: 'refused', category: 'not_closable_here' }, [SHIFT_0], op);
+
+    await waitFor(() => {
+      expect(screen.queryByTestId('stuck-shift-card-shift-111')).toBeNull();
+    });
+    expect(op.listStuckShifts).toHaveBeenCalledTimes(2);
   });
 
   it('on generic refusal (non-state_invalid): shows submit error but does NOT refetch', async () => {
@@ -634,6 +675,38 @@ describe('StuckShiftSurface — RT-554 (b) outcomes', () => {
     );
     expect(screen.queryByTestId('stuck-shift-card-shift-111')).toBeNull();
     expect(screen.getByTestId('stuck-shift-card-shift-222')).toBeInTheDocument();
+  });
+
+  // The drain is in causal order, so a later `sent` means everything before it was
+  // sent too: the «not at the server yet» notice follows the LATEST delivery.
+  it('a later close that is sent clears the «not at the server yet» notice', async () => {
+    const op = {
+      listStuckShifts: vi.fn(() =>
+        Promise.resolve({ kind: 'stuck_shifts', shifts: [SHIFT_0, SHIFT_1] }),
+      ),
+      forceCloseShift: vi
+        .fn()
+        .mockResolvedValueOnce({
+          kind: 'forced_closed',
+          audit_event_id: 'evt-1',
+          delivery: 'queued',
+        })
+        .mockResolvedValueOnce({
+          kind: 'forced_closed',
+          audit_event_id: 'evt-2',
+          delivery: 'sent',
+        }),
+    } as unknown as Pick<OperatorBridgeAPI, 'listStuckShifts' | 'forceCloseShift'>;
+    render(<StuckShiftSurface operator={op} />);
+    await waitFor(() => screen.getByText('Nour Al-Hassan'));
+
+    await closeThroughDialog('shift-111');
+    expect(await screen.findByTestId('stuck-shift-queued-notice')).toBeInTheDocument();
+    await closeThroughDialog('shift-222');
+
+    await waitFor(() => {
+      expect(screen.queryByTestId('stuck-shift-queued-notice')).toBeNull();
+    });
   });
 
   it('delivery sent: no notice', async () => {
