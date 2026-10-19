@@ -257,6 +257,22 @@ describe('StuckShiftSurface — duration formatting', () => {
 
 // ─── Dialog flow ──────────────────────────────────────────────────────────────
 
+/** Renders the surface, force-closes SHIFT_0 and answers with the refusal `category`. */
+async function submitRefusedClose(
+  category: 'not_closable_here',
+): Promise<Pick<OperatorBridgeAPI, 'listStuckShifts' | 'forceCloseShift'>> {
+  const op = makeOperator(
+    { kind: 'stuck_shifts', shifts: [SHIFT_0] },
+    { kind: 'refused', category },
+  );
+  render(<StuckShiftSurface operator={op} />);
+  await waitFor(() => screen.getByText('Nour Al-Hassan'));
+  await userEvent.click(cardButton('shift-111'));
+  await userEvent.click(screen.getByRole('radio', { name: COPY.reasons.cashier_no_show }));
+  await userEvent.click(dialogButton(COPY.close));
+  return op;
+}
+
 describe('StuckShiftSurface — dialog flow', () => {
   it('clicking a card opens the forced-close dialog', async () => {
     const op = makeOperator({ kind: 'stuck_shifts', shifts: [SHIFT_0] });
@@ -354,25 +370,13 @@ describe('StuckShiftSurface — dialog flow', () => {
   });
 
   it('RT-554: not_closable_here shows the clear «cannot close from this device» copy, no refetch, never «state changed»', async () => {
-    const op = makeOperator(
-      { kind: 'stuck_shifts', shifts: [SHIFT_0] },
-      { kind: 'refused', category: 'not_closable_here' },
-    );
-    render(<StuckShiftSurface operator={op} />);
+    const op = await submitRefusedClose('not_closable_here');
 
-    await waitFor(() => screen.getByText('Nour Al-Hassan'));
-
-    await userEvent.click(cardButton('shift-111'));
-    await userEvent.click(screen.getByRole('radio', { name: COPY.reasons.cashier_no_show }));
-    await userEvent.click(dialogButton(COPY.close));
-
-    await waitFor(() => {
-      expect(screen.getByTestId('stuck-shift-submit-error')).toHaveTextContent(
-        COPY.notClosableHere,
-      );
-    });
-    expect(screen.getByTestId('stuck-shift-submit-error')).not.toHaveTextContent(COPY.changed);
-    expect(screen.getByTestId('stuck-shift-submit-error')).not.toHaveTextContent(COPY.failed);
+    const error = await screen.findByTestId('stuck-shift-submit-error');
+    expect(error).toHaveTextContent(COPY.notClosableHere);
+    for (const other of [COPY.changed, COPY.failed]) {
+      expect(error).not.toHaveTextContent(other);
+    }
     // The shift is still stuck on the backend: the list is not re-read and the card stays.
     expect(op.listStuckShifts).toHaveBeenCalledTimes(1);
     expect(screen.getByTestId('stuck-shift-card-shift-111')).toBeInTheDocument();
