@@ -288,6 +288,9 @@ npm run contracts:repin   # re-vendor contracts/backend-core from Backend-Core
 
 ---
 
+
+This project is tested with BrowserStack.
+
 ## Documentation
 
 | Audience | First reads |
