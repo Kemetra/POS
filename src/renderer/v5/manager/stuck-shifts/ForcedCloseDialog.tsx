@@ -38,8 +38,18 @@ export interface ForcedCloseFormSubmitPayload {
   annotation?: string;
 }
 
-/** `changed`: `state_invalid` (the list was read again). `failed`: any other refusal. */
-export type ForcedCloseRefusal = 'changed' | 'failed';
+/**
+ * `changed`: `state_invalid` (the list was read again). `notClosable`:
+ * `not_closable_here` (RT-554; the shift belongs to another device). `failed`:
+ * any other refusal.
+ */
+export type ForcedCloseRefusal = 'changed' | 'notClosable' | 'failed';
+
+const REFUSAL_COPY: Readonly<Record<ForcedCloseRefusal, string>> = {
+  changed: COPY.changed,
+  notClosable: COPY.notClosableHere,
+  failed: COPY.failed,
+};
 
 export interface ForcedCloseFormProps {
   onSubmit: (payload: ForcedCloseFormSubmitPayload) => void;
@@ -113,7 +123,7 @@ export function ForcedCloseForm({
       <div className="v5-stuck-slot" role="status" aria-live="polite">
         {refusal !== null && (
           <Notice tone="warning" announce={false} testId="stuck-shift-submit-error">
-            {refusal === 'changed' ? COPY.changed : COPY.failed}
+            {REFUSAL_COPY[refusal]}
           </Notice>
         )}
       </div>

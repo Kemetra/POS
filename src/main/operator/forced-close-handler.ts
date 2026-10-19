@@ -74,9 +74,13 @@ export class ForcedCloseHandler {
       ) as PrepareGet<ShiftRow>
     ).get(req.shift_id);
 
+    // RT-554 — the stuck list is read from Backend-Core, so a shift this device
+    // does not hold is the normal case (opened on another device or profile).
+    // Backend-Core resolves a shift only for the device that opened it, so
+    // nothing can close it from here: say so, never the generic `state_invalid`.
     if (shiftRow === undefined) {
-      this.logRefusal('state_invalid');
-      return { kind: 'refused', category: 'state_invalid' };
+      this.logRefusal('not_closable_here');
+      return { kind: 'refused', category: 'not_closable_here' };
     }
 
     // P17 — branch isolation: mismatch returns role_mismatch, not state_invalid,

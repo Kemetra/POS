@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { randomUUID } from 'node:crypto';
+import type { Logger } from 'pino';
 
 import { ForcedCloseHandler } from '../../../../src/main/operator/forced-close-handler.js';
 import type { ForcedCloseHandlerDeps } from '../../../../src/main/operator/forced-close-handler.js';
@@ -501,7 +502,11 @@ describe('T085 — forced-close handler audit event shape', () => {
     db.close();
   });
 
-  it('unknown shift returns state_invalid', async () => {
+  // RT-554 — a stuck shift the local DB does not hold (the list comes from the
+  // backend; the shift was opened on another device). The contract resolves a
+  // shift only for the device that opened it, so this device cannot close it:
+  // refused as `not_closable_here`, never the generic `state_invalid`.
+  it('RT-554: a shift missing from the local DB is refused not_closable_here, nothing written', async () => {
     const db = freshDb();
     const captured: CapturedEvent[] = [];
     const handler = makeHandler(db, makeSession({ role: 'manager' }), captured);
@@ -512,10 +517,64 @@ describe('T085 — forced-close handler audit event shape', () => {
       event_id: randomUUID(),
     });
 
-    expect(isOperatorRefusal(result)).toBe(true);
-    if (isOperatorRefusal(result)) {
-      expect(result.category).toBe('state_invalid');
-    }
+    expect(result).toEqual({ kind: 'refused', category: 'not_closable_here' });
+    expect(captured).toHaveLength(0);
+    db.close();
+  });
+
+  it('RT-554: an admin gets the same not_closable_here refusal', async () => {
+    const db = freshDb();
+    const handler = makeHandler(db, makeSession({ role: 'admin' }), []);
+
+    const result = await handler.forceCloseShift({
+      shift_id: 'shift-does-not-exist',
+      reason: 'cashier_no_show',
+      event_id: randomUUID(),
+    });
+
+    expect(result).toEqual({ kind: 'refused', category: 'not_closable_here' });
+    db.close();
+  });
+
+  it('RT-554: a cashier is refused role_mismatch BEFORE the shift is looked up', async () => {
+    const db = freshDb();
+    const handler = makeHandler(db, makeSession({ role: 'cashier' }), []);
+
+    const result = await handler.forceCloseShift({
+      shift_id: 'shift-does-not-exist',
+      reason: 'cashier_no_show',
+      event_id: randomUUID(),
+    });
+
+    expect(result).toEqual({ kind: 'refused', category: 'role_mismatch' });
+    db.close();
+  });
+
+  it('RT-554: the not_closable_here log names the category only (no reason, note or ids)', async () => {
+    const db = freshDb();
+    const lines: unknown[] = [];
+    const logger = { info: (...a: unknown[]) => lines.push(a) } as unknown as Logger;
+    const handle = bindHandle(db);
+    const handler = new ForcedCloseHandler({
+      db: handle,
+      sessionManager: { getCurrent: () => makeSession({ role: 'manager' }) },
+      pairingStore: { getStatus: () => Promise.resolve(makePairingStatus()) },
+      auditEmitter: makeAuditEmitter([], db),
+      logger,
+    });
+
+    await handler.forceCloseShift({
+      shift_id: 'shift-secret-id-123',
+      reason: 'other',
+      annotation: 'private-note-xyz',
+      event_id: 'evt-secret-456',
+    });
+
+    const logged = JSON.stringify(lines);
+    expect(logged).toContain('not_closable_here');
+    expect(logged).not.toContain('shift-secret-id-123');
+    expect(logged).not.toContain('private-note-xyz');
+    expect(logged).not.toContain('evt-secret-456');
     db.close();
   });
 

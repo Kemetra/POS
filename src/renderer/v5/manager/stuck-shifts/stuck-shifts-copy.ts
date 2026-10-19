@@ -30,6 +30,15 @@ export const STUCK_SHIFTS_COPY = Object.freeze({
   cancel: 'إلغاء',
   /** `state_invalid`: the only refusal that re-reads the list. */
   changed: 'تغيّرت حالة هذه الوردية. تم تحديث القائمة.',
+  /**
+   * `not_closable_here` (RT-554): no forced close is available for this shift
+   * from the stuck list. True for a shift opened on another device (Backend-Core
+   * resolves a shift only for the device that opened it) and for one opened on
+   * this device (no forced-close path yet; the cash-up closes it). The list is
+   * not re-read (the shift is still open). Needs owner copy sign-off (UX-13).
+   */
+  notClosableHere:
+    'لا يمكن الإغلاق الإجباري لهذه الوردية من هنا. تُغلق بجرد الدرج على الجهاز الذي فتحها.',
   /** Any other refusal: the list is not re-read. */
   failed: 'تعذّر إغلاق هذه الوردية. حاول مرة أخرى.',
   /** The five FORCED_CLOSE_REASONS, in enum order. */
