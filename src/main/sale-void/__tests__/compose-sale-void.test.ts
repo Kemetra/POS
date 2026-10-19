@@ -78,6 +78,16 @@ let answer: () => Response;
 let enabled: boolean;
 const ref: { domain: ComposedSaleVoid | null } = { domain: null };
 
+/** Records every POST and answers with the current `answer`. */
+const recordingFetch = ((url: string, init: RequestInit) => {
+  posted.push({
+    url,
+    headers: init.headers as Record<string, string>,
+    body: JSON.parse(init.body as string) as Record<string, unknown>,
+  });
+  return Promise.resolve(answer());
+}) as unknown as typeof fetch;
+
 beforeAll(async () => {
   await initGrantSql();
 });
@@ -125,17 +135,7 @@ beforeEach(async () => {
   });
   deps = {
     db,
-    http: {
-      baseUrl: 'https://api.example.test',
-      fetch: ((url: string, init: RequestInit) => {
-        posted.push({
-          url,
-          headers: init.headers as Record<string, string>,
-          body: JSON.parse(init.body as string) as Record<string, unknown>,
-        });
-        return Promise.resolve(answer());
-      }) as unknown as typeof fetch,
-    },
+    http: { baseUrl: 'https://api.example.test', fetch: recordingFetch },
     getOperatorEnvelope: () => (current === null ? null : (envelopes[current.id] ?? null)),
     getSession: () => current,
     getTerminalId: () => TERMINAL,
@@ -143,6 +143,7 @@ beforeEach(async () => {
     isEnabled: () => enabled,
     approvals,
     auditSink: emitter,
+    accessAudit: { emitRaw: () => undefined },
     logger: { warn: () => undefined, error: () => undefined },
     now: () => clock,
     localDayOf: (iso) => iso.slice(0, 10),

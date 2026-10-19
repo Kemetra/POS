@@ -3,8 +3,8 @@
  * `receipts.*` handler (OD-534-1 / OD-534-2).
  *
  *   • A cashier reads, previews, reprints and recovers ONLY their own sales; a
- *     request for another operator's sale refuses as `sale_not_found`
- *     (non-disclosing) and writes a `sale.access.refused` audit event.
+ *     request for another operator's sale refuses as `role_denied` (RT-741,
+ *     owner decision 2026-10-19) and writes a `sale.access.refused` audit event.
  *   • A manager or admin reaches every sale in the terminal scope.
  *   • A role outside the allowlist refuses as `role_denied` and is audited.
  *   • No session, or a locked session, refuses as `no_session`, unaudited.
@@ -189,6 +189,11 @@ function expectRefusal(result: { kind: string; reason?: string }, reason: string
   expect(result).toMatchObject({ kind: 'refused', reason });
 }
 
+/** RT-741: the whole answer is the refusal, so no sale field is disclosed. */
+function expectOwnershipRefusal(result: unknown): void {
+  expect(result).toEqual({ kind: 'refused', reason: 'role_denied' });
+}
+
 function expectNotOwnerAudit(h: Harness, action: string, saleId: string): void {
   expect(h.audits).toHaveLength(1);
   expect(h.audits[0]).toMatchObject({
@@ -212,10 +217,10 @@ describe('RT-546 — sales.read', () => {
     expect(h.audits).toEqual([]);
   });
 
-  it("a cashier is refused another operator's sale, non-disclosing, and it is audited", async () => {
+  it("a cashier is refused another operator's sale as role_denied, and it is audited", async () => {
     const h = harness();
     const res = await bridges(h, CASHIER_A).sales.read({ sale_id: sid(OTHER.id) });
-    expectRefusal(res, 'sale_not_found');
+    expectOwnershipRefusal(res);
     expectNotOwnerAudit(h, 'sales.read', OTHER.id);
   });
 
@@ -237,12 +242,12 @@ describe('RT-546 — sales.findByNumber', () => {
     expect(res).toMatchObject({ kind: 'ok', sale: { sale_id: OWN.id } });
   });
 
-  it("a cashier probing another operator's number gets sale_not_found, audited", async () => {
+  it("a cashier probing another operator's number gets role_denied, audited", async () => {
     const h = harness();
     const res = await bridges(h, CASHIER_A).sales.findByNumber({
       sale_number: snum(OTHER.number),
     });
-    expectRefusal(res, 'sale_not_found');
+    expectOwnershipRefusal(res);
     expectNotOwnerAudit(h, 'sales.findByNumber', OTHER.id);
   });
 
@@ -378,7 +383,7 @@ describe('RT-546 — receipts.* (OD-534-2)', () => {
       c.seed(OTHER.id);
       const h = harness();
       const res = await c.call(bridges(h, CASHIER_A), OTHER.id);
-      expectRefusal(res, 'sale_not_found');
+      expectOwnershipRefusal(res);
       expect(c.effects(h)).toBe(0);
       expectNotOwnerAudit(h, c.action, OTHER.id);
     },
@@ -466,6 +471,6 @@ describe('RT-546 — every sales/receipts handler gates the session and role', (
       printEventsRepo: bindPrintEventsRepository(handle),
       drawerEventsRepo: bindDrawerEventsRepository(handle),
     });
-    expectRefusal(await sales.read({ sale_id: sid(OTHER.id) }), 'sale_not_found');
+    expectOwnershipRefusal(await sales.read({ sale_id: sid(OTHER.id) }));
   });
 });

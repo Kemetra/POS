@@ -15,6 +15,9 @@ import { randomUUID } from 'node:crypto';
 import type { DatabaseHandle } from '../db/client.js';
 import type { ManagerApprovalService } from '../operator/manager-approval-service.js';
 import type { OperatorSessionRecord } from '../operator/session-manager.js';
+import { resolveSessionScope } from '../operator/resolve-session-scope.js';
+import type { SaleAuditEmitter } from '../sales/audit-emitter.js';
+import { createSaleAccessPolicy } from '../sales/sale-access-policy.js';
 import { bindSalesRepository, type SaleRow } from '../sales/repositories/sales.repository.js';
 import { DEFAULT_CURRENCY_CODE } from '../sales-sync/create-sale-sync-client.js';
 import { createSaleSyncStateRepo } from '../sales-sync/sale-sync-state-repo.js';
@@ -55,6 +58,11 @@ export interface ComposeSaleVoidDeps {
   readonly isEnabled: () => boolean;
   readonly approvals: Pick<ManagerApprovalService, 'consume' | 'evidence'>;
   readonly auditSink: SaleVoidAuditSink;
+  /**
+   * RT-741: records `sale.access.refused` for the shared RT-546 gate that
+   * `saleVoid.lookup` runs (the same emitter the sales and receipts bridges use).
+   */
+  readonly accessAudit: Pick<SaleAuditEmitter, 'emitRaw'>;
   readonly logger: SaleVoidLogger;
   readonly now: () => string;
   /** The terminal's capture currency (the sale-sync capture's own source). */
@@ -119,6 +127,13 @@ export function composeSaleVoid(deps: ComposeSaleVoidDeps): ComposedSaleVoid {
   });
   const hasLiveReturn = db.prepare(LIVE_RETURN_SQL) as Row1;
   const audit = createSaleVoidAudit({ sink: deps.auditSink, now, newEventId: randomUUID });
+  // RT-741: the shared RT-546 gate, over the same live session and lock.
+  const access = createSaleAccessPolicy({
+    getCurrentSession: () => resolveSessionScope(deps.getSession(), deps.getTerminalId()),
+    isSessionLocked: deps.isSessionLocked,
+    auditEmitter: deps.accessAudit,
+    now,
+  });
 
   /**
    * The selling cashier's `users.id` from the sale's own settled event, when
@@ -153,6 +168,7 @@ export function composeSaleVoid(deps: ComposeSaleVoidDeps): ComposedSaleVoid {
       return toVoidSession(session, terminalId, deps.getOperatorEnvelope());
     },
     isSessionLocked: deps.isSessionLocked,
+    access,
     sales,
     repo,
     hasLiveReturn: (saleId) => hasLiveReturn.get(saleId) !== undefined,

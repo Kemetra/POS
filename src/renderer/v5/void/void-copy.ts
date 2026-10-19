@@ -46,6 +46,8 @@ const REFUSALS: Readonly<Record<SaleVoidRefusalReason | ManagerApprovalRefusalRe
   session_locked: 'الجهاز مقفل.',
   invalid_input: 'البيانات غير صحيحة.',
   sale_not_found: 'لا يوجد بيع بهذا الرقم على هذه الطرفية.',
+  // RT-741: a cashier asked for another operator's sale.
+  role_denied: 'غير مسموح لك بعرض هذا البيع.',
   not_same_day: 'انتهى يوم هذا البيع، فلا يمكن إلغاؤه. استخدم المرتجعات.',
   already_voided: 'لهذا البيع طلب إلغاء بالفعل.',
   has_return: 'لهذا البيع مرتجع، فلا يمكن إلغاؤه.',

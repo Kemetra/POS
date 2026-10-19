@@ -15,7 +15,9 @@ import './sales.css';
  *   trimmed, an empty one sends nothing, no bridge is a no-op.
  * - One search at a time: a ref blocks re-entry synchronously, and the button
  *   reads «جارٍ البحث…» and is disabled while one runs.
- * - A refusal and a rejected call both read «لم يُعثر على بيع بهذا الرقم.».
+ * - A refusal and a rejected call both read «لم يُعثر على بيع بهذا الرقم.»,
+ *   except RT-741's `role_denied` (a cashier asked for another operator's
+ *   sale), which reads «غير مسموح لك بعرض هذا البيع.».
  * - A new search closes any open preview and clears the previous result.
  *
  * Out of scope (RT-249 / D-N1): the recent-sales list and the short number.
@@ -38,7 +40,28 @@ type LookupState =
   | { phase: 'idle' }
   | { phase: 'searching' }
   | { phase: 'found'; sale: SaleSummary }
-  | { phase: 'not_found' };
+  | { phase: 'not_found' }
+  // RT-741: a cashier asked for another operator's sale (main says role_denied).
+  | { phase: 'not_allowed' };
+
+/** The notice a finished search shows, or nothing. */
+function LookupNotice({ phase }: Readonly<{ phase: LookupState['phase'] }>): JSX.Element | null {
+  if (phase === 'not_found') {
+    return (
+      <Notice tone="info" testId="sale-not-found">
+        {SALES_COPY.notFound}
+      </Notice>
+    );
+  }
+  if (phase === 'not_allowed') {
+    return (
+      <Notice tone="info" testId="sale-not-allowed">
+        {SALES_COPY.notAllowed}
+      </Notice>
+    );
+  }
+  return null;
+}
 
 export function SalesLookup({
   _testSalesBridge,
@@ -60,7 +83,8 @@ export function SalesLookup({
     setState({ phase: 'searching' });
     try {
       const res = await salesApi.findByNumber({ sale_number: trimmed as SaleNumber });
-      setState(res.kind === 'ok' ? { phase: 'found', sale: res.sale } : { phase: 'not_found' });
+      if (res.kind === 'ok') setState({ phase: 'found', sale: res.sale });
+      else setState({ phase: res.reason === 'role_denied' ? 'not_allowed' : 'not_found' });
     } catch {
       setState({ phase: 'not_found' });
     } finally {
@@ -100,11 +124,7 @@ export function SalesLookup({
             {searching ? SALES_COPY.searching : SALES_COPY.search}
           </button>
         </form>
-        {state.phase === 'not_found' && (
-          <Notice tone="info" testId="sale-not-found">
-            {SALES_COPY.notFound}
-          </Notice>
-        )}
+        <LookupNotice phase={state.phase} />
         {state.phase === 'found' && (
           <SaleResult
             sale={state.sale}
