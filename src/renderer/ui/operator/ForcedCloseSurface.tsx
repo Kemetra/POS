@@ -1,5 +1,8 @@
 import { useState, useEffect, useCallback, type JSX } from 'react';
 
+import type { RefusalCategory } from '../../../shared/audit/event-shape.js';
+import { Notice } from '../../v5/foundation/Notice.js';
+
 import type {
   OperatorBridgeAPI,
   StuckShiftSummary,
@@ -7,6 +10,7 @@ import type {
 } from '../../../shared/bridge-api.js';
 import { ReauthDialog, ReauthRequiredNotice } from './ReauthDialog.js';
 import { SIGN_IN_REFUSAL_COPY } from './messages.js';
+import { STUCK_SHIFTS_COPY as COPY } from '../../v5/manager/stuck-shifts/stuck-shifts-copy.js';
 import {
   ForcedCloseDialog,
   type ForcedCloseFormSubmitPayload,
@@ -98,6 +102,38 @@ function surfaceOf(res: ListStuckShiftsResponse, afterReauth: boolean): SurfaceS
     : { kind: 'error' };
 }
 
+/**
+ * Which dialog message each refusal shows; any other category is `failed`.
+ */
+const REFUSAL_OF_CATEGORY: Partial<Record<RefusalCategory, ForcedCloseRefusal>> = {
+  state_invalid: 'changed',
+  // RT-554: still open on the backend, and no re-read can change that.
+  not_closable_here: 'notClosable',
+  // RT-554 (b): parked sales or drawer cash in flight; the shift is still open.
+  close_blocked: 'blocked',
+  // RT-554 (b): closed on this terminal, not at the server yet.
+  closed_here_unsent: 'unsent',
+};
+
+/** The list without `shiftId` (the empty state when it was the last one). */
+function withoutShift(prev: SurfaceState, shiftId: string): SurfaceState {
+  if (prev.kind !== 'list') return prev;
+  const remaining = prev.shifts.filter((s) => s.shift_id !== shiftId);
+  return remaining.length === 0 ? { kind: 'empty' } : { kind: 'list', shifts: remaining };
+}
+
+/**
+ * The refusals that re-read the stuck list: `state_invalid` (the shift changed under
+ * the manager) and `not_closable_here` (local absence cannot prove the backend shift
+ * is still open: its opening terminal may have closed it since the list loaded).
+ * Every other refusal leaves the shift exactly where it was (still open on this
+ * terminal, or closed here and not at the server yet), so a re-read could only show it again.
+ */
+const REREADS_LIST: ReadonlySet<RefusalCategory> = new Set<RefusalCategory>([
+  'state_invalid',
+  'not_closable_here',
+]);
+
 type DialogState =
   | { kind: 'idle' }
   | {
@@ -125,6 +161,8 @@ type DialogState =
 export function StuckShiftSurface({ operator }: Readonly<StuckShiftSurfaceProps>): JSX.Element {
   const [surface, setSurface] = useState<SurfaceState>({ kind: 'loading' });
   const [dialog, setDialog] = useState<DialogState>({ kind: 'idle' });
+  // RT-554 (b): a forced close recorded here but not yet at the server.
+  const [queued, setQueued] = useState(false);
   const focus = useStuckShiftFocus(surface.kind !== 'loading');
   const { afterClose } = focus;
   const openShiftId = dialog.kind === 'open' ? dialog.shift.shift_id : null;
@@ -170,6 +208,25 @@ export function StuckShiftSurface({ operator }: Readonly<StuckShiftSurfaceProps>
     };
   }, [openShiftId, closeDialog]);
 
+  /** The forced close succeeded: the dialog closes, the shift leaves the list. */
+  function showClosed(input: { shiftId: string; delivery: 'sent' | 'queued' }): void {
+    // Follows the latest outcome: the drain is causal, so a later `sent` means the queue is empty.
+    setQueued(input.delivery === 'queued');
+    closeDialog(input.shiftId);
+    setSurface((prev) => withoutShift(prev, input.shiftId));
+  }
+
+  /** A refusal: its dialog message; `REREADS_LIST` refusals also re-read the list. */
+  function showRefusal(input: { shift: StuckShiftSummary; category: RefusalCategory }): void {
+    setDialog({
+      kind: 'open',
+      shift: input.shift,
+      submitting: false,
+      refusal: REFUSAL_OF_CATEGORY[input.category] ?? 'failed',
+    });
+    if (REREADS_LIST.has(input.category)) void fetchShifts();
+  }
+
   async function handleSubmit(
     shift: StuckShiftSummary,
     payload: ForcedCloseFormSubmitPayload,
@@ -180,32 +237,25 @@ export function StuckShiftSurface({ operator }: Readonly<StuckShiftSurfaceProps>
       event_id: crypto.randomUUID(),
       shift_id: shift.shift_id,
       reason: payload.forced_close_reason,
+      counted_cash_minor: payload.counted_cash_minor,
       ...(payload.annotation !== undefined ? { annotation: payload.annotation } : {}),
     });
 
     if (res.kind === 'forced_closed') {
-      closeDialog(shift.shift_id);
-      setSurface((prev) => {
-        if (prev.kind !== 'list') return prev;
-        const remaining = prev.shifts.filter((s) => s.shift_id !== shift.shift_id);
-        return remaining.length === 0 ? { kind: 'empty' } : { kind: 'list', shifts: remaining };
-      });
-    } else if (res.category === 'state_invalid') {
-      setDialog({ kind: 'open', shift, submitting: false, refusal: 'changed' });
-      void fetchShifts();
-    } else if (res.category === 'not_closable_here') {
-      // RT-554: this terminal does not hold the shift. Local absence cannot prove the
-      // backend shift is still open (its opening terminal may have closed it since
-      // the list loaded), so the list is re-read, as for `state_invalid`.
-      setDialog({ kind: 'open', shift, submitting: false, refusal: 'notClosable' });
-      void fetchShifts();
+      showClosed({ shiftId: shift.shift_id, delivery: res.delivery });
     } else {
-      setDialog({ kind: 'open', shift, submitting: false, refusal: 'failed' });
+      showRefusal({ shift, category: res.category });
     }
   }
 
   return (
     <StuckShiftsPage>
+      {queued && (
+        <Notice tone="info" testId="stuck-shift-queued-notice">
+          {COPY.queuedNotice}
+        </Notice>
+      )}
+
       {surface.kind === 'loading' && <StuckShiftsLoading />}
 
       {surface.kind === 'empty' && <StuckShiftsEmpty focus={focus} />}

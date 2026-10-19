@@ -1,3 +1,4 @@
+import { SHIFT_COPY } from '../../../shift/shift-copy';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -50,7 +51,11 @@ type Bridge = Pick<OperatorBridgeAPI, 'listStuckShifts' | 'forceCloseShift' | 'r
 
 function makeBridge(
   lists: ListStuckShiftsResponse[],
-  answer: Answer | Promise<Answer> = { kind: 'forced_closed', audit_event_id: 'evt-1' },
+  answer: Answer | Promise<Answer> = {
+    kind: 'forced_closed',
+    audit_event_id: 'evt-1',
+    delivery: 'sent',
+  },
 ) {
   const queue = [...lists];
   const last = lists[lists.length - 1];
@@ -86,6 +91,11 @@ function closeButtonOf(shiftId: string): HTMLElement {
 async function openDialog(user: ReturnType<typeof userEvent.setup>, shiftId = 'shift-1') {
   await user.click(closeButtonOf(shiftId));
   return screen.getByRole('dialog');
+}
+
+/** RT-554 (b): the manager's blind count (EGP 500.00), typed before the commit. */
+async function typeCount(user: ReturnType<typeof userEvent.setup>, dialog: HTMLElement) {
+  await user.type(within(dialog).getByLabelText(SHIFT_COPY.countLabel), '500');
 }
 
 function commitIn(dialog: HTMLElement): HTMLElement {
@@ -265,22 +275,29 @@ describe('RT-502 forced-close dialog — open, focus, cancel', () => {
 });
 
 describe('RT-502 forced-close dialog — the bridge call', () => {
-  it('sends exactly { event_id, shift_id, reason } when the note is empty', async () => {
+  it('sends exactly { event_id, shift_id, reason, counted_cash_minor } when the note is empty', async () => {
     const bridge = makeBridge([LIST(AHMED)]);
     const user = await renderList(bridge);
     const dialog = await openDialog(user);
     await user.click(within(dialog).getByRole('radio', { name: COPY.reasons.cashier_no_show }));
+    await typeCount(user, dialog);
     await user.click(commitIn(dialog));
 
     await waitFor(() => {
       expect(bridge.forceCloseShift).toHaveBeenCalledOnce();
     });
     const req = bridge.forceCloseShift.mock.calls[0]?.[0] as unknown as Record<string, unknown>;
-    expect(Object.keys(req).sort()).toEqual(['event_id', 'reason', 'shift_id']);
+    expect(Object.keys(req).sort()).toEqual([
+      'counted_cash_minor',
+      'event_id',
+      'reason',
+      'shift_id',
+    ]);
     expect(req).toEqual({
       event_id: expect.stringMatching(UUID) as string,
       shift_id: 'shift-1',
       reason: 'cashier_no_show',
+      counted_cash_minor: 50_000,
     });
   });
 
@@ -290,6 +307,7 @@ describe('RT-502 forced-close dialog — the bridge call', () => {
     const dialog = await openDialog(user);
     await user.click(within(dialog).getByRole('radio', { name: COPY.reasons.other }));
     await user.type(within(dialog).getByRole('textbox', { name: COPY.note }), 'غادر مبكرًا');
+    await typeCount(user, dialog);
     await user.click(commitIn(dialog));
 
     await waitFor(() => {
@@ -300,6 +318,7 @@ describe('RT-502 forced-close dialog — the bridge call', () => {
       shift_id: 'shift-1',
       reason: 'other',
       annotation: 'غادر مبكرًا',
+      counted_cash_minor: 50_000,
     });
   });
 
@@ -308,8 +327,10 @@ describe('RT-502 forced-close dialog — the bridge call', () => {
     const user = await renderList(bridge);
     const dialog = await openDialog(user);
     await user.click(within(dialog).getByRole('radio', { name: COPY.reasons.other }));
+    await typeCount(user, dialog);
     await user.click(commitIn(dialog));
     await screen.findByTestId('stuck-shift-submit-error');
+    await typeCount(user, dialog);
     await user.click(commitIn(dialog));
     await waitFor(() => {
       expect(bridge.forceCloseShift).toHaveBeenCalledTimes(2);
@@ -328,6 +349,7 @@ describe('RT-502 forced-close dialog — the bridge call', () => {
     const user = await renderList(bridge);
     const dialog = await openDialog(user);
     await user.click(within(dialog).getByRole('radio', { name: COPY.reasons.other }));
+    await typeCount(user, dialog);
     await user.click(commitIn(dialog));
 
     expect(commitIn(dialog)).toBeDisabled();
@@ -344,6 +366,7 @@ describe('RT-502 forced-close dialog — answers', () => {
     const user = await renderList(bridge);
     const dialog = await openDialog(user, 'shift-1');
     await user.click(within(dialog).getByRole('radio', { name: COPY.reasons.cashier_no_show }));
+    await typeCount(user, dialog);
     await user.click(commitIn(dialog));
 
     await waitFor(() => {
@@ -362,6 +385,7 @@ describe('RT-502 forced-close dialog — answers', () => {
     const user = await renderList(bridge);
     const dialog = await openDialog(user, 'shift-2');
     await user.click(within(dialog).getByRole('radio', { name: COPY.reasons.other }));
+    await typeCount(user, dialog);
     await user.click(commitIn(dialog));
 
     await waitFor(() => {
@@ -377,6 +401,7 @@ describe('RT-502 forced-close dialog — answers', () => {
     const user = await renderList(makeBridge([LIST(AHMED)]));
     const dialog = await openDialog(user);
     await user.click(within(dialog).getByRole('radio', { name: COPY.reasons.other }));
+    await typeCount(user, dialog);
     await user.click(commitIn(dialog));
     expect(await screen.findByTestId('stuck-shift-surface-empty')).toHaveTextContent(COPY.empty);
   });
@@ -389,6 +414,7 @@ describe('RT-502 forced-close dialog — answers', () => {
     const user = await renderList(bridge);
     const dialog = await openDialog(user);
     await user.click(within(dialog).getByRole('radio', { name: COPY.reasons.terminal_failure }));
+    await typeCount(user, dialog);
     await user.click(commitIn(dialog));
 
     const error = await screen.findByTestId('stuck-shift-submit-error');
@@ -412,6 +438,7 @@ describe('RT-502 forced-close dialog — answers', () => {
     const user = await renderList(bridge);
     const dialog = await openDialog(user, 'shift-2');
     await user.click(within(dialog).getByRole('radio', { name: COPY.reasons.other }));
+    await typeCount(user, dialog);
     await user.click(commitIn(dialog));
     await screen.findByTestId('stuck-shift-submit-error');
     await waitFor(() => {
@@ -433,6 +460,7 @@ describe('RT-502 forced-close dialog — answers', () => {
     const user = await renderList(bridge);
     const dialog = await openDialog(user, 'shift-1');
     await user.click(within(dialog).getByRole('radio', { name: COPY.reasons.other }));
+    await typeCount(user, dialog);
     await user.click(commitIn(dialog));
     await screen.findByTestId('stuck-shift-submit-error');
     await waitFor(() => {
@@ -453,6 +481,7 @@ describe('RT-502 forced-close dialog — answers', () => {
       const user = await renderList(bridge);
       const dialog = await openDialog(user);
       await user.click(within(dialog).getByRole('radio', { name: COPY.reasons.other }));
+      await typeCount(user, dialog);
       await user.click(commitIn(dialog));
 
       const error = await screen.findByTestId('stuck-shift-submit-error');
@@ -470,6 +499,7 @@ describe('RT-502 forced-close dialog — answers', () => {
     const user = await renderList(bridge);
     const dialog = await openDialog(user);
     await user.click(within(dialog).getByRole('radio', { name: COPY.reasons.other }));
+    await typeCount(user, dialog);
     await user.click(commitIn(dialog));
     const error = await screen.findByTestId('stuck-shift-submit-error');
     const slot = error.parentElement;

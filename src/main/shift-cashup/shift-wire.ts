@@ -385,10 +385,11 @@ function approverOf(fact: ShiftCloseFact): { varianceApprovedByUserId?: string }
   };
 }
 
-/** The `closeShift` body and key (device path, `closeKind: normal`). */
-export function buildCloseShiftRequest(
-  input: InShiftCurrency<ShiftCloseFact>,
-): BuiltShiftFact<ShiftCloseFact> {
+/** A close fact normalised for the wire (lower-case ids, canonical instant, checked sums). */
+function normalizedClose(input: InShiftCurrency<ShiftCloseFact>): {
+  fact: ShiftCloseFact;
+  amounts: Record<string, string>;
+} {
   const amounts = closeAmounts(input);
   checkArithmetic(input.fact);
   const fact: ShiftCloseFact = {
@@ -400,15 +401,61 @@ export function buildCloseShiftRequest(
     cashRefundReturnRefs: refundRefsOf(input.fact),
     ...approverOf(input.fact),
   };
+  return { fact, amounts };
+}
+
+/** The close body's fields after `closeKind` (`forcedReason` sits right after it). */
+function closeBodyTail(input: { fact: ShiftCloseFact; amounts: Record<string, string> }): object {
+  const { fact } = input;
+  return {
+    ...input.amounts,
+    saleCount: fact.saleCount,
+    cashRefundReturnRefs: fact.cashRefundReturnRefs,
+    ...approverOf(fact),
+  };
+}
+
+/** The `closeShift` body and key (device path, `closeKind: normal`). */
+export function buildCloseShiftRequest(
+  input: InShiftCurrency<ShiftCloseFact>,
+): BuiltShiftFact<ShiftCloseFact> {
+  const { fact, amounts } = normalizedClose(input);
   const body = {
     closedAt: fact.closedAt,
     closingUserId: fact.closingUserId,
     closeKind: 'normal',
-    ...amounts,
-    saleCount: fact.saleCount,
-    cashRefundReturnRefs: fact.cashRefundReturnRefs,
-    ...approverOf(fact),
+    ...closeBodyTail({ fact, amounts }),
     operatorUserId: fact.closingUserId,
+  };
+  return { fact, request: request({ kind: 'close', id: fact.shiftId }, body) };
+}
+
+/** `forcedReason`: 1–200 characters, no PII (the contract's rule); never echoed in a refusal. */
+function forcedReasonOf(reason: string): string {
+  if (reason.length < 1 || reason.length > NOTE_MAX) {
+    refuse({ reason: 'invalid_note', field: 'forcedReason' });
+  }
+  return reason;
+}
+
+/**
+ * RT-554 — the `closeShift` body and key of a FORCED close: `closeKind: forced`
+ * with its `forcedReason`, on the manager-envelope path only. The body carries
+ * NO `operatorUserId` (an envelope request that carries it is a 401; the
+ * actor is the envelope's operator) and `closingUserId` is the manager. The key
+ * is the shift's close key: a shift closes once, normally or forced.
+ */
+export function buildForcedCloseShiftRequest(
+  input: InShiftCurrency<ShiftCloseFact> & { forcedReason: string },
+): BuiltShiftFact<ShiftCloseFact> {
+  const forcedReason = forcedReasonOf(input.forcedReason);
+  const { fact, amounts } = normalizedClose(input);
+  const body = {
+    closedAt: fact.closedAt,
+    closingUserId: fact.closingUserId,
+    closeKind: 'forced',
+    forcedReason,
+    ...closeBodyTail({ fact, amounts }),
   };
   return { fact, request: request({ kind: 'close', id: fact.shiftId }, body) };
 }

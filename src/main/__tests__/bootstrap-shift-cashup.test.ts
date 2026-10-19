@@ -40,7 +40,16 @@ describe('main/index.ts wires the RT-17 shift sync engine', () => {
 
   it('uses the sale-sync device sources and the RT-215 detector', () => {
     expect(source).toMatch(
-      /startShiftSync\(\{\s*db,\s*terminal,\s*client: \{\s*baseUrl: resolveApiBaseUrl\(\),\s*fetch: backendFetch,\s*detector: deviceAuthDetector,\s*getDeviceToken: readSendableDeviceToken,\s*currentTerminalId: \(\) => pairingStore\.getCurrentTerminalId\(\),\s*\},\s*resolveTerminalId: createCurrentTerminalResolver\(\(\) => pairingStore\.getStatus\(\)\),\s*logger: mainLogger,\s*\}\)/,
+      /startShiftSync\(\{\s*db,\s*terminal,\s*client: \{\s*baseUrl: resolveApiBaseUrl\(\),\s*fetch: backendFetch,\s*detector: deviceAuthDetector,\s*getDeviceToken: readSendableDeviceToken,\s*currentTerminalId: \(\) => pairingStore\.getCurrentTerminalId\(\),\s*(?:\/\/[^\n]*\n\s*)?getEnvelope: createManagerEnvelopeReader\(\s*operatorSessionManager,\s*operatorEnvelopeHolder,?\s*\),\s*\},\s*resolveTerminalId: createCurrentTerminalResolver\(\(\) => pairingStore\.getStatus\(\)\),\s*logger: mainLogger,\s*onDrainNow: \(drainNow\) => \{\s*shiftSyncDrainNowRef\.current = drainNow;\s*\},\s*\}\)/,
+    );
+  });
+
+  it('RT-554 (b): sends a forced close under the manager envelope only, and kicks the drain from the handler', () => {
+    // The envelope reader is the manager / admin one, never the sale-sync (any-role) reader.
+    expect(source).toMatch(/getEnvelope: createManagerEnvelopeReader\(/);
+    // The forced-close handler is built over the cash-up tables, with the drain-now seam.
+    expect(source).toMatch(
+      /forcedCloseHandler: new ForcedCloseHandler\(\{[\s\S]*?shiftCashup: composeShiftCashupService\(\{[\s\S]*?\}\),\s*deliverNow: \(\) =>\s*shiftSyncDrainNowRef\.current === null\s*\? Promise\.resolve\(false\)\s*: shiftSyncDrainNowRef\.current\(\),/,
     );
   });
 

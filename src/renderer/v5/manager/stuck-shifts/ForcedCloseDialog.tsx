@@ -12,8 +12,18 @@ import {
   FORCED_CLOSE_REASONS,
   type ForcedCloseReason,
 } from '../../../../shared/audit/payload-schemas';
+import { isShiftAmountWithinBound } from '../../../../shared/shift-cashup/amount-bound';
 import { Dialog } from '../../foundation/Dialog';
 import { Notice } from '../../foundation/Notice';
+import { SHIFT_COPY } from '../../shift/shift-copy';
+import { parseShiftAmount } from '../../shift/shift-format';
+import {
+  amountOutOfRange,
+  invalidEntry,
+  ShiftAmountField,
+  type FieldError,
+} from '../../shift/ShiftParts';
+import '../../shift/shift.css';
 import { STUCK_SHIFTS_COPY as COPY } from './stuck-shifts-copy';
 import './stuck-shifts.css';
 
@@ -29,25 +39,35 @@ import './stuck-shifts.css';
  * - A refusal shows in the always-mounted slot, and focus moves to «إلغاء»
  *   (the commit was disabled mid-flight, so focus would otherwise be lost).
  * - The note is captured in `annotation` only, never in the reason, and only
- *   when it is not empty. No amount anywhere (FR-024 blind close).
+ *   when it is not empty.
+ * - RT-554 (b): the manager COUNTS the drawer. The count is an input only (a
+ *   blind count, FR-024): the dialog never shows the expected cash or the
+ *   variance, and an invalid or implausible count is stopped here with a
+ *   message under the field, before any call.
  */
 
 /** What the dialog hands back on submit (the T084 contract, unchanged). */
 export interface ForcedCloseFormSubmitPayload {
   forced_close_reason: ForcedCloseReason;
   annotation?: string;
+  /** The manager's blind count, in integer minor units (RT-554 (b)). */
+  counted_cash_minor: number;
 }
 
 /**
  * `changed`: `state_invalid` (the list was read again). `notClosable`:
- * `not_closable_here` (RT-554; the shift belongs to another device). `failed`:
+ * `not_closable_here` (RT-554; the shift belongs to another device). `blocked`:
+ * `close_blocked` (RT-554 (b); parked sales or drawer cash in flight). `unsent`:
+ * `closed_here_unsent` (closed on this terminal, not at the server yet). `failed`:
  * any other refusal.
  */
-export type ForcedCloseRefusal = 'changed' | 'notClosable' | 'failed';
+export type ForcedCloseRefusal = 'changed' | 'notClosable' | 'blocked' | 'unsent' | 'failed';
 
 const REFUSAL_COPY: Readonly<Record<ForcedCloseRefusal, string>> = {
   changed: COPY.changed,
   notClosable: COPY.notClosableHere,
+  blocked: COPY.closeBlocked,
+  unsent: COPY.queuedNotice,
   failed: COPY.failed,
 };
 
@@ -73,13 +93,35 @@ export function ForcedCloseForm({
   const noteId = useId();
   const [reason, setReason] = useState<ForcedCloseReason | null>(null);
   const [annotation, setAnnotation] = useState('');
+  const [count, setCount] = useState('');
+  const [countError, setCountError] = useState<FieldError | null>(null);
+  const countRef = useRef<HTMLInputElement>(null);
+
+  /** The count's own message under the field, and the field gets focus back. */
+  function rejectCount(error: FieldError): void {
+    setCountError(error);
+    countRef.current?.focus();
+  }
 
   function handleSubmit(e: SyntheticEvent<HTMLFormElement>): void {
     e.preventDefault();
     if (reason == null) return;
-    onSubmit(
-      annotation ? { forced_close_reason: reason, annotation } : { forced_close_reason: reason },
-    );
+    const counted = parseShiftAmount(count);
+    if (counted === null) {
+      rejectCount(invalidEntry(SHIFT_COPY.invalidAmount));
+      return;
+    }
+    // RT-278 S1: the cap depends on nothing hidden, so this reveals nothing.
+    if (!isShiftAmountWithinBound('counted_cash', counted, 'EGP')) {
+      rejectCount(amountOutOfRange());
+      return;
+    }
+    setCountError(null);
+    onSubmit({
+      forced_close_reason: reason,
+      counted_cash_minor: counted,
+      ...(annotation ? { annotation } : {}),
+    });
   }
 
   return (
@@ -107,6 +149,14 @@ export function ForcedCloseForm({
           </label>
         ))}
       </fieldset>
+      <p className="v5-shift-hint">{COPY.countHint}</p>
+      <ShiftAmountField
+        label={SHIFT_COPY.countLabel}
+        value={count}
+        onChange={setCount}
+        error={countError}
+        inputRef={countRef}
+      />
       <div className="v5-stuck-field">
         <label htmlFor={noteId}>{COPY.note}</label>
         <textarea

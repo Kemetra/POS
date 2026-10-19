@@ -31,14 +31,27 @@ export const STUCK_SHIFTS_COPY = Object.freeze({
   /** `state_invalid`: the list is read again (with `not_closable_here`, the only refusals that do). */
   changed: 'تغيّرت حالة هذه الوردية. تم تحديث القائمة.',
   /**
-   * `not_closable_here` (RT-554): no forced close is available for this shift
-   * from the stuck list. True for a shift opened on another device (Backend-Core
-   * resolves a shift only for the device that opened it) and for one opened on
-   * this device (no forced-close path yet; the cash-up closes it). The list is
-   * re-read (a shift closed meanwhile on its opening terminal then leaves it). Needs owner copy sign-off (UX-13).
+   * `not_closable_here` (RT-554): this terminal does not hold the shift (it was
+   * opened on another device; Backend-Core resolves a shift only for the device
+   * that opened it), or the cash-up is off here. The shift is closed by cash-up
+   * on the device that opened it. The list is re-read (a shift closed meanwhile on
+   * its opening terminal then leaves it). Owner-approved copy, 2026-10-19 (RT-554).
    */
   notClosableHere:
     'لا يمكن الإغلاق الإجباري لهذه الوردية من هنا. تُغلق بجرد الدرج على الجهاز الذي فتحها.',
+  /**
+   * RT-554 (b), the manager's blind count: an input only. The hint names no
+   * amount and promises nothing about what is (not) shown.
+   */
+  countHint: 'عُدّ النقد في الدرج وأدخل ما عددته.',
+  /** `close_blocked`: parked sales or drawer cash in flight on this terminal. */
+  closeBlocked:
+    'لا يمكن إغلاق الوردية الآن: توجد مبيعات معلّقة أو حركة نقدية جارية على هذا الجهاز. أنهِها ثم أعد المحاولة.',
+  /**
+   * `delivery: queued` and `closed_here_unsent`: closed on this terminal, not at
+   * the server yet. It promises nothing about when (a stuck earlier fact can hold it).
+   */
+  queuedNotice: 'أُغلقت الوردية على هذا الجهاز ولم تصل إلى الخادم بعد.',
   /** Any other refusal: the list is not re-read. */
   failed: 'تعذّر إغلاق هذه الوردية. حاول مرة أخرى.',
   /** The five FORCED_CLOSE_REASONS, in enum order. */

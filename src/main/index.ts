@@ -39,6 +39,7 @@ import { createLockStateReader, createSafePointProbe } from './operator/lock-sta
 import { wireSessionStatePush } from './operator/session-state-push.js';
 import { wireSessionLockAudit } from './operator/session-lock-audit.js';
 import { createSaleSyncTokenReader } from './operator/sale-sync-token.js';
+import { createManagerEnvelopeReader } from './operator/manager-envelope-token.js';
 import { SESSION_LOCK_IPC_CHANNELS } from '../shared/operator/channels.js';
 import { registerPingHandler } from './ipc/ping.js';
 import { registerAppVersionHandler } from './ipc/app-version.js';
@@ -147,6 +148,7 @@ import {
   scheduleReturnsResolver,
 } from './returns/compose-returns.js';
 import {
+  composeShiftCashupService,
   pairedShiftScope,
   registerShiftSync,
   startShiftSync,
@@ -1092,6 +1094,9 @@ singleInstanceReady
       }),
     });
     const recoveryRef: { current: ManagerRecovery | null } = { current: null };
+    // RT-554 (b) — "drain the shift outbox now", set once the shift sync engine
+    // starts (paired, flag on); null until then, so a forced close is only queued.
+    const shiftSyncDrainNowRef: { current: (() => Promise<boolean>) | null } = { current: null };
     // RT-530 — the sale void's approval subject, bound below once the domain exists.
     const saleVoidRef: { current: ComposedSaleVoid | null } = { current: null };
     const managerApprovals = createManagerApprovalService({
@@ -1407,6 +1412,27 @@ singleInstanceReady
         sessionManager: operatorSessionManager,
         pairingStore,
         auditEmitter,
+        // RT-554 (b): a manager's forced close of THIS terminal's shift, from the
+        // cash-up tables, with the manager's count; queued as a manager-envelope
+        // row and sent by the shift sync engine (see `onDrainNow` below).
+        shiftCashup: composeShiftCashupService({
+          db,
+          isEnabled: () => parseFeatureFlags(process.env).shiftCashup,
+          getSession: () =>
+            resolveSessionScope(
+              operatorSessionManager.getCurrent(),
+              pairingStore.getCurrentTerminalId(),
+            ),
+          isSessionLocked: () => operatorSessionManager.getCurrent()?.lock_state === 'locked',
+          pairedScope: async () => pairedShiftScope(await pairingStore.getStatus()),
+          pairingEpoch: () => pairingStore.getPairingEpoch(),
+          managerPins,
+          now: () => new Date().toISOString(),
+        }),
+        deliverNow: () =>
+          shiftSyncDrainNowRef.current === null
+            ? Promise.resolve(false)
+            : shiftSyncDrainNowRef.current(),
       }),
       stuckShiftsHandler: new StuckShiftsHandler({
         sessionManager: operatorSessionManager,
@@ -2527,9 +2553,17 @@ singleInstanceReady
             detector: deviceAuthDetector,
             getDeviceToken: readSendableDeviceToken,
             currentTerminalId: () => pairingStore.getCurrentTerminalId(),
+            // RT-554 (b): a forced close goes out under a manager / admin's envelope only.
+            getEnvelope: createManagerEnvelopeReader(
+              operatorSessionManager,
+              operatorEnvelopeHolder,
+            ),
           },
           resolveTerminalId: createCurrentTerminalResolver(() => pairingStore.getStatus()),
           logger: mainLogger,
+          onDrainNow: (drainNow) => {
+            shiftSyncDrainNowRef.current = drainNow;
+          },
         }),
     });
 

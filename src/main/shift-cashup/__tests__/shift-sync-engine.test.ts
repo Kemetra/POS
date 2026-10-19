@@ -32,9 +32,11 @@ import {
   type ShiftSyncEngineDeps,
 } from '../shift-sync-engine.js';
 import {
+  CLOSE,
   NOW,
   OPEN,
   OTHER_TERMINAL,
+  PAY_IN,
   S2,
   SCOPE,
   recordWholeShift,
@@ -46,7 +48,7 @@ const OK: ShiftSyncResult = { kind: 'ok' };
 const BACKOFF = { baseMs: 1_000, maxMs: 60_000 };
 
 interface FakeCall {
-  method: keyof ShiftSyncClient;
+  method: 'openShift' | 'recordCashMovement' | 'closeShift' | 'sendEnvelope';
   seq: number;
   terminalId: string;
 }
@@ -60,7 +62,7 @@ function fakeClient(script: ReadonlyArray<ShiftSyncResult | Error> = [OK]): Fake
   const queue = [...script];
   let last = script[script.length - 1] ?? OK;
   const calls: FakeCall[] = [];
-  const answer = (method: keyof ShiftSyncClient) => (input: ShiftSyncSend) => {
+  const answer = (method: FakeCall['method']) => (input: ShiftSyncSend) => {
     calls.push({ method, seq: input.fact.seq, terminalId: input.terminalId });
     last = queue.shift() ?? last;
     return last instanceof Error ? Promise.reject(last) : Promise.resolve(last);
@@ -492,5 +494,108 @@ describe('createShiftSyncEngine — stop latch (RT-198)', () => {
       await vi.advanceTimersByTimeAsync(1);
       expect(drained.done).toBe(true);
     });
+  });
+});
+
+describe('RT-554: the engine sends a manager-envelope forced close', () => {
+  const MANAGER = '0190f5a2-3b4c-7d8e-9f01-23456789abce';
+
+  /** open + pay-in on the device path, then the manager's forced close (envelope). */
+  function recordForcedShift(): void {
+    repo.recordOpen({ scope: SCOPE, fact: OPEN, now: NOW });
+    repo.recordMovement({ scope: SCOPE, fact: PAY_IN, now: NOW });
+    repo.recordForcedClose({
+      scope: SCOPE,
+      fact: { ...CLOSE, closingUserId: MANAGER },
+      forcedReason: 'cashier_no_show',
+      now: NOW,
+    });
+  }
+
+  /** A client whose envelope answers follow `script` (then repeat the last). */
+  function envelopeClient(script: ReadonlyArray<ShiftSyncResult> = [OK]): FakeClient {
+    const device = fakeClient();
+    const queue = [...script];
+    let last = script[script.length - 1] ?? OK;
+    return {
+      ...device,
+      sendEnvelope: (input: ShiftSyncSend) => {
+        device.calls.push({
+          method: 'sendEnvelope',
+          seq: input.fact.seq,
+          terminalId: input.terminalId,
+        });
+        last = queue.shift() ?? last;
+        return Promise.resolve(last);
+      },
+    };
+  }
+
+  it('sends the device facts by their methods, then the forced close through sendEnvelope', async () => {
+    recordForcedShift();
+    const client = envelopeClient();
+
+    const report = await tick(engineWith(client));
+
+    expect(client.calls.map((c) => [c.method, c.seq])).toEqual([
+      ['openShift', 1],
+      ['recordCashMovement', 2],
+      ['sendEnvelope', 3],
+    ]);
+    expect(report).toEqual({ sent: 3, stop: { kind: 'idle' } });
+    expect(stateOf({ db, seq: 3 })).toMatchObject({ sync_status: 'synced', attempt_count: 1 });
+  });
+
+  it('holds the envelope row, unchanged, when no manager envelope is available', async () => {
+    recordForcedShift();
+    const client = envelopeClient([{ kind: 'not_sent', reason: 'no_envelope_credential' }]);
+
+    const report = await tick(engineWith(client));
+
+    expect(report).toEqual({ sent: 2, stop: { kind: 'held', reason: 'no_envelope_credential' } });
+    expect(stateOf({ db, seq: 3 })).toMatchObject({
+      sync_status: 'pending',
+      attempt_count: 0,
+      next_retry_at: null,
+    });
+  });
+
+  it('a refused envelope (401) is a retry with backoff, never a dead letter', async () => {
+    recordForcedShift();
+    const client = envelopeClient([{ kind: 'envelope_unauthorized' }, OK]);
+    const engine = engineWith(client);
+
+    const first = await tick(engine);
+
+    expect(first.stop).toMatchObject({ kind: 'waiting', seq: 3 });
+    expect(stateOf({ db, seq: 3 })).toMatchObject({
+      sync_status: 'pending',
+      attempt_count: 1,
+      last_error_category: 'envelope_unauthorized',
+    });
+    clock = later(BACKOFF.baseMs * 4);
+    await expect(tick(engine)).resolves.toMatchObject({ stop: { kind: 'idle' } });
+    expect(stateOf({ db, seq: 3 })).toMatchObject({ sync_status: 'synced' });
+  });
+
+  it('a rejected forced close is dead-lettered with its reason and blocks the terminal', async () => {
+    recordForcedShift();
+    const onDeadLetter = vi.fn();
+    const client = envelopeClient([{ kind: 'rejected', reason: 'shift_not_found' }]);
+
+    const report = await tick(engineWith(client, { onDeadLetter }));
+
+    expect(report.stop).toEqual({ kind: 'blocked', seq: 3, reason: 'shift_not_found' });
+    expect(onDeadLetter).toHaveBeenCalledExactlyOnceWith({
+      seq: 3,
+      factKind: 'close',
+      reason: 'shift_not_found',
+    });
+  });
+
+  it('a client without an envelope sender leaves the row envelope_pending (as before)', async () => {
+    recordForcedShift();
+    const report = await tick(engineWith(fakeClient()));
+    expect(report).toEqual({ sent: 2, stop: { kind: 'envelope_pending', seq: 3 } });
   });
 });

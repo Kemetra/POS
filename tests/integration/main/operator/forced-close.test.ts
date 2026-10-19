@@ -1,610 +1,366 @@
-import { describe, expect, it, beforeAll } from 'vitest';
-import initSqlJs, { type Database as SqlJsDatabase, type SqlJsStatic } from 'sql.js';
-import { readFileSync } from 'node:fs';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
-import { randomUUID } from 'node:crypto';
+import { afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import type { Database as SqlJsDatabase } from 'sql.js';
 import type { Logger } from 'pino';
 
-import { ForcedCloseHandler } from '../../../../src/main/operator/forced-close-handler.js';
-import type { ForcedCloseHandlerDeps } from '../../../../src/main/operator/forced-close-handler.js';
-import type { DatabaseHandle } from '../../../../src/main/db/client.js';
-import type { AuditEmitter } from '../../../../src/main/audit/audit-emitter.js';
 import type { AuditEvent } from '../../../../src/shared/audit/event-shape.js';
-import type { OperatorSessionRecord } from '../../../../src/main/operator/session-manager.js';
-import type { PairingStatus } from '../../../../src/shared/pairing-types.js';
-import { isOperatorRefusal } from '../../../../src/shared/audit/event-shape.js';
+import type { ForceCloseShiftRequest } from '../../../../src/shared/bridge-api.js';
+import {
+  handleFor,
+  initSalesSyncSql,
+} from '../../../../src/main/sales-sync/__tests__/__helpers__/sales-sync-fixture.js';
+import { createShiftCashupRepo } from '../../../../src/main/shift-cashup/shift-cashup-repo.js';
+import {
+  cashLine,
+  factCounts,
+  MANAGER,
+  seedSettlement,
+  seedShiftSale,
+  storedBody,
+  type ServiceHarness,
+} from '../../../../src/main/shift-cashup/__tests__/__helpers__/shift-cashup-service-fixture.js';
+import {
+  SCOPE,
+  USER,
+} from '../../../../src/main/shift-cashup/__tests__/__helpers__/shift-sync-fixture.js';
+import {
+  CLOSE_AT,
+  FLOAT,
+  setupForcedClose,
+  type ForcedCloseFixture,
+  type HandlerOptions,
+} from './__helpers__/forced-close-fixture.js';
 
 /**
- * T085 — forced-close handler audit event emission shape.
+ * T085 (rewritten by RT-554 (b)) — the manager's forced close of a stuck shift
+ * of THIS terminal. The shift is the terminal's open shift in the cash-up
+ * tables (`shift_cashup_opens`); the cash-up is computed from local truth and
+ * the manager's count; the close row, its manager-envelope outbox row and the
+ * `shift.forced_close` audit event are ONE atomic write. The legacy `shifts`
+ * table (0007, never written in production) is not used.
  *
- * Verifies: manager/admin can force-close a stuck shift; audit event shape
- * matches FR-025 mandatory attributes; declared_count is absent (null);
- * lifecycle transitions to closed_forced; idempotency via INSERT OR IGNORE;
- * cashier is refused; branch-mismatch manager is refused.
+ * Verifies: manager/admin can force-close; the audit event shape (FR-025); the
+ * count is a blind input; idempotency by `event_id`; the audit and the close
+ * stand or fall together; a cashier, a signed-out caller and a manager with no
+ * `users.id` are refused; a shift this terminal does not hold is
+ * `not_closable_here`; an already-closed shift is `state_invalid`; in-flight
+ * drawer cash is `close_blocked`; nothing sensitive reaches a log.
  */
 
-const __dirnameForFile = path.dirname(fileURLToPath(import.meta.url));
-const REPO_ROOT = path.resolve(__dirnameForFile, '..', '..', '..', '..');
+const OTHER_SHIFT = '0192f5a2-3b4c-7d8e-9f01-eeeeeeeeeeee';
+/** The close is the second outbox row: the open is seq 1. */
+const CLOSE_SEQ = 2;
 
-const SHIFTS_SQL = readFileSync(path.join(REPO_ROOT, 'migrations', '0007_shifts.sql'), 'utf8');
-const AUDIT_SQL = readFileSync(path.join(REPO_ROOT, 'migrations', '0004_audit_events.sql'), 'utf8');
-
-let SQL: SqlJsStatic;
+let db: SqlJsDatabase;
+let harness: ServiceHarness;
+let shiftId: string;
+let captured: AuditEvent[];
+let makeSession: ForcedCloseFixture['makeSession'];
+let makeHandler: ForcedCloseFixture['makeHandler'];
+let request: ForcedCloseFixture['request'];
 
 beforeAll(async () => {
-  SQL = await initSqlJs();
+  await initSalesSyncSql();
 });
 
-// ─── DB factory ───────────────────────────────────────────────────────────────
+beforeEach(() => {
+  ({ db, harness, shiftId, captured, makeSession, makeHandler, request } = setupForcedClose());
+});
 
-function freshDb(): SqlJsDatabase {
-  const db = new SQL.Database();
-  db.run(SHIFTS_SQL);
-  db.run(AUDIT_SQL);
-  return db;
-}
+afterEach(() => {
+  db.close();
+});
 
-// ─── sql.js DatabaseHandle adapter ───────────────────────────────────────────
-
-function bindHandle(db: SqlJsDatabase): DatabaseHandle {
-  return {
-    pragma(): unknown {
-      return undefined;
-    },
-    exec(sql: string): void {
-      db.run(sql);
-    },
-    transaction<T extends (...args: never[]) => unknown>(fn: T): T {
-      return fn;
-    },
-    close(): void {
-      /* managed by test */
-    },
-    prepare(sql: string) {
-      return {
-        run(...params: unknown[]): unknown {
-          const stmt = db.prepare(sql);
-          stmt.run(params as Parameters<typeof stmt.run>[1]);
-          stmt.free();
-          return undefined;
-        },
-        get(...params: unknown[]): Record<string, unknown> | undefined {
-          const stmt = db.prepare(sql);
-          stmt.bind(params as Parameters<typeof stmt.bind>[1]);
-          const has = stmt.step();
-          const row = has ? (stmt.getAsObject() as Record<string, unknown>) : undefined;
-          stmt.free();
-          return row;
-        },
-      };
-    },
-  };
-}
-
-// ─── In-process AuditEmitter stub ────────────────────────────────────────────
-
-interface CapturedEvent {
-  event: AuditEvent;
-}
-
-function makeAuditEmitter(captured: CapturedEvent[], db?: SqlJsDatabase): AuditEmitter {
-  return {
-    emit(event: AuditEvent): void {
-      captured.push({ event });
-      // Write to audit_events so the idempotency SELECT in the handler can find it.
-      if (db) {
-        db.run(
-          `INSERT OR IGNORE INTO audit_events
-             (event_id, tenant_id, branch_id, originating_terminal_id,
-              acting_operator_id, session_id, shift_id, action_category,
-              created_at, approving_supervisor_id, payload)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-          [
-            event.event_id,
-            event.tenant_id,
-            event.branch_id,
-            event.originating_terminal_id,
-            event.acting_operator_id,
-            event.session_id ?? null,
-            event.shift_id ?? null,
-            event.action_category,
-            event.created_at,
-            event.approving_supervisor_id ?? null,
-            JSON.stringify(event.payload),
-          ],
-        );
-      }
-    },
-  } as unknown as AuditEmitter;
-}
-
-function makeThrowingAuditEmitter(): AuditEmitter {
-  return {
-    emit(): void {
-      throw new Error('audit store unavailable');
-    },
-  } as unknown as AuditEmitter;
-}
-
-// ─── Session + pairing fakes ──────────────────────────────────────────────────
-
-function makeSession(overrides: Partial<OperatorSessionRecord> = {}): OperatorSessionRecord {
-  return {
-    id: 'session-mgr-1',
-    operator_id: 'mgr-operator-1',
-    display_name: 'Manager One',
-    role: 'manager',
-    tenant_id: 'tenant-1',
-    branch_id: 'branch-1',
-    backend_session_id: 'bsess-1',
-    started_at: '2026-05-12T08:00:00.000Z',
-    last_activity_at: '2026-05-12T08:00:00.000Z',
-    ...overrides,
-  };
-}
-
-function makePairingStatus(terminalId = 'terminal-001'): PairingStatus {
-  return {
-    kind: 'paired',
-    tenant_id: 'tenant-1',
-    branch_id: 'branch-1',
-    terminal_id: terminalId,
-    terminal_label: 'Terminal 1',
-    paired_at: 0,
-  };
-}
-
-// ─── Shift seed helper ────────────────────────────────────────────────────────
-
-function seedOpenShift(
-  db: SqlJsDatabase,
-  overrides: Partial<{
-    id: string;
-    tenant_id: string;
-    branch_id: string;
-    originating_terminal_id: string;
-    opening_operator_id: string;
-  }> = {},
-): string {
-  const id = overrides.id ?? 'shift-stuck-1';
-  db.run(
-    `INSERT INTO shifts
-       (id, tenant_id, branch_id, originating_terminal_id,
-        opening_operator_id, lifecycle_state, declared_count, opened_at, closed_at)
-     VALUES (?, ?, ?, ?, ?, 'open', NULL, '2026-05-12T06:00:00.000Z', NULL)`,
-    [
-      id,
-      overrides.tenant_id ?? 'tenant-1',
-      overrides.branch_id ?? 'branch-1',
-      overrides.originating_terminal_id ?? 'terminal-cashier',
-      overrides.opening_operator_id ?? 'cashier-op-1',
-    ],
+function closeRows(): unknown[][] {
+  return (
+    db.exec(
+      `SELECT close_kind, forced_reason, closing_user_id, counted_cash_minor, variance_minor
+         FROM shift_cashup_closes`,
+    )[0]?.values ?? []
   );
-  return id;
 }
 
-// ─── Handler factory ──────────────────────────────────────────────────────────
+// ─── the forced close ─────────────────────────────────────────────────────────
 
-function makeHandler(
-  db: SqlJsDatabase,
-  session: OperatorSessionRecord | null,
-  captured: CapturedEvent[],
-  pairingTerminalId = 'terminal-001',
-): ForcedCloseHandler {
-  const handle = bindHandle(db);
-  const deps: ForcedCloseHandlerDeps = {
-    db: handle,
-    sessionManager: { getCurrent: () => session },
-    pairingStore: {
-      getStatus: () => Promise.resolve(makePairingStatus(pairingTerminalId)),
+describe('T085 — a manager force-closes the terminal’s own stuck shift', () => {
+  it.each(['manager', 'admin'] as const)(
+    'a %s receives forced_closed, queued for sending',
+    async (role) => {
+      const handler = makeHandler({ session: makeSession({ role }) });
+      const req = request();
+
+      const result = await handler.forceCloseShift(req);
+
+      expect(result).toEqual({
+        kind: 'forced_closed',
+        audit_event_id: req.event_id,
+        delivery: 'queued',
+      });
     },
-    auditEmitter: makeAuditEmitter(captured, db),
-  };
-  return new ForcedCloseHandler(deps);
-}
+  );
 
-// ─── Tests ────────────────────────────────────────────────────────────────────
+  it('records the forced close and ONE manager-envelope outbox row with the manager as closer', async () => {
+    await makeHandler().forceCloseShift(request({ reason: 'cashier_no_show' }));
 
-describe('T085 — forced-close handler audit event shape', () => {
-  it('manager can force-close a stuck shift and receives forced_closed result', async () => {
-    const db = freshDb();
-    const shiftId = seedOpenShift(db);
-    const captured: CapturedEvent[] = [];
-    const handler = makeHandler(db, makeSession({ role: 'manager' }), captured);
-
-    const result = await handler.forceCloseShift({
-      shift_id: shiftId,
-      reason: 'takeover_supersession',
-      event_id: randomUUID(),
-    });
-
-    expect(result.kind).toBe('forced_closed');
-    db.close();
+    expect(closeRows()).toEqual([['forced', 'cashier_no_show', MANAGER, FLOAT, 0]]);
+    expect(
+      db.exec(`SELECT auth_path, sync_status FROM shift_sync_outbox o
+               JOIN shift_sync_state s ON s.seq = o.seq WHERE o.fact_kind = 'close'`)[0]?.values,
+    ).toEqual([['envelope', 'pending']]);
+    const body = storedBody(db, 2);
+    expect(body).toMatchObject({ closeKind: 'forced', forcedReason: 'cashier_no_show' });
+    expect(body).not.toHaveProperty('operatorUserId');
   });
 
-  it('admin can force-close a stuck shift', async () => {
-    const db = freshDb();
-    const shiftId = seedOpenShift(db);
-    const captured: CapturedEvent[] = [];
-    const handler = makeHandler(db, makeSession({ role: 'admin' }), captured);
-
-    const result = await handler.forceCloseShift({
-      shift_id: shiftId,
-      reason: 'cashier_no_show',
-      event_id: randomUUID(),
+  it('computes the cash-up from local truth and the manager’s count', async () => {
+    seedShiftSale(db, {
+      saleId: 'sale-1',
+      finalizedAt: '2026-10-05T10:00:00.000Z',
+      lines: [cashLine(10_000)],
     });
 
-    expect(result.kind).toBe('forced_closed');
-    db.close();
+    await makeHandler().forceCloseShift(request({ counted_cash_minor: 59_500 }));
+
+    expect(storedBody(db, 2)).toMatchObject({
+      openingFloat: '500.00',
+      cashSalesTotal: '100.00',
+      expectedCash: '600.00',
+      countedCash: '595.00',
+      variance: '-5.00',
+      saleCount: 1,
+    });
   });
 
-  it('audit event has correct action_category and FR-025 mandatory attributes', async () => {
-    const db = freshDb();
-    const shiftId = seedOpenShift(db, { opening_operator_id: 'cashier-op-1' });
-    const captured: CapturedEvent[] = [];
-    const session = makeSession({
-      role: 'manager',
-      operator_id: 'mgr-operator-1',
-      branch_id: 'branch-1',
-      tenant_id: 'tenant-1',
-    });
-    const handler = makeHandler(db, session, captured, 'terminal-001');
+  it('audit event has the FR-025 attributes and never carries the count or the variance', async () => {
+    await makeHandler().forceCloseShift(
+      request({ event_id: 'evt-t085-shape-1', annotation: 'left at 3pm' }),
+    );
 
-    await handler.forceCloseShift({
-      shift_id: shiftId,
-      reason: 'takeover_supersession',
+    expect(captured).toHaveLength(1);
+    const event = captured[0];
+    if (event === undefined) throw new Error('no event');
+    expect(event).toMatchObject({
       event_id: 'evt-t085-shape-1',
+      action_category: 'shift.forced_close',
+      tenant_id: SCOPE.tenantId,
+      branch_id: SCOPE.branchId,
+      originating_terminal_id: SCOPE.terminalId,
+      acting_operator_id: 'op-manager-1',
+      shift_id: shiftId,
     });
-
-    expect(captured).toHaveLength(1);
-    const first = captured[0];
-    if (!first) throw new Error('No captured event');
-    const { event } = first;
-    expect(event.action_category).toBe('shift.forced_close');
-    // FR-025 mandatory attributes
-    expect(event.acting_operator_id).toBe('mgr-operator-1');
-    expect(event.originating_terminal_id).toBe('terminal-001');
-    expect(typeof event.created_at).toBe('string');
-    expect(event.shift_id).toBe(shiftId);
-    expect(event.tenant_id).toBe('tenant-1');
-    expect(event.branch_id).toBe('branch-1');
-    db.close();
+    expect(event.payload).toEqual({
+      shift_id: shiftId,
+      shift_owner_id: USER,
+      forced_close_actor_id: 'op-manager-1',
+      forced_close_reason: 'takeover_supersession',
+      annotation: 'left at 3pm',
+    });
   });
 
-  it('audit event payload carries shift_owner_id, forced_close_actor_id and reason', async () => {
-    const db = freshDb();
-    const shiftId = seedOpenShift(db, { opening_operator_id: 'cashier-owner-2' });
-    const captured: CapturedEvent[] = [];
-    const session = makeSession({ role: 'manager', operator_id: 'mgr-actor-2' });
-    const handler = makeHandler(db, session, captured);
-
-    await handler.forceCloseShift({
-      shift_id: shiftId,
-      reason: 'takeover_supersession',
-      event_id: randomUUID(),
-    });
-
-    const capturedFirst = captured[0];
-    if (!capturedFirst) throw new Error('No captured event');
-    const payload = capturedFirst.event.payload as Record<string, unknown>;
-    expect(payload['shift_owner_id']).toBe('cashier-owner-2');
-    expect(payload['forced_close_actor_id']).toBe('mgr-actor-2');
-    expect(payload['forced_close_reason']).toBe('takeover_supersession');
-    db.close();
-  });
-
-  it('declared_count is NULL after forced-close (FR-024(a) absent state)', async () => {
-    const db = freshDb();
-    const shiftId = seedOpenShift(db);
-    const captured: CapturedEvent[] = [];
-    const handler = makeHandler(db, makeSession({ role: 'manager' }), captured);
-
-    await handler.forceCloseShift({
-      shift_id: shiftId,
-      reason: 'takeover_supersession',
-      event_id: randomUUID(),
-    });
-
-    const row = db.exec(`SELECT declared_count FROM shifts WHERE id = '${shiftId}'`);
-    const declaredCount = row[0]?.values[0]?.[0];
-    expect(declaredCount).toBeNull();
-    db.close();
-  });
-
-  it('lifecycle_state is closed_forced after forced-close', async () => {
-    const db = freshDb();
-    const shiftId = seedOpenShift(db);
-    const captured: CapturedEvent[] = [];
-    const handler = makeHandler(db, makeSession({ role: 'manager' }), captured);
-
-    await handler.forceCloseShift({
-      shift_id: shiftId,
-      reason: 'takeover_supersession',
-      event_id: randomUUID(),
-    });
-
-    const row = db.exec(`SELECT lifecycle_state FROM shifts WHERE id = '${shiftId}'`);
-    expect(row[0]?.values[0]?.[0]).toBe('closed_forced');
-    db.close();
-  });
-
-  it('closed_at is set after forced-close', async () => {
-    const db = freshDb();
-    const shiftId = seedOpenShift(db);
-    const captured: CapturedEvent[] = [];
-    const handler = makeHandler(db, makeSession({ role: 'manager' }), captured);
-
-    await handler.forceCloseShift({
-      shift_id: shiftId,
-      reason: 'takeover_supersession',
-      event_id: randomUUID(),
-    });
-
-    const row = db.exec(`SELECT closed_at FROM shifts WHERE id = '${shiftId}'`);
-    const closedAt = row[0]?.values[0]?.[0];
-    expect(typeof closedAt).toBe('string');
-    expect((closedAt as string).length).toBeGreaterThan(0);
-    db.close();
-  });
-
-  it('idempotency — second call with same event_id returns forced_closed no-op; audit not re-emitted', async () => {
-    const db = freshDb();
-    const shiftId = seedOpenShift(db);
-    const captured: CapturedEvent[] = [];
-    const handler = makeHandler(db, makeSession({ role: 'manager' }), captured);
-    const eventId = randomUUID();
-
-    // First call closes the shift and writes the audit row
-    const result1 = await handler.forceCloseShift({
-      shift_id: shiftId,
-      reason: 'takeover_supersession',
-      event_id: eventId,
-    });
-    expect(result1.kind).toBe('forced_closed');
-    expect(captured).toHaveLength(1);
-
-    // Retry with the SAME event_id → idempotent success, no duplicate audit
-    const result2 = await handler.forceCloseShift({
-      shift_id: shiftId,
-      reason: 'takeover_supersession',
-      event_id: eventId,
-    });
-    expect(result2.kind).toBe('forced_closed');
-    if (result2.kind === 'forced_closed') {
-      expect(result2.audit_event_id).toBe(eventId);
-    }
-    expect(captured).toHaveLength(1);
-    db.close();
-  });
-
-  it('idempotency — second call with different event_id on closed shift returns state_invalid; audit emitted once', async () => {
-    const db = freshDb();
-    const shiftId = seedOpenShift(db);
-    const captured: CapturedEvent[] = [];
-    const handler = makeHandler(db, makeSession({ role: 'manager' }), captured);
-
-    // First call closes the shift and emits audit
-    const result1 = await handler.forceCloseShift({
-      shift_id: shiftId,
-      reason: 'takeover_supersession',
-      event_id: randomUUID(),
-    });
-    expect(result1.kind).toBe('forced_closed');
-    expect(captured).toHaveLength(1);
-
-    // Second call with a DIFFERENT event_id — shift already closed_forced → state_invalid
-    const result2 = await handler.forceCloseShift({
-      shift_id: shiftId,
-      reason: 'takeover_supersession',
-      event_id: randomUUID(),
-    });
-    expect(isOperatorRefusal(result2)).toBe(true);
-    if (isOperatorRefusal(result2)) {
-      expect(result2.category).toBe('state_invalid');
-    }
-    expect(captured).toHaveLength(1);
-    db.close();
-  });
-
-  it('audit emitter failure returns invalid_input; shift remains open with closed_at NULL', async () => {
-    const db = freshDb();
-    const shiftId = seedOpenShift(db);
-    const handle = bindHandle(db);
-    const deps: ForcedCloseHandlerDeps = {
-      db: handle,
-      sessionManager: { getCurrent: () => makeSession({ role: 'manager' }) },
-      pairingStore: {
-        getStatus: () => Promise.resolve(makePairingStatus()),
-      },
-      auditEmitter: makeThrowingAuditEmitter(),
-    };
-    const handler = new ForcedCloseHandler(deps);
-
-    const result = await handler.forceCloseShift({
-      shift_id: shiftId,
-      reason: 'takeover_supersession',
-      event_id: randomUUID(),
-    });
-
-    expect(isOperatorRefusal(result)).toBe(true);
-    if (isOperatorRefusal(result)) {
-      expect(result.category).toBe('invalid_input');
-    }
-
-    // Shift must remain open — closed_at NULL, lifecycle_state unchanged
-    const row = db.exec(`SELECT lifecycle_state, closed_at FROM shifts WHERE id = '${shiftId}'`);
-    const values = row[0]?.values[0];
-    expect(values?.[0]).toBe('open');
-    expect(values?.[1]).toBeNull();
-    db.close();
-  });
-
-  it('cashier is refused (role_mismatch) — AC-9', async () => {
-    const db = freshDb();
-    const shiftId = seedOpenShift(db);
-    const captured: CapturedEvent[] = [];
-    const handler = makeHandler(db, makeSession({ role: 'cashier' }), captured);
-
-    const result = await handler.forceCloseShift({
-      shift_id: shiftId,
-      reason: 'takeover_supersession',
-      event_id: randomUUID(),
-    });
-
-    expect(isOperatorRefusal(result)).toBe(true);
-    if (isOperatorRefusal(result)) {
-      expect(result.category).toBe('role_mismatch');
-    }
-    db.close();
-  });
-
-  it('null session is refused (not_signed_in)', async () => {
-    const db = freshDb();
-    const shiftId = seedOpenShift(db);
-    const captured: CapturedEvent[] = [];
-    const handler = makeHandler(db, null, captured);
-
-    const result = await handler.forceCloseShift({
-      shift_id: shiftId,
-      reason: 'takeover_supersession',
-      event_id: randomUUID(),
-    });
-
-    expect(isOperatorRefusal(result)).toBe(true);
-    if (isOperatorRefusal(result)) {
-      expect(result.category).toBe('not_signed_in');
-    }
-    db.close();
-  });
-
-  it('branch-mismatch manager is refused (role_mismatch — P17)', async () => {
-    const db = freshDb();
-    // Shift is on branch-1, session is on branch-2
-    const shiftId = seedOpenShift(db, { branch_id: 'branch-1' });
-    const captured: CapturedEvent[] = [];
-    const handler = makeHandler(
-      db,
-      makeSession({ role: 'manager', branch_id: 'branch-2' }),
-      captured,
+  it('reports delivery sent when the drain delivered it', async () => {
+    const result = await makeHandler({ deliverNow: () => Promise.resolve(true) }).forceCloseShift(
+      request(),
     );
-
-    const result = await handler.forceCloseShift({
-      shift_id: shiftId,
-      reason: 'takeover_supersession',
-      event_id: randomUUID(),
-    });
-
-    expect(isOperatorRefusal(result)).toBe(true);
-    if (isOperatorRefusal(result)) {
-      expect(result.category).toBe('role_mismatch');
-    }
-    db.close();
+    expect(result).toMatchObject({ kind: 'forced_closed', delivery: 'sent' });
   });
 
-  // RT-554 — a stuck shift the local DB does not hold (the list comes from the
-  // backend; the shift was opened on another device). The contract resolves a
-  // shift only for the device that opened it, so this device cannot close it:
-  // refused as `not_closable_here`, never the generic `state_invalid`.
-  describe('RT-554: a stuck shift the local DB does not hold', () => {
-    /** Force-closes a shift id the local DB does not hold, as `role`. */
-    async function forceCloseUnknown(
-      role: OperatorSessionRecord['role'],
-      extra: { logger?: Logger; captured?: CapturedEvent[] } = {},
-    ): Promise<{ result: unknown; captured: CapturedEvent[] }> {
-      const db = freshDb();
-      const captured = extra.captured ?? [];
-      const handler = new ForcedCloseHandler({
-        db: bindHandle(db),
-        sessionManager: { getCurrent: () => makeSession({ role }) },
-        pairingStore: { getStatus: () => Promise.resolve(makePairingStatus()) },
-        auditEmitter: makeAuditEmitter(captured, db),
-        ...(extra.logger === undefined ? {} : { logger: extra.logger }),
-      });
-      const result = await handler.forceCloseShift({
-        shift_id: 'shift-secret-id-123',
-        reason: 'other',
-        annotation: 'private-note-xyz',
+  it.each([
+    ['did not deliver', () => Promise.resolve(false)],
+    ['threw', () => Promise.reject(new Error('offline'))],
+  ])('reports delivery queued when the drain %s', async (_name, deliverNow) => {
+    const result = await makeHandler({ deliverNow }).forceCloseShift(request());
+    expect(result).toMatchObject({ kind: 'forced_closed', delivery: 'queued' });
+    expect(closeRows()).toHaveLength(1);
+  });
+});
+
+describe('T085 — idempotency and atomicity', () => {
+  it('a retry with the same event_id is forced_closed again; the close and the audit are not repeated', async () => {
+    const calls: number[] = [];
+    const handler = makeHandler({
+      deliverNow: () => {
+        calls.push(1);
+        return Promise.resolve(true);
+      },
+    });
+    const req = request();
+
+    const first = await handler.forceCloseShift(req);
+    const second = await handler.forceCloseShift(req);
+
+    expect(first).toMatchObject({ kind: 'forced_closed', delivery: 'sent' });
+    expect(second).toEqual({
+      kind: 'forced_closed',
+      audit_event_id: req.event_id,
+      delivery: 'sent',
+    });
+    expect(captured).toHaveLength(1);
+    expect(closeRows()).toHaveLength(1);
+    // The retry kicks delivery again: the first answer may have been lost.
+    expect(calls).toHaveLength(2);
+  });
+
+  // RT-554 (b): the close is recorded here, but until the server has it the stuck
+  // list still shows the shift. A retry must say so: never «state changed».
+  it('another event_id on a shift closed here but NOT at the server yet is closed_here_unsent, audit once', async () => {
+    const handler = makeHandler();
+    await handler.forceCloseShift(request());
+
+    const result = await handler.forceCloseShift(request());
+
+    expect(result).toEqual({ kind: 'refused', category: 'closed_here_unsent' });
+    expect(captured).toHaveLength(1);
+  });
+
+  it('the same retry is state_invalid once the server has the close (the list is only stale)', async () => {
+    const handler = makeHandler();
+    await handler.forceCloseShift(request());
+    createShiftCashupRepo(handleFor(db)).markSynced({ seq: CLOSE_SEQ, now: CLOSE_AT });
+
+    const result = await handler.forceCloseShift(request());
+
+    expect(result).toEqual({ kind: 'refused', category: 'state_invalid' });
+  });
+
+  it('a retry first kicks delivery: if that sends the close, it is state_invalid, not unsent', async () => {
+    const repo = createShiftCashupRepo(handleFor(db));
+    await makeHandler().forceCloseShift(request());
+    const handler = makeHandler({
+      deliverNow: () => {
+        repo.markSynced({ seq: CLOSE_SEQ, now: CLOSE_AT });
+        return Promise.resolve(true);
+      },
+    });
+
+    const result = await handler.forceCloseShift(request());
+
+    expect(result).toEqual({ kind: 'refused', category: 'state_invalid' });
+  });
+
+  it('a retry whose delivery throws still answers closed_here_unsent', async () => {
+    await makeHandler().forceCloseShift(request());
+    const handler = makeHandler({ deliverNow: () => Promise.reject(new Error('offline')) });
+
+    expect(await handler.forceCloseShift(request())).toEqual({
+      kind: 'refused',
+      category: 'closed_here_unsent',
+    });
+  });
+
+  it('an audit failure is invalid_input and leaves the shift open: no close row, no outbox row', async () => {
+    const counts = factCounts(db);
+
+    const result = await makeHandler({ auditFails: true }).forceCloseShift(request());
+
+    expect(result).toEqual({ kind: 'refused', category: 'invalid_input' });
+    expect(factCounts(db)).toEqual(counts);
+    expect(closeRows()).toEqual([]);
+  });
+});
+
+// ─── refusals ─────────────────────────────────────────────────────────────────
+
+describe('T085 — refusals write nothing', () => {
+  async function refused(options: HandlerOptions, over: Partial<ForceCloseShiftRequest> = {}) {
+    const counts = factCounts(db);
+    const result = await makeHandler(options).forceCloseShift(request(over));
+    expect(factCounts(db)).toEqual(counts);
+    expect(captured).toHaveLength(0);
+    return result;
+  }
+
+  it('a cashier is refused role_mismatch (AC-9)', async () => {
+    expect(await refused({ session: makeSession({ role: 'cashier' }) })).toEqual({
+      kind: 'refused',
+      category: 'role_mismatch',
+    });
+  });
+
+  it('no session is not_signed_in', async () => {
+    expect(await refused({ session: null })).toEqual({
+      kind: 'refused',
+      category: 'not_signed_in',
+    });
+  });
+
+  it('a manager session with no users.id is not_signed_in (sign in again)', async () => {
+    const without = makeSession();
+    delete without.manager_user_id;
+    expect(await refused({ session: without })).toEqual({
+      kind: 'refused',
+      category: 'not_signed_in',
+    });
+  });
+
+  it('a session other than the terminal’s live one is not_signed_in', async () => {
+    expect(await refused({ session: makeSession({ id: 'another-session' }) })).toEqual({
+      kind: 'refused',
+      category: 'not_signed_in',
+    });
+  });
+
+  it('a locked cash-up session is not_signed_in', async () => {
+    harness.state.locked = true;
+    expect(await refused({})).toEqual({ kind: 'refused', category: 'not_signed_in' });
+  });
+
+  it('a shift this terminal does not hold is not_closable_here', async () => {
+    expect(await refused({}, { shift_id: OTHER_SHIFT })).toEqual({
+      kind: 'refused',
+      category: 'not_closable_here',
+    });
+  });
+
+  it('with the cash-up feature off there is no local shift: not_closable_here', async () => {
+    harness.state.enabled = false;
+    expect(await refused({})).toEqual({ kind: 'refused', category: 'not_closable_here' });
+  });
+
+  it('drawer cash in flight is close_blocked', async () => {
+    seedSettlement(db, { saleId: 'sale-in-flight' });
+    expect(await refused({})).toEqual({ kind: 'refused', category: 'close_blocked' });
+  });
+
+  it('an implausible count is invalid_input', async () => {
+    expect(await refused({}, { counted_cash_minor: 100_000_001 })).toEqual({
+      kind: 'refused',
+      category: 'invalid_input',
+    });
+  });
+});
+
+describe('T085 — logs', () => {
+  it('name the outcome and category only: no id, reason, note or count', async () => {
+    const lines: unknown[] = [];
+    const logger = { info: (...a: unknown[]) => lines.push(a) } as unknown as Logger;
+    const handler = makeHandler({ logger });
+    seedShiftSale(db, {
+      saleId: 'sale-1',
+      finalizedAt: '2026-10-05T10:00:00.000Z',
+      lines: [cashLine(10_000)],
+    });
+
+    await handler.forceCloseShift(
+      request({
         event_id: 'evt-secret-456',
-      });
-      db.close();
-      return { result, captured };
-    }
-
-    it.each(['manager', 'admin'] as const)(
-      '%s is refused not_closable_here and nothing is written',
-      async (role) => {
-        const { result, captured } = await forceCloseUnknown(role);
-
-        expect(result).toEqual({ kind: 'refused', category: 'not_closable_here' });
-        expect(captured).toHaveLength(0);
-      },
+        annotation: 'private-note-xyz',
+        counted_cash_minor: 123_457,
+      }),
     );
+    await handler.forceCloseShift(request({ shift_id: 'shift-secret-id-123' }));
 
-    it('a cashier is refused role_mismatch BEFORE the shift is looked up', async () => {
-      const { result } = await forceCloseUnknown('cashier');
-
-      expect(result).toEqual({ kind: 'refused', category: 'role_mismatch' });
-    });
-
-    it('the log names the category only (no reason, note or ids)', async () => {
-      const lines: unknown[] = [];
-      const logger = { info: (...a: unknown[]) => lines.push(a) } as unknown as Logger;
-
-      await forceCloseUnknown('manager', { logger });
-
-      const logged = JSON.stringify(lines);
-      expect(logged).toContain('not_closable_here');
-      for (const secret of ['shift-secret-id-123', 'private-note-xyz', 'evt-secret-456']) {
-        expect(logged).not.toContain(secret);
-      }
-    });
-  });
-
-  it('result contains audit_event_id matching the provided event_id', async () => {
-    const db = freshDb();
-    const shiftId = seedOpenShift(db);
-    const captured: CapturedEvent[] = [];
-    const handler = makeHandler(db, makeSession({ role: 'manager' }), captured);
-    const eventId = randomUUID();
-
-    const result = await handler.forceCloseShift({
-      shift_id: shiftId,
-      reason: 'takeover_supersession',
-      event_id: eventId,
-    });
-
-    if (result.kind === 'forced_closed') {
-      expect(result.audit_event_id).toBe(eventId);
-    } else {
-      throw new Error(`Expected forced_closed, got ${result.kind}`);
+    const logged = JSON.stringify(lines);
+    expect(logged).toContain('forced_closed');
+    expect(logged).toContain('not_closable_here');
+    for (const secret of [
+      'evt-secret-456',
+      'private-note-xyz',
+      '123457',
+      '1234.57',
+      'shift-secret-id-123',
+      shiftId,
+      MANAGER,
+    ]) {
+      expect(logged).not.toContain(secret);
     }
-    db.close();
-  });
-
-  it('originating_terminal_id is empty string when terminal is unpaired', async () => {
-    const db = freshDb();
-    const shiftId = seedOpenShift(db);
-    const captured: CapturedEvent[] = [];
-    const handle = bindHandle(db);
-    const deps: ForcedCloseHandlerDeps = {
-      db: handle,
-      sessionManager: { getCurrent: () => makeSession({ role: 'manager' }) },
-      pairingStore: {
-        getStatus: () => Promise.resolve({ kind: 'unpaired' as const }),
-      },
-      auditEmitter: makeAuditEmitter(captured),
-    };
-    const handler = new ForcedCloseHandler(deps);
-
-    const result = await handler.forceCloseShift({
-      shift_id: shiftId,
-      reason: 'takeover_supersession',
-      event_id: randomUUID(),
-    });
-
-    expect(result.kind).toBe('forced_closed');
-    expect(captured[0]?.event.originating_terminal_id).toBe('');
-    db.close();
   });
 });

@@ -399,3 +399,102 @@ describe('createShiftSyncClient — request timeout (RT-17 follow-up, drain boun
     }
   });
 });
+
+describe('RT-554: sendEnvelope — a manager-envelope row (forced close)', () => {
+  const ENVELOPE = 'manager-envelope-under-test';
+  const FORCED_FACT = (): QueuedShiftFact => ({
+    ...CLOSE_FACT,
+    authPath: 'envelope',
+    requestBody: '{"closeKind":"forced"}',
+  });
+  const envelopeHarness = (input: Parameters<typeof harness>[0] = {}): Harness =>
+    harness({ ...input, deps: { getEnvelope: () => ENVELOPE, ...input.deps } });
+  const sendEnvelope = (client: ShiftSyncClient, fact = FORCED_FACT()) =>
+    client.sendEnvelope?.({ terminalId: TERMINAL, fact });
+
+  it('POSTs the stored bytes and key with the ENVELOPE bearer, never the device token', async () => {
+    const { client, sent, observe } = envelopeHarness();
+
+    expect(await sendEnvelope(client)).toEqual({ kind: 'ok' });
+
+    expect(sent).toHaveLength(1);
+    const request = sent[0];
+    expect(request?.url).toBe(`${BASE}/api/pos/v1/shifts/${S1}/close`);
+    expect(request?.init.method).toBe('POST');
+    expect(request?.init.body).toBe('{"closeKind":"forced"}');
+    const headers = request?.init.headers as Record<string, string>;
+    expect(headers['Authorization']).toBe(`Bearer ${ENVELOPE}`);
+    expect(headers['Idempotency-Key']).toBe(FORCED_FACT().idempotencyKey);
+    expect(JSON.stringify(request?.init)).not.toContain(DEVICE_TOKEN);
+    // An envelope answer is not a device answer: it never feeds the device-401 detector.
+    expect(observe).not.toHaveBeenCalled();
+  });
+
+  it.each<[string, Partial<CreateShiftSyncClientDeps>]>([
+    ['no envelope is held', { getEnvelope: () => null }],
+    [
+      'the envelope read fails',
+      {
+        getEnvelope: () => {
+          throw new Error('boom');
+        },
+      },
+    ],
+    ['no envelope reader is wired', {}],
+  ])('sends nothing when %s (no_envelope_credential)', async (_name, deps) => {
+    const { client, sent } = harness({ deps });
+    expect(await sendEnvelope(client)).toEqual({
+      kind: 'not_sent',
+      reason: 'no_envelope_credential',
+    });
+    expect(sent).toHaveLength(0);
+  });
+
+  it('sends nothing for a device row (kind_mismatch) or under another terminal', async () => {
+    const device = envelopeHarness();
+    expect(await sendEnvelope(device.client, CLOSE_FACT)).toEqual({
+      kind: 'not_sent',
+      reason: 'kind_mismatch',
+    });
+    const moved = envelopeHarness({ deps: { currentTerminalId: () => 'another-terminal' } });
+    expect(await sendEnvelope(moved.client)).toEqual({
+      kind: 'not_sent',
+      reason: 'terminal_changed',
+    });
+    expect([device.sent.length, moved.sent.length]).toEqual([0, 0]);
+  });
+
+  it.each([
+    [
+      '401 is envelope_unauthorized (a retry; re-auth cannot refresh it)',
+      answer({ status: 401 }),
+      { kind: 'envelope_unauthorized' },
+    ],
+    [
+      '403 is a refusal (rejected)',
+      answer({ status: 403 }),
+      { kind: 'rejected', reason: 'rejected' },
+    ],
+    [
+      '404 shift_not_found is rejected with its code',
+      answer({ status: 404, body: errorBody('shift_not_found') }),
+      { kind: 'rejected', reason: 'shift_not_found' },
+    ],
+    [
+      '409 shift_payload_conflict is rejected with its code',
+      answer({ status: 409, body: errorBody('shift_payload_conflict') }),
+      { kind: 'rejected', reason: 'shift_payload_conflict' },
+    ],
+    ['200 (an idempotent replay) is ok', answer({ status: 200 }), { kind: 'ok' }],
+    ['500 is transient', answer({ status: 500 }), { kind: 'transient' }],
+    ['a transport fault is no_connection', 'reject' as const, { kind: 'no_connection' }],
+  ])('%s', async (_name, response, expected) => {
+    const { client } = envelopeHarness({ answer: response });
+    expect(await sendEnvelope(client)).toEqual(expected);
+  });
+
+  it('never returns or logs the envelope', async () => {
+    const { client } = envelopeHarness({ answer: answer({ status: 401 }) });
+    expect(JSON.stringify(await sendEnvelope(client))).not.toContain(ENVELOPE);
+  });
+});

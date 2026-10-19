@@ -52,7 +52,7 @@ import {
   SHIFT_SYNC_REQUEST_TIMEOUT_MS,
   type CreateShiftSyncClientDeps,
 } from './shift-sync-client.js';
-import { createShiftSyncEngine } from './shift-sync-engine.js';
+import { createShiftSyncEngine, type ShiftSyncEngine } from './shift-sync-engine.js';
 
 export type { ShiftCashupSession } from './shift-cashup-service.js';
 
@@ -121,17 +121,53 @@ export interface ShiftSyncLogger {
   warn(payload: Record<string, unknown>, message: string): void;
 }
 
+/**
+ * RT-554 (b) — runs a drain now (the forced-close handler's "send it" step) and
+ * resolves true only when the queue ended `idle`: Backend-Core has everything.
+ * A tick already in flight is awaited (bounded) and one more is run. A held,
+ * waiting or blocked queue, a tick that outlasts `timeoutMs`, or a tick that
+ * is still running is false ("queued"), never "sent".
+ */
+export async function drainNow(
+  engine: Pick<ShiftSyncEngine, 'runTickOnce' | 'drain'>,
+  timeoutMs: number,
+): Promise<boolean> {
+  let admission = engine.runTickOnce();
+  if (admission.kind === 'already_running') {
+    await engine.drain(timeoutMs);
+    admission = engine.runTickOnce();
+  }
+  if (admission.kind !== 'started') return false;
+  let timer: NodeJS.Timeout | undefined;
+  const timedOut = new Promise<null>((resolve) => {
+    timer = setTimeout(() => {
+      resolve(null);
+    }, timeoutMs);
+  });
+  try {
+    const report = await Promise.race([admission.completed, timedOut]);
+    return report?.stop.kind === 'idle';
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 export interface StartShiftSyncDeps {
   db: DatabaseHandle;
   /** The paired terminal the paired-workers latch started the engine for. */
   terminal: PairedTerminal;
   client: Pick<
     CreateShiftSyncClientDeps,
-    'baseUrl' | 'fetch' | 'detector' | 'getDeviceToken' | 'currentTerminalId'
+    'baseUrl' | 'fetch' | 'detector' | 'getDeviceToken' | 'currentTerminalId' | 'getEnvelope'
   >;
   /** The CURRENT pairing's terminal, read every tick (RT-221); null when unpaired. */
   resolveTerminalId: () => Promise<string | null>;
   logger: ShiftSyncLogger;
+  /**
+   * RT-554 (b): receives a "drain now" for the forced-close handler (see
+   * `drainNow`), once the engine exists.
+   */
+  onDrainNow?: (drainNow: () => Promise<boolean>) => void;
 }
 
 /** Start the shift sync engine on its interval; returns its stop. */
@@ -156,6 +192,7 @@ export function startShiftSync(deps: StartShiftSyncDeps): ShiftSyncStop {
     },
     isStopped: () => stopped,
   });
+  deps.onDrainNow?.(() => drainNow(engine, SHIFT_SYNC_DRAIN_TIMEOUT_MS));
   // The tick's `completed` never rejects: the engine ends a failing tick
   // with `dependency_failure` (reported above).
   const interval = setInterval(() => {

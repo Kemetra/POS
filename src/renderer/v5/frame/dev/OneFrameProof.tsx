@@ -215,7 +215,9 @@ function receiptsBridge(params: OneFrameProofParams): ReceiptsBridgeAPI {
 function forceCloseAnswer(
   close: OneFrameProofParams['close'],
 ): ForceCloseShiftResponse | OperatorRefusal {
-  if (close === 'ok') return { kind: 'forced_closed', audit_event_id: 'proof-event' };
+  if (close === 'ok') {
+    return { kind: 'forced_closed', audit_event_id: 'proof-event', delivery: 'sent' };
+  }
   return {
     kind: 'refused',
     category: close === 'state_invalid' ? 'state_invalid' : 'invalid_input',

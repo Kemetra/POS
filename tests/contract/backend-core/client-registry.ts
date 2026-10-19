@@ -33,6 +33,7 @@ import {
 import type { QueuedShiftFact } from '../../../src/main/shift-cashup/shift-cashup-repo.js';
 import type { ShiftFactKind } from '../../../src/main/shift-cashup/shift-wire.js';
 import { createShiftSyncClient } from '../../../src/main/shift-cashup/shift-sync-client.js';
+import { buildForcedCloseShiftRequest } from '../../../src/main/shift-cashup/shift-wire.js';
 import { validateVoucher } from '../../../src/main/payments/voucher-authority-client/validate.js';
 import { redeemVoucher } from '../../../src/main/payments/voucher-authority-client/redeem.js';
 import { reverseVoucher } from '../../../src/main/payments/voucher-authority-client/reverse.js';
@@ -85,6 +86,41 @@ const CAPTURE_PAYLOAD: CaptureSalePayload = {
 };
 
 const SHIFT_TERMINAL = 'term-1';
+
+/** A queued manager-envelope forced close (RT-554), built by the real wire builder. */
+function forcedCloseEnvelopeFact(): { terminalId: string; fact: QueuedShiftFact } {
+  const built = buildForcedCloseShiftRequest({
+    currencyCode: 'EGP',
+    forcedReason: 'cashier_no_show',
+    fact: {
+      shiftId: UUID,
+      closedAt: '2026-10-05T16:00:00.000Z',
+      closingUserId: UUID,
+      openingFloatMinor: 50_000,
+      cashSalesTotalMinor: 0,
+      cashRefundsTotalMinor: 0,
+      payInTotalMinor: 0,
+      payOutTotalMinor: 0,
+      expectedCashMinor: 50_000,
+      countedCashMinor: 50_000,
+      varianceMinor: 0,
+      saleCount: 0,
+      cashRefundReturnRefs: [],
+    },
+  });
+  return {
+    terminalId: SHIFT_TERMINAL,
+    fact: {
+      seq: 1,
+      factKind: 'close',
+      shiftId: UUID,
+      authPath: 'envelope',
+      idempotencyKey: built.request.idempotencyKey,
+      requestBody: built.request.body,
+      attemptCount: 0,
+    },
+  };
+}
 
 /** A queued device-path shift fact (RT-17); the client sends its stored bytes as they are. */
 function shiftFact(factKind: ShiftFactKind): { terminalId: string; fact: QueuedShiftFact } {
@@ -169,6 +205,8 @@ const shiftSyncClient = (fetch: FetchLike): ReturnType<typeof createShiftSyncCli
     detector: { observe: () => undefined },
     getDeviceToken: () => Promise.resolve(SENTINEL.device),
     currentTerminalId: () => SHIFT_TERMINAL,
+    // RT-554: a forced close goes out under a manager / admin's operator envelope.
+    getEnvelope: () => SENTINEL['operator-envelope'],
   });
 const pairingNetwork = (fetch: FetchLike): ReturnType<typeof createNetwork> =>
   createNetwork({ baseUrl: BASE_URL, fetch });
@@ -189,6 +227,8 @@ const VOUCHER_DIR = 'src/main/payments/voucher-authority-client';
 const SHIFT_SYNC_CLIENT = 'src/main/shift-cashup/shift-sync-client.ts';
 const SHIFT_SYNC_WIRING =
   'not wired yet (RT-17 slice 3 part 3): `getDeviceToken` = createSendableDeviceTokenReader (paired only; never once revoked, RT-215)';
+const SHIFT_SYNC_ENVELOPE_WIRING =
+  'index.ts startShiftSync: `getEnvelope` = createManagerEnvelopeReader (the manager / admin session envelope from operatorEnvelopeHolder; null for a cashier session)';
 
 const LIVENESS_PROBE = 'src/main/terminal-status/liveness-probe.ts';
 
@@ -497,6 +537,16 @@ export const CLIENT_CALLS: readonly ClientCall[] = [
     pathTemplate: '/api/pos/v1/shifts/{shift_id}/close',
     wiring: SHIFT_SYNC_WIRING,
     invoke: (fetch) => shiftSyncClient(fetch).closeShift(shiftFact('close')),
+  },
+  // RT-554 (b): a manager's FORCED close, the stored envelope-path bytes (no
+  // `operatorUserId`), under the manager envelope (never the device bearer).
+  {
+    id: 'shiftSyncClient.sendEnvelope',
+    module: SHIFT_SYNC_CLIENT,
+    method: 'post',
+    pathTemplate: '/api/pos/v1/shifts/{shift_id}/close',
+    wiring: SHIFT_SYNC_ENVELOPE_WIRING,
+    invoke: (fetch) => shiftSyncClient(fetch).sendEnvelope?.(forcedCloseEnvelopeFact()),
   },
   {
     id: 'validateVoucher',

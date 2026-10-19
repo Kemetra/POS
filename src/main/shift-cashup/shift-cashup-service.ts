@@ -271,6 +271,34 @@ export interface ClosedShift {
   saleCount: number;
 }
 
+/**
+ * RT-554 — a manager's forced close of the terminal's own open shift. The
+ * caller (the forced-close handler) has already checked the role and read the
+ * manager's `users.id` (`manager_user_id`, never the cashier `user_id`); this
+ * service re-checks the flag, the session and the shift.
+ */
+export interface ForceCloseShiftInput {
+  shiftId: string;
+  /** The manager's blind count of the drawer, in minor units. */
+  countedCashMinor: number;
+  /** The closed-set reason code (1–200 characters, no PII); the only text on the wire. */
+  forcedReason: string;
+  /** The manager's `users.id`: the closing user of the fact. */
+  managerUserId: string;
+  /** The operator session the caller checked; any other live session is `no_session`. */
+  operatorSessionId: string;
+  /**
+   * Runs INSIDE the close's transaction, once the rows are written: a throw
+   * leaves the shift open and writes nothing (the handler's audit event).
+   */
+  onRecorded?: (closed: ForcedClosedShift) => void;
+}
+
+/** A forced close, with the shift owner (the opening user) for the audit. */
+export interface ForcedClosedShift extends ClosedShift {
+  openingUserId: string;
+}
+
 /** The status with the open shift's probe refusals (RT-17 slice 4). */
 export interface ShiftCashupServiceStatus extends ShiftCashupStatus {
   probeRefusals: ShiftProbeRefusals;
@@ -280,6 +308,13 @@ export interface ShiftCashupService {
   openShift(input: OpenShiftInput): OpenedShift;
   recordCashMovement(input: CashMovementInput): RecordedCashMovement;
   closeShift(input: CloseShiftInput): ClosedShift;
+  /**
+   * RT-554 — records a manager's FORCED close of the terminal's open shift:
+   * the close row and one manager-envelope outbox row, in one transaction.
+   * Nothing is sent here. A shift id other than the terminal's open shift is
+   * `ShiftCashupStateError('shift_not_open')`.
+   */
+  forceCloseShift(input: ForceCloseShiftInput): ForcedClosedShift;
   /** Null when the count needs no approver (a zero variance). */
   verifyApprover(input: VerifyApproverInput): Promise<VerifiedApprover | null>;
   listApprovers(): EnrolledManager[];
@@ -298,7 +333,10 @@ export interface ShiftCashupServiceDeps {
   pairingEpoch: () => string | null;
   /** The local manager PIN records (option A). */
   managerPins: Pick<ManagerPinStore, 'verify' | 'list'>;
-  repo: Pick<ShiftCashupRepo, 'recordOpen' | 'recordMovement' | 'recordClose' | 'findOpenShift'>;
+  repo: Pick<
+    ShiftCashupRepo,
+    'recordOpen' | 'recordMovement' | 'recordClose' | 'recordForcedClose' | 'findOpenShift'
+  >;
   sources: ShiftCashupSources;
   status: ShiftCashupStatusReader;
   /** The terminal's capture currency (the sale-sync capture's own source). */
@@ -783,6 +821,41 @@ export function createShiftCashupService(deps: ShiftCashupServiceDeps): ShiftCas
       );
       repo.recordClose({ scope, fact, now: closedAt });
       return closedShiftOf(fact);
+    },
+
+    forceCloseShift(input) {
+      const session = requireSession();
+      if (session.operator_session_id !== input.operatorSessionId) refuse('no_session');
+      const scope = scopeOf(session);
+      // First: a shift this terminal does not hold is not closable here, whatever the count.
+      if (repo.findOpenShift(scope)?.shiftId !== input.shiftId.toLowerCase()) shiftNotOpen();
+      const { open, closedAt, cashup } = planClose({
+        scope,
+        countedCashMinor: input.countedCashMinor,
+      });
+      // The configured variance policy applies as for any close: it is off by
+      // default, and a manager cannot approve their own close.
+      const fact = closeFactOf({
+        open,
+        closedAt,
+        closingUserId: input.managerUserId,
+        cashup,
+        countedCashMinor: input.countedCashMinor,
+        approverUserId: undefined,
+        thresholdMinor: deps.varianceApprovalThresholdMinor,
+      });
+      const closed: ForcedClosedShift = {
+        ...closedShiftOf(fact),
+        openingUserId: open.openingUserId,
+      };
+      repo.recordForcedClose({
+        scope,
+        fact,
+        forcedReason: input.forcedReason,
+        now: closedAt,
+        ...(input.onRecorded === undefined ? {} : { within: () => input.onRecorded?.(closed) }),
+      });
+      return closed;
     },
 
     async verifyApprover(input) {
