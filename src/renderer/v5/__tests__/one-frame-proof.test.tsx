@@ -275,7 +275,7 @@ describe('OneFrameProof — renders the real router in the one frame', () => {
     );
   });
 
-  it('a cashier sees the Sale and Sales in the nav (D1)', async () => {
+  it('a cashier sees only the Sale in the nav: the proof profile has saleFinalization off', async () => {
     window.location.hash = '#/dev/one-frame-proof?role=cashier';
     render(<OneFrameProof />);
     const frame = await screen.findByTestId('v5-frame');
@@ -284,7 +284,7 @@ describe('OneFrameProof — renders the real router in the one frame', () => {
       within(nav)
         .getAllByRole('link')
         .map((l) => l.textContent),
-    ).toEqual(['نقطة البيع', 'المبيعات']);
+    ).toEqual(['نقطة البيع']);
   });
 });
 

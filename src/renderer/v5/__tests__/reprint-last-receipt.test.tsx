@@ -228,8 +228,19 @@ describe('ReprintLastReceipt', () => {
 });
 
 describe('the Sale places the action only for an empty cart, for a cashier', () => {
+  // Main registers sales.* / receipts.* only when saleFinalization is on; with
+  // it off (the default and the rollback profile) the button would only fail.
+  it('is absent while saleFinalization is off, even for a cashier with an empty cart', async () => {
+    signIn();
+    useFeatureFlagsStore.setState({ saleFinalization: false });
+    renderSale(makeBridges());
+    await screen.findByRole('textbox', { name: 'حقل التقاط مسح الباركود' });
+    expect(screen.queryByRole('button', { name: LABEL })).not.toBeInTheDocument();
+  });
+
   it('shows for a cashier with an empty cart, hides once a line is added, and is axe-clean', async () => {
     signIn();
+    useFeatureFlagsStore.setState({ saleFinalization: true });
     const b = makeBridges();
     renderSale(b);
     expect(await screen.findByRole('button', { name: LABEL })).toBeInTheDocument();
@@ -243,6 +254,7 @@ describe('the Sale places the action only for an empty cart, for a cashier', () 
     const r = bridges();
     (window as unknown as { api: unknown }).api = { sales: r.sales, receipts: r.receipts };
     signIn();
+    useFeatureFlagsStore.setState({ saleFinalization: true });
     renderSale(makeBridges());
     await userEvent.setup().click(await screen.findByRole('button', { name: LABEL }));
     await waitFor(() => {
@@ -255,6 +267,7 @@ describe('the Sale places the action only for an empty cart, for a cashier', () 
 
   it("is not shown to a manager (the terminal's last sale there is anyone's)", async () => {
     signIn();
+    useFeatureFlagsStore.setState({ saleFinalization: true });
     useOperatorSessionStore.getState().reset();
     useOperatorSessionStore.getState().hydrateSignedIn({
       id: 'session-1',

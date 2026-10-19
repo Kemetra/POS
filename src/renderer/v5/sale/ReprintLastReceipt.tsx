@@ -5,6 +5,7 @@ import { CartState } from '../../../shared/cart/cart-state';
 import type { Role } from '../../../shared/operator/role';
 import type { SaleId } from '../../../shared/sales/types';
 import { focusScanOwner } from '../../scan/scan-anchor';
+import { useFeatureFlagsStore } from '../../stores/feature-flags-store';
 import { Notice } from '../foundation/Notice';
 import { refusalCopy } from '../manager/sales/history/history-copy';
 import { SALES_COPY } from '../manager/sales/sales-copy';
@@ -37,13 +38,20 @@ export function canReprintLast(
   return cartState === null || cartState === CartState.empty || cartState === CartState.editing;
 }
 
-/** The Sale's slot for the action: renders it only where `canReprintLast` allows. */
+/**
+ * The Sale's slot for the action: renders it only where `canReprintLast`
+ * allows, and only with `saleFinalization` on — main registers `sales.*` and
+ * `receipts.*` only then (default off, the rollback profile).
+ */
 export function ReprintLastSlot({
   role,
   cartState,
   lineCount,
 }: Readonly<{ role: Role; cartState: CartState | null; lineCount: number }>): JSX.Element | null {
-  return canReprintLast(role, cartState, lineCount) ? <ReprintLastReceipt /> : null;
+  const saleFinalization = useFeatureFlagsStore((s) => s.saleFinalization);
+  return saleFinalization && canReprintLast(role, cartState, lineCount) ? (
+    <ReprintLastReceipt />
+  ) : null;
 }
 
 export interface ReprintLastReceiptProps {

@@ -112,6 +112,7 @@ describe('V5Frame — the one application frame for v5 screens', () => {
   // and Settings stay hidden (Settings carried the only theme toggle on a
   // cashier path, OD-4). Navigation only: no route guard changes.
   it('a cashier sees the Sale and Sales only (OD-6 amended by D1), and no theme toggle', () => {
+    useFeatureFlagsStore.setState({ saleFinalization: true });
     signIn('cashier');
     renderFrame();
     const nav = screen.getByRole('navigation', { name: 'التنقل الرئيسي' });
@@ -130,8 +131,23 @@ describe('V5Frame — the one application frame for v5 screens', () => {
     expect(screen.queryByRole('button', { name: /theme|السمة|المظهر/i })).not.toBeInTheDocument();
   });
 
+  // Main registers sales.* / receipts.* / saleHistory.* only when saleFinalization
+  // is on (index.ts), so with it off (the default and the rollback profile) the
+  // cashier has no «المبيعات»: the entry would lead to a screen whose reads reject.
+  it('a cashier gets no «المبيعات» while saleFinalization is off (the default)', () => {
+    signIn('cashier');
+    renderFrame();
+    const nav = screen.getByRole('navigation', { name: 'التنقل الرئيسي' });
+    expect(
+      within(nav)
+        .getAllByRole('link')
+        .map((link) => link.textContent),
+    ).toEqual(['نقطة البيع']);
+  });
+
   // D1 (RT-249): the entry the cashier now sees leads to a real, accessible screen.
   it('«المبيعات» is current for a cashier on /app/sales, and the screen is axe-clean in the frame', async () => {
+    useFeatureFlagsStore.setState({ saleFinalization: true });
     signIn('cashier');
     render(
       <MemoryRouter initialEntries={['/app/sales']}>
@@ -456,15 +472,20 @@ describe('v5 nav model', () => {
   it.each(['cashier', 'manager', 'admin', undefined] as const)(
     'never shows Audit or Settings (role: %s)',
     (role) => {
-      const ids = visibleNavEntries(role).map((e) => e.id);
+      const ids = visibleNavEntries(role, true).map((e) => e.id);
       expect(ids).not.toContain('audit');
       expect(ids).not.toContain('settings');
     },
   );
 
+  it("the flag gates only the cashier's «المبيعات»", () => {
+    expect(visibleNavEntries('cashier', false).map((e) => e.id)).toEqual(['cart']);
+    expect(visibleNavEntries('cashier', true).map((e) => e.id)).toEqual(['cart', 'sales']);
+  });
+
   it('keeps the manager and admin nav otherwise unchanged', () => {
     for (const role of ['manager', 'admin'] as const) {
-      expect(visibleNavEntries(role).map((e) => e.id)).toEqual([
+      expect(visibleNavEntries(role, false).map((e) => e.id)).toEqual([
         'dashboard',
         'cart',
         'sales',
