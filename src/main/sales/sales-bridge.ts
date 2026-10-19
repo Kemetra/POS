@@ -20,7 +20,8 @@
  *   • RT-546 (OD-534-1): every handler then runs the main-process role gate
  *     (`sale-access-policy.ts`): a locked session refuses as `no_session`, a
  *     role outside the allowlist as `role_denied`, and a cashier sees only
- *     their own sales — another operator's sale refuses as `sale_not_found`;
+ *     their own sales — another operator's sale refuses as `role_denied`
+ *     (RT-741);
  *     `subscribe` projects only the cashier's own sales.
  *   • Cross-tenant misses on `findByNumber` refuse with `sale_not_found`
  *     NOT `tenant_isolation` (§A4 #6 — no information leak).
@@ -66,7 +67,7 @@ import type {
 import type { SaleId, SaleNumber, TenderLineSummary } from '../../shared/sales/types.js';
 import type { BannerStateProjector } from './banner-state-projector.js';
 import type { SaleAuditEmitter } from './audit-emitter.js';
-import { createSaleAccessPolicy } from './sale-access-policy.js';
+import { SALE_OWNERSHIP_REFUSAL, createSaleAccessPolicy } from './sale-access-policy.js';
 import { projectSaleLines } from './sale-lines.js';
 import { planSalesList, runSalesList } from './sales-list.js';
 
@@ -309,9 +310,9 @@ export function createSalesBridge(deps: SalesBridgeDependencies): SalesBridge {
       ) {
         return await Promise.resolve({ kind: 'refused', reason: 'tenant_isolation' });
       }
-      // OD-534-1: a cashier reads only their own sale (non-disclosing refusal).
+      // OD-534-1: a cashier reads only their own sale (RT-741: role_denied).
       if (!access.admitSale('sales.read', session, saleRow)) {
-        return await Promise.resolve({ kind: 'refused', reason: 'sale_not_found' });
+        return await Promise.resolve({ kind: 'refused', reason: SALE_OWNERSHIP_REFUSAL });
       }
 
       return await Promise.resolve(okSale(saleRow));
@@ -341,10 +342,10 @@ export function createSalesBridge(deps: SalesBridgeDependencies): SalesBridge {
       if (saleRow === null) {
         return await Promise.resolve({ kind: 'refused', reason: 'sale_not_found' });
       }
-      // OD-534-1: sale numbers are sequential, so another operator's sale
-      // refuses exactly like a missing one (no existence leak).
+      // OD-534-1: another operator's sale is "not allowed" (RT-741, owner
+      // decision 2026-10-19); the answer carries no sale field.
       if (!access.admitSale('sales.findByNumber', session, saleRow)) {
-        return await Promise.resolve({ kind: 'refused', reason: 'sale_not_found' });
+        return await Promise.resolve({ kind: 'refused', reason: SALE_OWNERSHIP_REFUSAL });
       }
 
       return await Promise.resolve(okSale(saleRow));

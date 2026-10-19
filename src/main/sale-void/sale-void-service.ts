@@ -18,6 +18,12 @@
  * Every call passes the same admission gate: the feature flag, an operator
  * session on a paired terminal, not locked. Shutdown (RT-198): once stopped
  * every call answers `void_unavailable` before touching the database.
+ *
+ * RT-741: `lookup` then runs the shared RT-546 sale access gate
+ * (`sale-access-policy.ts`), because it answers the sale's total, cash and
+ * seller: a cashier finds only their own sale, a manager or admin any sale of
+ * this terminal. Another operator's sale refuses as `role_denied`, audited as
+ * `sale.access.refused`.
  */
 import type {
   ApprovalEvidence,
@@ -25,6 +31,7 @@ import type {
   ManagerApprovalService,
 } from '../operator/manager-approval-service.js';
 import type { SaleRow, SalesRepository } from '../sales/repositories/sales.repository.js';
+import { SALE_OWNERSHIP_REFUSAL, type SaleAccessPolicy } from '../sales/sale-access-policy.js';
 import { saleNetCashMinor } from '../shift-cashup/shift-cashup-calculator.js';
 import type {
   LocalVoidRefusal,
@@ -67,6 +74,8 @@ export interface SaleVoidServiceDeps {
   readonly isEnabled: () => boolean;
   readonly getSession: () => VoidSession | null;
   readonly isSessionLocked: () => boolean;
+  /** RT-741: the shared RT-546 sale access gate, run by `lookup`. */
+  readonly access: Pick<SaleAccessPolicy, 'admitSession' | 'admitSale'>;
   readonly sales: Pick<SalesRepository, 'findByNumber' | 'readById'>;
   readonly repo: SaleVoidRepository;
   /** True when the sale has a return that is not refused (any other state counts). */
@@ -341,12 +350,18 @@ export function createSaleVoidService(deps: SaleVoidServiceDeps): SaleVoidServic
     async lookup(req: SaleVoidLookupRequest): Promise<SaleVoidLookupResponse> {
       const admitted = admit();
       if (admitted.kind !== 'ok') return admitted;
+      const gate = deps.access.admitSession('saleVoid.lookup');
+      if (!gate.ok) return refuse(gate.reason);
       const sale = deps.sales.findByNumber(req.sale_number, {
         tenant_id: admitted.session.scope.tenantId,
         branch_id: admitted.session.scope.branchId,
         terminal_id: admitted.session.scope.terminalId,
       });
       if (sale === null) return refuse('sale_not_found');
+      // OD-534-1: the view carries the total, cash and seller name.
+      if (!deps.access.admitSale('saleVoid.lookup', gate.session, sale)) {
+        return refuse(SALE_OWNERSHIP_REFUSAL);
+      }
       return { kind: 'sale', sale: saleView(sale) };
     },
 

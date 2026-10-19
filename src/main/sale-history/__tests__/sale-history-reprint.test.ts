@@ -200,7 +200,7 @@ function lineWithName(lineName: string): Record<string, unknown> {
 }
 
 describe('RT-542 saleHistory.reprint — authority, audit and limits', () => {
-  it('a cashier reprints only their own sale (OD-534-2), refused non-disclosing otherwise', async () => {
+  it('a cashier reprints only their own sale (OD-534-2), refused role_denied otherwise', async () => {
     const h = harness(CASHIER);
     h.client.read.mockResolvedValue(
       okDetail(
@@ -210,7 +210,7 @@ describe('RT-542 saleHistory.reprint — authority, audit and limits', () => {
     );
     expect(await createSaleHistoryService(h.deps).reprint(DUPLICATE)).toEqual({
       kind: 'refused',
-      reason: 'sale_not_found',
+      reason: 'role_denied',
     });
     expect(h.client.authorizeReprint).not.toHaveBeenCalled();
   });
@@ -432,7 +432,7 @@ describe('RT-542 review fixes — marks never weaker than the record (OD-534-8)'
     h.localSales.set('sale-local-1', localSaleRow({ selling_operator_id: 'op-other' }));
     expect(await createSaleHistoryService(h.deps).reprint(DUPLICATE)).toEqual({
       kind: 'refused',
-      reason: 'sale_not_found',
+      reason: 'role_denied',
     });
   });
 });

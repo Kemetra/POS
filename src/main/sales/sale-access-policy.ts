@@ -21,11 +21,14 @@
  * Refusals on the wire stay inside the closed `SalesRefusalReason` set:
  *   • no session, or a locked session         → `no_session`
  *   • a role outside the allowlist            → `role_denied` (audited)
- *   • a cashier asking for another's sale     → `sale_not_found` (audited)
- * The ownership miss is deliberately non-disclosing: sale numbers are
- * sequential, so `role_denied` there would tell a cashier which numbers exist
- * (Confluence 40468506: "fail closed and non-disclosing"). The audit event
- * records the true reason.
+ *   • a cashier asking for another's sale     → `role_denied` (audited as
+ *     `not_owner`; {@link SALE_OWNERSHIP_REFUSAL})
+ * RT-741 (owner decision 2026-10-19, RT-546 comment 12976): the ownership miss
+ * says "not allowed", reversing PR #692's non-disclosing `sale_not_found`. The
+ * owner accepted that a cashier learns a sale number exists; the refusal still
+ * carries no sale field (no total, no name). Every gated handler uses the one
+ * constant, so the refusal reads the same everywhere: `sales.*`, `receipts.*`,
+ * `saleHistory.*`, `saleVoid.lookup` and `returns.lookup`.
  *
  * Not audited: `no_session` (no operator or scope to attribute it to) and a
  * locked session (the banner poll would write a row every few seconds).
@@ -57,7 +60,16 @@ export type SaleAccessAction =
   | 'saleHistory.read'
   | 'saleHistory.reprint'
   // RT-553 — the store-zone vs. fixed-zone status (read-only, no sale data).
-  | 'saleHistory.zoneStatus';
+  | 'saleHistory.zoneStatus'
+  // RT-741 — the void and return lookups (they show the sale's total and seller).
+  | 'saleVoid.lookup'
+  | 'returns.lookup';
+
+/**
+ * RT-741 — the wire refusal when a cashier asks for another operator's sale.
+ * The audit event still records the precise reason (`not_owner`).
+ */
+export const SALE_OWNERSHIP_REFUSAL = 'role_denied' as const;
 
 /** Why access was refused, as recorded in the `sale.access.refused` audit event. */
 export type SaleAccessAuditReason = 'role_denied' | 'not_owner';
@@ -104,10 +116,22 @@ function hasOperatorId(session: OperatorSessionForSales): boolean {
 }
 
 /** True iff this session may see only its own sales (OD-534-1/2). */
-function isOwnSalesOnly(session: OperatorSessionForSales): boolean {
+function isOwnSalesOnly(session: Pick<OperatorSessionForSales, 'role'>): boolean {
   // A closed allowlist upstream means this is exactly 'cashier'; anything not
   // manager/admin is treated as own-only, so a future role fails closed.
   return session.role !== 'manager' && session.role !== 'admin';
+}
+
+/**
+ * The operator a read must be limited to (a cashier's own id), or null for a
+ * manager/admin's full scope. Pure, unaudited: for a domain that admits and
+ * audits through its own gate (the return flow, RT-741) but must apply the
+ * same own-sales rule.
+ */
+export function saleOwnerFilter(
+  session: Pick<OperatorSessionForSales, 'role' | 'operator_id'>,
+): string | null {
+  return isOwnSalesOnly(session) ? session.operator_id : null;
 }
 
 export function createSaleAccessPolicy(deps: SaleAccessPolicyDeps): SaleAccessPolicy {
@@ -156,8 +180,6 @@ export function createSaleAccessPolicy(deps: SaleAccessPolicyDeps): SaleAccessPo
       return false;
     },
 
-    ownerFilter(session) {
-      return isOwnSalesOnly(session) ? session.operator_id : null;
-    },
+    ownerFilter: saleOwnerFilter,
   };
 }

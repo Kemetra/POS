@@ -12,6 +12,8 @@ export const SALES_COPY = Object.freeze({
   search: 'بحث',
   searching: 'جارٍ البحث…',
   notFound: 'لم يُعثر على بيع بهذا الرقم.',
+  // RT-741 (owner decision 2026-10-19): another operator's sale is "not allowed".
+  notAllowed: 'غير مسموح لك بعرض هذا البيع.',
   preview: 'معاينة الإيصال',
   // RT-659 — the preview dialog (G6P-Receipt-Preview, owner option A, 2026-10-17).
   // Loading and failed are the 008 preview's own words; «الإيصال» names the slip region.

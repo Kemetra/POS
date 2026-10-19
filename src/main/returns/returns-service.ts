@@ -8,7 +8,9 @@
  *      `role_denied` — audited.
  *
  * A return is then built only from a LIVE `readSale` (D-a): the sale is looked
- * up by its local sale number on this terminal (D-d), must be synced with a
+ * up by its local sale number on this terminal (D-d), passes the shared RT-546
+ * own-sales rule (RT-741, defence in depth behind D-b: a cashier, were one ever
+ * admitted, gets `role_denied` for another operator's sale), must be synced with a
  * stored server `saleRef` (AC3), not voided and with something returnable
  * (AC4), and cash-only (D-c). Quantities are whole, 1..returnable (D-e, AC5);
  * the refund is priced exactly by the contract rule (AC6). The return is
@@ -42,12 +44,14 @@ import type {
   ReturnsSubmitResponse,
 } from '../../shared/returns/types.js';
 import type { SaleRow, SalesRepository } from '../sales/repositories/sales.repository.js';
+import { SALE_OWNERSHIP_REFUSAL, saleOwnerFilter } from '../sales/sale-access-policy.js';
 import type { SaleSyncStateRepo } from '../sales-sync/sale-sync-state-repo.js';
 import type { ReturnActor, ReturnsAudit } from './returns-audit.js';
 import {
   SHUTTING_DOWN,
   latchedRecheck,
   type AuthSnapshot,
+  type AuthorizedActor,
   type ReturnsAuthorizer,
 } from './returns-auth.js';
 import type { ReadSaleOutcome, ReturnsClient } from './returns-client.js';
@@ -198,7 +202,10 @@ class ReturnsService implements ReturnsCoreAPI {
   }
 
   /** The local sale, synced, cash-only on the till's own record (D-c, D-d, AC3). */
-  private localSale(actor: ReturnActor, req: ReturnsLookupRequest): SaleRow | LocalReturnRefusal {
+  private localSale(
+    actor: AuthorizedActor,
+    req: ReturnsLookupRequest,
+  ): SaleRow | LocalReturnRefusal {
     const { tenantId, branchId, terminalId } = actor.scope;
     const row = this.deps.sales.findByNumber(req.saleNumber, {
       tenant_id: tenantId,
@@ -206,6 +213,9 @@ class ReturnsService implements ReturnsCoreAPI {
       terminal_id: terminalId,
     });
     if (row === null) return 'sale_not_found';
+    // RT-741: the shared RT-546 own-sales rule, before any network call.
+    const owner = saleOwnerFilter({ role: actor.role, operator_id: actor.operatorId });
+    if (owner !== null && row.selling_operator_id !== owner) return SALE_OWNERSHIP_REFUSAL;
     // RT-530: a live void takes the sale out of the return flow before any network call.
     if (this.deps.voids?.blocksReturn(row.sale_id) === true) return 'sale_voided';
     // D-c: a contradicting local tender refuses before any network call.

@@ -25,12 +25,12 @@ describe('RT-542 saleHistory.read', () => {
     expect((await createSaleHistoryService(h.deps).read({ sale_ref: SALE_REF })).kind).toBe('ok');
   });
 
-  it('a cashier is refused another operator’s sale, non-disclosing, and it is audited', async () => {
+  it('a cashier is refused another operator’s sale, as role_denied, and it is audited', async () => {
     const h = harness(CASHIER);
     h.client.read.mockResolvedValue(okDetail({}, OTHERS));
     expect(await createSaleHistoryService(h.deps).read({ sale_ref: SALE_REF })).toEqual({
       kind: 'refused',
-      reason: 'sale_not_found',
+      reason: 'role_denied',
     });
     expect(h.audit).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -48,7 +48,7 @@ describe('RT-542 saleHistory.read', () => {
     );
     expect(await createSaleHistoryService(h.deps).read({ sale_ref: SALE_REF })).toEqual({
       kind: 'refused',
-      reason: 'sale_not_found',
+      reason: 'role_denied',
     });
   });
 

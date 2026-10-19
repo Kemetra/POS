@@ -37,6 +37,7 @@ import type { ReceiptPayload } from '../../shared/receipts/types.js';
 import type { Admitted, ResolvedCredential, SaleHistoryAccess } from './sale-history-access.js';
 import type { WireReprint } from './sale-history-wire.js';
 import type { SaleRow } from '../sales/repositories/sales.repository.js';
+import { SALE_OWNERSHIP_REFUSAL } from '../sales/sale-access-policy.js';
 import type { DetailReader } from './sale-history-detail.js';
 import { coversMarks, detailMarks, printedMarks } from './sale-history-marks.js';
 import type { SaleHistoryServiceDeps } from './sale-history-service.js';
@@ -142,7 +143,7 @@ export function createSaleHistoryReprint(input: SaleHistoryReprintDeps): {
   function localSource(admitted: Admitted, row: SaleRow): DuplicateSource | Refusal {
     // Defence in depth: a cashier never prints another operator's record.
     if (admitted.owner !== null && row.selling_operator_id !== admitted.owner) {
-      return refuse('sale_not_found');
+      return refuse(SALE_OWNERSHIP_REFUSAL);
     }
     if (!deps.printEventsRepo.hasSuccessfulPrint(row.sale_id)) return refuse('not_yet_printed');
     if (duplicateFromLocal(row, 1, now()) === null) return refuse('duplicate_unavailable');

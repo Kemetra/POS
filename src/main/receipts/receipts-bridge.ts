@@ -39,7 +39,11 @@ import { deriveReceiptPayload } from './receipts-payload.js';
 import { renderReceipt } from './template-engine.js';
 import type { PrintDispatcher, PrintDispatchContext } from './print-dispatcher.js';
 import type { DrawerKickDispatcher } from '../drawer/drawer-kick.js';
-import { createSaleAccessPolicy, type SaleAccessAction } from '../sales/sale-access-policy.js';
+import {
+  SALE_OWNERSHIP_REFUSAL,
+  createSaleAccessPolicy,
+  type SaleAccessAction,
+} from '../sales/sale-access-policy.js';
 
 /** 80 mm Font A column width — the v1 printed-slip dimension (§(a) layout). */
 const PREVIEW_WIDTH_CHARS = 42;
@@ -147,9 +151,9 @@ export interface ReceiptsBridgeDependencies {
 
 /**
  * Session + role + tenant-isolation + ownership gate shared by every handler:
- * returns the scoped Sale row, or a refusal reason. A cross-scope, missing or
- * (for a cashier) another operator's row refuses as `sale_not_found` (no
- * existence-distinguishing leak; §A4 #6, RT-546).
+ * returns the scoped Sale row, or a refusal reason. A cross-scope or missing
+ * row refuses as `sale_not_found` (§A4 #6); for a cashier, another operator's
+ * row refuses as `role_denied` (RT-546, RT-741 owner decision 2026-10-19).
  */
 type ScopedSale =
   | { ok: true; row: SaleRow; session: OperatorSessionForSales }
@@ -181,9 +185,9 @@ export function createReceiptsBridge(deps: ReceiptsBridgeDependencies): Receipts
     ) {
       return { ok: false, reason: 'sale_not_found' };
     }
-    // OD-534-1/2: a cashier acts only on their own sale.
+    // OD-534-1/2: a cashier acts only on their own sale (RT-741: role_denied).
     if (!access.admitSale(action, session, row)) {
-      return { ok: false, reason: 'sale_not_found' };
+      return { ok: false, reason: SALE_OWNERSHIP_REFUSAL };
     }
     return { ok: true, row, session };
   }
@@ -197,7 +201,7 @@ export function createReceiptsBridge(deps: ReceiptsBridgeDependencies): Receipts
       }
 
       // Session, role, tenant isolation and (RT-546) ownership — a cross-scope
-      // or another cashier's sale refuses as sale_not_found (§A4 #6).
+      // sale refuses as sale_not_found (§A4 #6), another cashier's as role_denied.
       const scoped = scopedSale('receipts.preview', req.sale_id);
       if (!scoped.ok) {
         return await Promise.resolve({ kind: 'refused', reason: scoped.reason });
@@ -373,8 +377,8 @@ export function createReceiptsBridge(deps: ReceiptsBridgeDependencies): Receipts
 
       // RT-546 / OD-534-2 (supersedes AD-10's "any operator"): a cashier
       // reprints only their own sale; a manager or admin any sale in scope. A
-      // cross-scope, missing or another cashier's sale refuses as
-      // `sale_not_found` (no information leak; §A4 #6).
+      // cross-scope or missing sale refuses as `sale_not_found` (§A4 #6);
+      // another cashier's as `role_denied` (RT-741).
       const scoped = scopedSale('receipts.reprint', req.sale_id);
       if (!scoped.ok) {
         return { kind: 'refused', reason: scoped.reason };
