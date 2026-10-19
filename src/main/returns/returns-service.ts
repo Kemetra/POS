@@ -433,6 +433,12 @@ class ReturnsService implements ReturnsCoreAPI, ReturnsResendAPI {
    * `resend_requested` is attributed to the requesting operator, not the one
    * who journaled the row. Like `submit`, the answer is withheld if the
    * session changed while the POST was awaited.
+   *
+   * Ownership (RT-741 own-sales rule): not applied here, on purpose. The rule
+   * narrows a cashier to their own sales, and a cashier never passes `admit`
+   * (D-b: manager/admin only, `role_denied`); for a manager or admin the rule is
+   * the terminal scope, which `isOwnScope` enforces on the journaled row. This
+   * acts on a journal row, not on a sale lookup.
    */
   async resend(req: ReturnsResendRequest): Promise<ReturnsResendResponse> {
     const admitted = this.admit('resend');
