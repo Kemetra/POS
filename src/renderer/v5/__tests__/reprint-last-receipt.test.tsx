@@ -162,7 +162,7 @@ describe('ReprintLastReceipt', () => {
     ['not_yet_printed', 'لم يُطبع الإيصال الأصلي لهذا البيع على هذا الجهاز.'],
     ['printer_unavailable', 'تعذّرت الطباعة. تحقق من الطابعة وحاول مرة أخرى.'],
     ['sale_not_found', 'لم يُعثر على هذا البيع.'],
-    ['sale_voided', SALES_COPY.reprintFailed],
+    ['sale_voided', 'لا يمكن طباعة نسخة طبق الأصل لهذا البيع.'],
     ['role_denied', SALES_COPY.reprintFailed],
   ])('a %s refusal uses existing copy', async (reason, copy) => {
     const user = renderButton(bridges(undefined, { kind: 'refused', reason }));

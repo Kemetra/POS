@@ -64,17 +64,21 @@ function windowApi(): WindowApi | undefined {
   return (window as unknown as { api?: WindowApi }).api;
 }
 
-/** Refusals whose existing history copy tells the cashier something true; the rest use the reprint's own. */
-const KNOWN_REFUSALS: ReadonlySet<string> = new Set([
-  'sale_not_found',
-  'not_yet_printed',
-  'printer_unavailable',
-]);
+/**
+ * Refusals whose existing history copy tells the cashier something true; the
+ * rest use the reprint's own. A voided sale (`sale_voided`) cannot be retried,
+ * so it says what the history says for a sale that allows no true duplicate.
+ */
+const HISTORY_COPY_KEY: Readonly<Record<string, Parameters<typeof refusalCopy>[0]>> = {
+  sale_not_found: 'sale_not_found',
+  not_yet_printed: 'not_yet_printed',
+  printer_unavailable: 'printer_unavailable',
+  sale_voided: 'duplicate_unavailable',
+};
 
 function refusalText(reason: string): string {
-  return KNOWN_REFUSALS.has(reason)
-    ? refusalCopy(reason as Parameters<typeof refusalCopy>[0])
-    : SALES_COPY.reprintFailed;
+  const key = HISTORY_COPY_KEY[reason];
+  return key === undefined ? SALES_COPY.reprintFailed : refusalCopy(key);
 }
 
 type Failed = { kind: 'failed'; text: string };
