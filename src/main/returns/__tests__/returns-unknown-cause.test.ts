@@ -221,6 +221,41 @@ describe('RT-196 S1 — returns.list shows the attempt history summary', () => {
     expect(row?.lastCause).toBeNull();
   });
 
+  it('§A4 D-1: a row crosses the bridge with exactly the closed key set (nothing secret added)', async () => {
+    harness();
+    await unknownReturn();
+
+    const list = await h.service.list();
+
+    const row = list.kind === 'ok' ? list.returns[0] : undefined;
+    expect(Object.keys(row ?? {}).sort()).toEqual(
+      [
+        // RT-15 S2/S4 fields
+        'confirmedAt',
+        'createdAt',
+        'currencyCode',
+        'lines',
+        'payout',
+        'quotedTotalMinor',
+        'refusalReason',
+        'returnId',
+        'returnRef',
+        'returnTotalMinor',
+        'saleId',
+        'saleNumber',
+        'state',
+        // RT-196 S1: the only three additions
+        'attemptCount',
+        'lastAttemptAt',
+        'lastCause',
+      ].sort(),
+    );
+    const text = JSON.stringify(row);
+    for (const secret of [ENVELOPE, 'externalId', 'requestBodyJson', 'Idempotency']) {
+      expect(text).not.toContain(secret);
+    }
+  });
+
   it('the submit answer of a lost send names its cause', async () => {
     harness();
     h.backend.onReturn = () => Promise.reject(new DOMException('t', 'TimeoutError'));
