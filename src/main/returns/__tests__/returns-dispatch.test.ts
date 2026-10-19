@@ -157,7 +157,7 @@ describe('returns dispatcher', () => {
       jsonResponse(201, tamper(saleReturnFor(JSON.parse(call.body ?? '{}') as never)));
     const res = await h.service.submit(ONE_A);
     expect(res).toMatchObject({ kind: 'unconfirmed', ret: { state: 'unknown' } });
-    expect(categories(h.audits)).toEqual(['sale.return.attempted']);
+    expect(categories(h.audits)).toEqual(['sale.return.attempted', 'sale.return.attempt_unknown']);
     expect(h.warnings).toContain('returns:confirmation_mismatch');
   });
 });
@@ -180,7 +180,10 @@ describe('returns dispatcher — atomic confirmation with its audits (Codex P2)'
         kind: 'unconfirmed',
         ret: { state: 'unknown', returnRef: null },
       });
-      expect(categories(h.audits)).toEqual(['sale.return.attempted']);
+      expect(categories(h.audits)).toEqual([
+        'sale.return.attempted',
+        'sale.return.attempt_unknown',
+      ]);
       expect(h.warnings).toContain('returns:local_commit_failed');
 
       h.state.failAudit = null;
@@ -193,6 +196,7 @@ describe('returns dispatcher — atomic confirmation with its audits (Codex P2)'
       expect(h.backend.recorded.size).toBe(1);
       expect(categories(h.audits)).toEqual([
         'sale.return.attempted',
+        'sale.return.attempt_unknown',
         'sale.return.confirmed',
         PAYOUT,
       ]);
@@ -209,7 +213,11 @@ describe('returns dispatcher — atomic confirmation with its audits (Codex P2)'
     expect(res).toMatchObject({ kind: 'unconfirmed', ret: { state: 'unknown' } });
     h.state.failAudit = null;
     await expect(h.resolver.resolveOnce(MANAGER_ACTOR)).resolves.toMatchObject({ refused: 1 });
-    expect(categories(h.audits)).toEqual(['sale.return.attempted', 'sale.return.refused']);
+    expect(categories(h.audits)).toEqual([
+      'sale.return.attempted',
+      'sale.return.attempt_unknown',
+      'sale.return.refused',
+    ]);
   });
 
   it('a replay after confirmation writes no duplicate audits', async () => {

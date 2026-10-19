@@ -129,6 +129,7 @@ describe('I5: the return state machine under seeded random interleavings', () =>
     expect(runs.some((r) => !r.stopped)).toBe(true);
     expect(runs.some((r) => r.calls.some((c) => c.method === 'POST'))).toBe(true);
     expect([...categories].sort()).toEqual([
+      'sale.return.attempt_unknown',
       'sale.return.attempted',
       'sale.return.confirmed',
       'sale.return.payout_ready',

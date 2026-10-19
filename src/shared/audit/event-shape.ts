@@ -100,6 +100,11 @@ export const AUDIT_ACTION_CATEGORIES = [
   'sale.return.slip_printed',
   'sale.return.slip_print_failed',
   'sale.return.slip_reprinted',
+  // RT-196 S1 — one send that left a return unknown (with its cause code), and
+  // a manager's per-row resend. Local only; ids and closed codes, never a body
+  // or envelope. Open-set at the SQL layer (0004: no CHECK); no migration.
+  'sale.return.attempt_unknown',
+  'sale.return.resend_requested',
   // RT-215 (RT-138 P-1) — the device credential was confirmed revoked, and a
   // later re-pair (or, RT-215 10897-A, a "Check again" answered 2xx) cleared it. System-attributed (no operator acts): the
   // actor is SYSTEM_DEVICE_ACTOR_ID below. Payload `{ source }` only — never a

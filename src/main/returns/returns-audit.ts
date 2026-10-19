@@ -12,7 +12,11 @@ import type {
   AuditPayloadMap,
   SaleReturnRefusedPayload,
 } from '../../shared/audit/payload-schemas.js';
-import type { ReturnDrawerFailure, ReturnPayoutMethod } from '../../shared/returns/types.js';
+import type {
+  ReturnDrawerFailure,
+  ReturnPayoutMethod,
+  ReturnUnknownCause,
+} from '../../shared/returns/types.js';
 import type { JournalEntry, ReturnScope } from './returns-repository.js';
 
 type ReturnAuditCategory = Extract<AuditEvent['action_category'], `sale.return.${string}`>;
@@ -20,6 +24,9 @@ type ReturnAuditCategory = Extract<AuditEvent['action_category'], `sale.return.$
 export interface ReturnsAuditSink {
   emit(event: AuditEvent): void;
 }
+
+/** How a return was sent: the first send, a resolver pass, or a manager's per-row resend. */
+export type SendOperation = 'submit' | 'resolve' | 'resend';
 
 /** Who acted, where: the envelope attributes of a return audit event. */
 export interface ReturnActor {
@@ -50,6 +57,10 @@ export interface ReturnsAudit {
   attempted(entry: JournalEntry): void;
   refused(actor: ReturnActor, payload: SaleReturnRefusedPayload): void;
   confirmed(entry: JournalEntry, replayed: boolean): void;
+  /** RT-196 S1: one send left the return unknown (cause code, attempt number). */
+  attemptUnknown(entry: JournalEntry, cause: ReturnUnknownCause, operation: SendOperation): void;
+  /** RT-196 S1: a manager resent this return; attributed to the REQUESTING `actor`. */
+  resendRequested(actor: ReturnActor, entry: JournalEntry): void;
   payoutReady(entry: JournalEntry): void;
   // RT-15 S4: attributed to the paying operator (`actor`), for a confirmed return.
   payoutStarted(actor: ReturnActor, entry: JournalEntry): void;
@@ -162,6 +173,18 @@ export function createReturnsAudit(deps: ReturnsAuditDeps): ReturnsAudit {
         return_total_minor: facts.totalMinor,
         replayed,
       }));
+    },
+    attemptUnknown(entry, cause, operation) {
+      write(actorOf(entry), 'sale.return.attempt_unknown', {
+        return_id: entry.returnId,
+        sale_id: entry.saleId,
+        attempt_no: entry.attemptCount,
+        cause,
+        operation,
+      });
+    },
+    resendRequested(actor, entry) {
+      write(actor, 'sale.return.resend_requested', { return_id: entry.returnId });
     },
     payoutReady(entry) {
       writeConfirmedEvent(entry, 'sale.return.payout_ready', (facts) => ({

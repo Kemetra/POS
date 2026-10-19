@@ -21,6 +21,9 @@ const REFUSAL_COPY: Readonly<Record<ReturnsRefusalReason, string>> = Object.free
   validation_error: 'رفض الخادم بيانات المرتجع لأنها غير صالحة.',
   unauthorized: 'لم يقبل الخادم صلاحية هذه الجلسة. سجّل الدخول من جديد ثم حاول.',
   returns_unavailable: 'المرتجعات غير متاحة على الخادم لهذا البيع حاليًا.',
+  // RT-196 S1 (OD-196-9): the sale has payer responsibilities (credit).
+  credit_sale_reversal_restricted:
+    'هذا البيع عليه مسؤولية دفع آجلة، فلا يُرجَع من هنا. لم يُسجَّل المرتجع ولم يُصرف أي نقد.',
   // Decided on the till.
   feature_disabled: 'المرتجعات غير مفعّلة على هذا الجهاز.',
   no_session: 'لا توجد جلسة تشغيل. سجّل الدخول للمتابعة.',
@@ -41,6 +44,8 @@ const REFUSAL_COPY: Readonly<Record<ReturnsRefusalReason, string>> = Object.free
   tender_unknown: 'لا يثبت أن هذا البيع دُفع نقدًا بالكامل، فلا يُسترد نقدًا.',
   sale_mismatch: 'بيانات البيع على الخادم لا تطابق هذا الجهاز. لا يمكن إرجاعه من هنا.',
   session_changed: 'تغيّرت جلسة التشغيل أثناء الطلب، فلم تُعرض النتيجة.',
+  // RT-196 S1 — a resend of a return that is no longer unresolved.
+  already_resolved: 'حُسمت حالة هذا المرتجع من قبل. حدّث السجل.',
   // RT-15 S4 — payout and slip.
   return_not_found: 'لا يوجد هذا المرتجع على هذا الجهاز.',
   not_payable: 'لم يتأكد هذا المرتجع على الخادم، فلا يُصرف نقده.',
