@@ -210,7 +210,8 @@ export function StuckShiftSurface({ operator }: Readonly<StuckShiftSurfaceProps>
 
   /** The forced close succeeded: the dialog closes, the shift leaves the list. */
   function showClosed(input: { shiftId: string; delivery: 'sent' | 'queued' }): void {
-    if (input.delivery === 'queued') setQueued(true);
+    // Follows the latest outcome: the drain is causal, so a later `sent` means the queue is empty.
+    setQueued(input.delivery === 'queued');
     closeDialog(input.shiftId);
     setSurface((prev) => withoutShift(prev, input.shiftId));
   }

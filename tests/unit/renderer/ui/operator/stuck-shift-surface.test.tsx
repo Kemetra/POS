@@ -267,6 +267,14 @@ describe('StuckShiftSurface — duration formatting', () => {
 
 type Answer = Awaited<ReturnType<OperatorBridgeAPI['forceCloseShift']>>;
 
+/** Opens `shiftId`'s dialog, picks a reason, types the blind count and commits. */
+async function closeThroughDialog(shiftId: string): Promise<void> {
+  await userEvent.click(cardButton(shiftId));
+  await userEvent.click(screen.getByRole('radio', { name: COPY.reasons.cashier_no_show }));
+  await enterCount();
+  await userEvent.click(dialogButton(COPY.close));
+}
+
 /**
  * Renders the surface over `shifts`, force-closes SHIFT_0 with a count, and answers
  * with `answer` (RT-554). The one path every outcome test below takes.
@@ -281,10 +289,7 @@ async function submitClose(
 ): Promise<Pick<OperatorBridgeAPI, 'listStuckShifts' | 'forceCloseShift'>> {
   render(<StuckShiftSurface operator={op} />);
   await waitFor(() => screen.getByText('Nour Al-Hassan'));
-  await userEvent.click(cardButton('shift-111'));
-  await userEvent.click(screen.getByRole('radio', { name: COPY.reasons.cashier_no_show }));
-  await enterCount();
-  await userEvent.click(dialogButton(COPY.close));
+  await closeThroughDialog('shift-111');
   return op;
 }
 
@@ -670,6 +675,38 @@ describe('StuckShiftSurface — RT-554 (b) outcomes', () => {
     );
     expect(screen.queryByTestId('stuck-shift-card-shift-111')).toBeNull();
     expect(screen.getByTestId('stuck-shift-card-shift-222')).toBeInTheDocument();
+  });
+
+  // The drain is in causal order, so a later `sent` means everything before it was
+  // sent too: the «not at the server yet» notice follows the LATEST delivery.
+  it('a later close that is sent clears the «not at the server yet» notice', async () => {
+    const op = {
+      listStuckShifts: vi.fn(() =>
+        Promise.resolve({ kind: 'stuck_shifts', shifts: [SHIFT_0, SHIFT_1] }),
+      ),
+      forceCloseShift: vi
+        .fn()
+        .mockResolvedValueOnce({
+          kind: 'forced_closed',
+          audit_event_id: 'evt-1',
+          delivery: 'queued',
+        })
+        .mockResolvedValueOnce({
+          kind: 'forced_closed',
+          audit_event_id: 'evt-2',
+          delivery: 'sent',
+        }),
+    } as unknown as Pick<OperatorBridgeAPI, 'listStuckShifts' | 'forceCloseShift'>;
+    render(<StuckShiftSurface operator={op} />);
+    await waitFor(() => screen.getByText('Nour Al-Hassan'));
+
+    await closeThroughDialog('shift-111');
+    expect(await screen.findByTestId('stuck-shift-queued-notice')).toBeInTheDocument();
+    await closeThroughDialog('shift-222');
+
+    await waitFor(() => {
+      expect(screen.queryByTestId('stuck-shift-queued-notice')).toBeNull();
+    });
   });
 
   it('delivery sent: no notice', async () => {
