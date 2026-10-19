@@ -102,6 +102,8 @@ describe('audit/event-shape — OperatorRefusal envelope (NFR-003 / PR-2)', () =
       // RT-444 (RT-116 §4 / §3.4) — sign-in and sign-out refusals; non-disclosing.
       'terminal_has_unresolved_payment',
       'payment_in_progress',
+      // RT-554 — forced close of a shift this device cannot close (opened elsewhere).
+      'not_closable_here',
     ]);
   });
 

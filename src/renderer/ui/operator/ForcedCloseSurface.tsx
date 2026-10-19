@@ -193,6 +193,9 @@ export function StuckShiftSurface({ operator }: Readonly<StuckShiftSurfaceProps>
     } else if (res.category === 'state_invalid') {
       setDialog({ kind: 'open', shift, submitting: false, refusal: 'changed' });
       void fetchShifts();
+    } else if (res.category === 'not_closable_here') {
+      // RT-554: still open on the backend, and no re-read can change that.
+      setDialog({ kind: 'open', shift, submitting: false, refusal: 'notClosable' });
     } else {
       setDialog({ kind: 'open', shift, submitting: false, refusal: 'failed' });
     }

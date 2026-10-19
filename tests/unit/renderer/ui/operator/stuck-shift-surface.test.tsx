@@ -353,6 +353,31 @@ describe('StuckShiftSurface — dialog flow', () => {
     expect(op.listStuckShifts).toHaveBeenCalledTimes(2);
   });
 
+  it('RT-554: not_closable_here shows the clear «cannot close from this device» copy, no refetch, never «state changed»', async () => {
+    const op = makeOperator(
+      { kind: 'stuck_shifts', shifts: [SHIFT_0] },
+      { kind: 'refused', category: 'not_closable_here' },
+    );
+    render(<StuckShiftSurface operator={op} />);
+
+    await waitFor(() => screen.getByText('Nour Al-Hassan'));
+
+    await userEvent.click(cardButton('shift-111'));
+    await userEvent.click(screen.getByRole('radio', { name: COPY.reasons.cashier_no_show }));
+    await userEvent.click(dialogButton(COPY.close));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('stuck-shift-submit-error')).toHaveTextContent(
+        COPY.notClosableHere,
+      );
+    });
+    expect(screen.getByTestId('stuck-shift-submit-error')).not.toHaveTextContent(COPY.changed);
+    expect(screen.getByTestId('stuck-shift-submit-error')).not.toHaveTextContent(COPY.failed);
+    // The shift is still stuck on the backend: the list is not re-read and the card stays.
+    expect(op.listStuckShifts).toHaveBeenCalledTimes(1);
+    expect(screen.getByTestId('stuck-shift-card-shift-111')).toBeInTheDocument();
+  });
+
   it('on generic refusal (non-state_invalid): shows submit error but does NOT refetch', async () => {
     const op = makeOperator(
       { kind: 'stuck_shifts', shifts: [SHIFT_0] },
