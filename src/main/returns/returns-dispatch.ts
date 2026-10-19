@@ -26,9 +26,9 @@
  * the resolver's same-key resend confirms it later. Sends of the same return
  * are single-flight within the process.
  */
-import type { ReturnsRefusalReason } from '../../shared/returns/types.js';
+import type { ReturnUnknownCause, ReturnsRefusalReason } from '../../shared/returns/types.js';
 import { exponentFor } from '../sales-sync/create-sale-sync-client.js';
-import type { ReturnsAudit } from './returns-audit.js';
+import type { ReturnsAudit, SendOperation } from './returns-audit.js';
 import type { AuthSnapshot, ReturnsAuthorizer } from './returns-auth.js';
 import type { RecordReturnOutcome, ReturnsClient } from './returns-client.js';
 import { amount4ToMinor, parseAmount4 } from './returns-money.js';
@@ -38,7 +38,12 @@ import type { WireSaleReturn } from './returns-wire.js';
 
 export type DispatchOutcome =
   | { readonly kind: 'confirmed'; readonly entry: JournalEntry; readonly replayed: boolean }
-  | { readonly kind: 'unconfirmed'; readonly entry: JournalEntry }
+  | {
+      readonly kind: 'unconfirmed';
+      readonly entry: JournalEntry;
+      /** RT-196 S1: why this send left the row unknown; null when nothing was sent / unknown. */
+      readonly cause: ReturnUnknownCause | null;
+    }
   /** Not sent: the actor is no longer authorized; the row stays pending/unknown. */
   | { readonly kind: 'deferred'; readonly entry: JournalEntry }
   | {
@@ -47,7 +52,8 @@ export type DispatchOutcome =
       readonly entry: JournalEntry;
     };
 
-export type DispatchOperation = 'submit' | 'resolve';
+/** `resend` (RT-196 S1) is the manager's explicit per-row «إعادة الإرسال». */
+export type DispatchOperation = SendOperation;
 
 export interface ReturnsDispatcher {
   /**
@@ -91,7 +97,7 @@ function outcomeOfState(entry: JournalEntry): DispatchOutcome {
   if (entry.state === 'refused' && entry.refusalReason !== null) {
     return { kind: 'refused', reason: entry.refusalReason, entry };
   }
-  return { kind: 'unconfirmed', entry };
+  return { kind: 'unconfirmed', entry, cause: null };
 }
 
 /** The answer names this return: its externalId, sale, currency and lines. */
@@ -169,41 +175,81 @@ class JournaledReturnsDispatcher implements ReturnsDispatcher {
       return this.apply(entry, outcome, op);
     } catch {
       this.deps.logger.warn({ return_id: entry.returnId }, 'returns:local_commit_failed');
-      return this.pendingLocally(entry);
+      return this.pendingLocally(entry, op);
     }
   }
 
   /** The server answered but the local commit failed: report unknown, never reject. */
-  private pendingLocally(entry: JournalEntry): DispatchOutcome {
+  private pendingLocally(entry: JournalEntry, op: DispatchOperation): DispatchOutcome {
     try {
-      return this.unconfirmed(entry);
+      return this.unconfirmed(entry, 'local_commit_failed', op);
     } catch {
-      return { kind: 'unconfirmed', entry: { ...entry, state: 'unknown' } };
+      return {
+        kind: 'unconfirmed',
+        entry: { ...entry, state: 'unknown' },
+        cause: 'local_commit_failed',
+      };
     }
   }
 
   private apply(entry: JournalEntry, outcome: RecordReturnOutcome, op: DispatchOperation) {
     if (outcome.kind === 'recorded') {
-      return this.confirm(entry, outcome.saleReturn, outcome.replayed);
+      return this.confirm(entry, outcome.saleReturn, outcome.replayed, op);
     }
     if (outcome.kind === 'refused') return this.refuse(entry, outcome.reason, op);
-    return this.unconfirmed(entry);
+    return this.unconfirmed(entry, outcome.cause, op);
   }
 
   private current(entry: JournalEntry): JournalEntry {
     return this.deps.repo.read(entry.returnId) ?? entry;
   }
 
-  private unconfirmed(entry: JournalEntry): DispatchOutcome {
-    this.deps.repo.markUnknown({ returnId: entry.returnId, now: this.deps.now() });
-    return outcomeOfState(this.current(entry));
+  /**
+   * The send left the row unknown: the guarded `markUnknown` and the cause audit
+   * commit together, and the audit is written only when the transition changed
+   * the row (RT-196 S1). If that local commit fails the row is still marked
+   * `unknown` on its own — never left `pending`, which the resolver treats as
+   * always due (no backoff) — and the lost cause audit is logged.
+   */
+  private unconfirmed(
+    entry: JournalEntry,
+    cause: ReturnUnknownCause,
+    op: DispatchOperation,
+  ): DispatchOutcome {
+    const stamp = { returnId: entry.returnId, now: this.deps.now() };
+    try {
+      this.deps.transaction(() => {
+        this.commitUnknown(entry, stamp, cause, op);
+      });
+    } catch {
+      this.deps.logger.warn({ return_id: entry.returnId }, 'returns:attempt_unknown_audit_failed');
+      this.deps.repo.markUnknown(stamp);
+    }
+    const outcome = outcomeOfState(this.current(entry));
+    return outcome.kind === 'unconfirmed' ? { ...outcome, cause } : outcome;
   }
 
-  private confirm(entry: JournalEntry, saleReturn: WireSaleReturn, replayed: boolean) {
+  /** Inside the transaction: the guarded transition, then its cause audit. */
+  private commitUnknown(
+    entry: JournalEntry,
+    stamp: { readonly returnId: string; readonly now: string },
+    cause: ReturnUnknownCause,
+    op: DispatchOperation,
+  ): void {
+    if (!this.deps.repo.markUnknown(stamp)) return;
+    this.deps.audit.attemptUnknown(this.current(entry), cause, op);
+  }
+
+  private confirm(
+    entry: JournalEntry,
+    saleReturn: WireSaleReturn,
+    replayed: boolean,
+    op: DispatchOperation,
+  ) {
     const totalMinor = matchingTotalMinor(entry, saleReturn);
     if (totalMinor === null) {
       this.deps.logger.warn({ return_id: entry.returnId }, 'returns:confirmation_mismatch');
-      return this.unconfirmed(entry);
+      return this.unconfirmed(entry, 'confirmation_mismatch', op);
     }
     const input = {
       returnId: entry.returnId,

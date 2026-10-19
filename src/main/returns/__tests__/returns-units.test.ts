@@ -273,6 +273,9 @@ describe('D-c tender evidence (Codex P1: fail closed on tender-unknown)', () => 
       confirmedAt: null,
       lines: [{ lineRef: LINE_A, quantity: 1 }],
       payout: null,
+      attemptCount: 0,
+      lastAttemptAt: null,
+      lastCause: null,
     });
   });
 

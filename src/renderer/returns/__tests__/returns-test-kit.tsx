@@ -73,6 +73,9 @@ export function journal(overrides: Partial<ReturnJournalView> = {}): ReturnJourn
     confirmedAt: '2026-10-04T09:05:02.000Z',
     lines: [{ lineRef: L1, quantity: 1 }],
     payout: null,
+    attemptCount: 1,
+    lastAttemptAt: '2026-10-04T09:05:00.000Z',
+    lastCause: null,
     ...overrides,
   };
 }

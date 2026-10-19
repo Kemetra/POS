@@ -485,7 +485,10 @@ describe('submit', () => {
         kind: 'unconfirmed',
         ret: { state: 'unknown', returnRef: null },
       });
-      expect(categories(h.audits)).toEqual(['sale.return.attempted']);
+      expect(categories(h.audits)).toEqual([
+        'sale.return.attempted',
+        'sale.return.attempt_unknown',
+      ]);
     },
   );
 

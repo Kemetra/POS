@@ -486,6 +486,10 @@ describe('operator:emit-audit-event — main-only categories (RT-117 §A4 L1)', 
     'operator.offline_grant.invalidated',
     // RT-551: the sale-number day-rule switch is written only by finalize.
     'sale.number_day_rule.switched',
+    // RT-196 S1: the unknown-cause record (it feeds `lastCause`, and S4 will
+    // count auth failures from it) and the per-row resend are main-only.
+    'sale.return.attempt_unknown',
+    'sale.return.resend_requested',
   ])('refuses a renderer-forged %s and never emits it', async (action_category) => {
     const emit = vi.fn();
     const { emitAuditEvent } = setup({ auditEmitter: fakeAuditEmitter({ emit }) });

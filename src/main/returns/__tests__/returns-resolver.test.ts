@@ -121,10 +121,11 @@ describe('returns resolver', () => {
     expect(h.repo.read(returnId)).toMatchObject({ state: 'confirmed', attemptCount: 2 });
     expect(categories(h.audits)).toEqual([
       'sale.return.attempted',
+      'sale.return.attempt_unknown',
       'sale.return.confirmed',
       'sale.return.payout_ready',
     ]);
-    expect(h.audits[1]?.payload).toMatchObject({ replayed: true });
+    expect(h.audits[2]?.payload).toMatchObject({ replayed: true });
 
     // Nothing is left to resolve, so a further pass sends nothing.
     await h.resolver.resolveOnce(ACTOR);

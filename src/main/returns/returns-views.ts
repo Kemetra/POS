@@ -8,6 +8,7 @@ import type {
   ReturnJournalView,
   ReturnPayoutKick,
   ReturnPayoutView,
+  ReturnUnknownCause,
 } from '../../shared/returns/types.js';
 import { kickStateOf } from './returns-drawer.js';
 import type { PayoutRow } from './returns-payout-repository.js';
@@ -38,6 +39,8 @@ export function toJournalView(
   payout: PayoutRow | null = null,
   /** The app clock, for the kick lease (null: a sending kick is in flight). */
   now: string | null = null,
+  /** RT-196 S1: why the last send left it unknown (shown only while unresolved). */
+  lastCause: ReturnUnknownCause | null = null,
 ): ReturnJournalView {
   return {
     returnId: entry.returnId,
@@ -53,5 +56,8 @@ export function toJournalView(
     confirmedAt: entry.confirmedAt,
     lines: entry.lines.map((l) => ({ lineRef: l.lineRef, quantity: l.quantity })),
     payout: toPayoutView(payout, now),
+    attemptCount: entry.attemptCount,
+    lastAttemptAt: entry.lastAttemptAt,
+    lastCause: entry.state === 'pending' || entry.state === 'unknown' ? lastCause : null,
   };
 }
