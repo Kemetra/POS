@@ -719,3 +719,136 @@ describe('envelope repair of a dead-lettered fact', () => {
     expect(stateOf({ seq: 2 })['sync_status']).toBe('dead_letter');
   });
 });
+
+describe('RT-554: a forced close is an ORIGINAL manager-envelope row (no migration)', () => {
+  const MANAGER = '0190f5a2-3b4c-7d8e-9f01-23456789abce';
+  const FORCED: ShiftCloseFact = { ...CLOSE, closingUserId: MANAGER };
+  const forced = (
+    over: { fact?: ShiftCloseFact; forcedReason?: string; within?: () => void } = {},
+  ) =>
+    repo.recordForcedClose({
+      scope: SCOPE,
+      fact: over.fact ?? FORCED,
+      forcedReason: over.forcedReason ?? 'cashier_no_show',
+      now: NOW,
+      ...(over.within === undefined ? {} : { within: over.within }),
+    });
+
+  function openWithMovements(): void {
+    repo.recordOpen({ scope: SCOPE, fact: OPEN, now: NOW });
+    repo.recordMovement({ scope: SCOPE, fact: PAY_IN, now: NOW });
+    repo.recordMovement({ scope: SCOPE, fact: PAY_OUT, now: NOW });
+  }
+
+  it('records a forced close row and an envelope outbox row that pass every 0043 CHECK and trigger', () => {
+    openWithMovements();
+    const recorded = forced();
+
+    expect(
+      db.exec(
+        `SELECT close_kind, forced_reason, closing_user_id FROM shift_cashup_closes WHERE shift_id = '${S1}'`,
+      )[0]?.values[0],
+    ).toEqual(['forced', 'cashier_no_show', MANAGER]);
+    expect(outboxRow(recorded)).toMatchObject({
+      fact_kind: 'close',
+      auth_path: 'envelope',
+      idempotency_key: `pos-pulse-shift-close:${S1}`,
+      sync_status: 'pending',
+      supersedes_seq: null,
+      origin_seq: null,
+    });
+    const body = JSON.parse(String(outboxRow(recorded)['request_body'])) as Record<string, unknown>;
+    expect(body).toMatchObject({ closeKind: 'forced', forcedReason: 'cashier_no_show' });
+    expect(body).not.toHaveProperty('operatorUserId');
+    expect(repo.findOpenShift(SCOPE)).toBeNull();
+  });
+
+  it('drains after the earlier device facts, as an envelope-path due fact', () => {
+    openWithMovements();
+    forced();
+    for (const seq of [1, 2, 3]) repo.markSynced({ seq, now: NOW });
+
+    const next = repo.nextFact({ scope: SCOPE, now: NOW });
+
+    expect(next).toMatchObject({
+      kind: 'due',
+      fact: { seq: 4, factKind: 'close', authPath: 'envelope' },
+    });
+  });
+
+  it('refuses without an open shift, and for totals other than the shift, writing nothing', () => {
+    expect(stateErrorOf(() => forced())).toBe('shift_not_open');
+    openWithMovements();
+    expect(
+      invalidFactOf(() =>
+        forced({
+          fact: {
+            ...FORCED,
+            payInTotalMinor: 2_000,
+            expectedCashMinor: 59_000,
+            varianceMinor: -1_500,
+          },
+        }),
+      ),
+    ).toEqual({ reason: 'cashup_inconsistent', field: 'payInTotalMinor' });
+    expect(count({ table: 'shift_cashup_closes' })).toBe(0);
+    expect(count({ table: 'shift_sync_outbox' })).toBe(3);
+  });
+
+  it('closes the shift once: a second close, forced or normal, is shift_not_open', () => {
+    openWithMovements();
+    forced();
+    expect(stateErrorOf(() => forced())).toBe('shift_not_open');
+    expect(stateErrorOf(() => repo.recordClose({ scope: SCOPE, fact: CLOSE, now: NOW }))).toBe(
+      'shift_not_open',
+    );
+  });
+
+  it('refuses a forcedReason outside 1-200 characters, writing nothing', () => {
+    openWithMovements();
+    expect(invalidFactOf(() => forced({ forcedReason: '' })).field).toBe('forcedReason');
+    expect(count({ table: 'shift_cashup_closes' })).toBe(0);
+  });
+
+  it('runs `within` inside the transaction after the rows are written; a throw rolls everything back', () => {
+    openWithMovements();
+    const seen: number[] = [];
+    forced({ within: () => seen.push(count({ table: 'shift_cashup_closes' })) });
+    expect(seen).toEqual([1]);
+
+    const other = freshSalesSyncDb();
+    const otherRepo = createShiftCashupRepo(handleFor(other));
+    otherRepo.recordOpen({ scope: SCOPE, fact: OPEN, now: NOW });
+    otherRepo.recordMovement({ scope: SCOPE, fact: PAY_IN, now: NOW });
+    otherRepo.recordMovement({ scope: SCOPE, fact: PAY_OUT, now: NOW });
+    expect(() =>
+      otherRepo.recordForcedClose({
+        scope: SCOPE,
+        fact: FORCED,
+        forcedReason: 'cashier_no_show',
+        now: NOW,
+        within: () => {
+          throw new Error('audit store unavailable');
+        },
+      }),
+    ).toThrow('audit store unavailable');
+    expect(Number(other.exec('SELECT COUNT(*) FROM shift_cashup_closes')[0]?.values[0]?.[0])).toBe(
+      0,
+    );
+    expect(otherRepo.findOpenShift(SCOPE)).not.toBeNull();
+    other.close();
+  });
+
+  it('a dead-lettered forced close is repaired on the envelope path with the same body', () => {
+    openWithMovements();
+    const recorded = forced();
+    for (const seq of [1, 2, 3]) repo.markSynced({ seq, now: NOW });
+    repo.markDeadLetter({ seq: recorded.seq, now: NOW, reason: 'rejected' });
+
+    const repair = repo.recordEnvelopeRepair({ seq: recorded.seq, now: NOW });
+
+    expect(JSON.parse(String(outboxRow(repair)['request_body']))).toEqual(
+      JSON.parse(String(outboxRow(recorded)['request_body'])),
+    );
+  });
+});

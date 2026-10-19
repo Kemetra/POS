@@ -20,6 +20,7 @@ function makeDeps(): ForcedCloseHandlerDeps {
       getStatus: () => Promise.resolve({ kind: 'unpaired' as const }),
     },
     auditEmitter: { emit: vi.fn() } as ForcedCloseHandlerDeps['auditEmitter'],
+    shiftCashup: { forceCloseShift: vi.fn() },
   };
 }
 
@@ -30,6 +31,7 @@ describe('ForcedCloseHandler — requireRole non-OperatorRefusalError fallback',
     const result = await handler.forceCloseShift({
       shift_id: 'any-shift',
       reason: 'takeover_supersession',
+      counted_cash_minor: 0,
       event_id: randomUUID(),
     });
 

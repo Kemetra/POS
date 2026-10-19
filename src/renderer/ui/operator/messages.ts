@@ -43,6 +43,8 @@ export const SIGN_IN_REFUSAL_COPY: Readonly<Record<RefusalCategory, string>> = O
   payment_in_progress: 'يوجد دفع جارٍ. أكمل الدفع أو ألغِه قبل تسجيل الخروج.',
   // RT-554 — forced close of a shift opened on another device (not this one).
   not_closable_here: STUCK_SHIFTS_COPY.notClosableHere,
+  // RT-554 (b) — forced close of this terminal's shift blocked by parked sales / drawer cash in flight.
+  close_blocked: STUCK_SHIFTS_COPY.closeBlocked,
 });
 
 export const EMPTY_INPUT_MESSAGE = 'أدخل بيانات الدخول للمتابعة.';

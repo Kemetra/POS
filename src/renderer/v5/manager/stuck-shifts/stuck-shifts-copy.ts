@@ -39,6 +39,17 @@ export const STUCK_SHIFTS_COPY = Object.freeze({
    */
   notClosableHere:
     'لا يمكن الإغلاق الإجباري لهذه الوردية من هنا. تُغلق بجرد الدرج على الجهاز الذي فتحها.',
+  /**
+   * RT-554 (b), the manager's blind count: an input only. The hint names no
+   * amount and promises nothing about what is (not) shown.
+   */
+  countHint: 'عُدّ النقد في الدرج وأدخل ما عددته.',
+  /** `close_blocked`: parked sales or drawer cash in flight on this terminal. */
+  closeBlocked:
+    'لا يمكن إغلاق الوردية الآن: توجد مبيعات معلّقة أو حركة نقدية جارية على هذا الجهاز. أنهِها ثم أعد المحاولة.',
+  /** `delivery: queued`: closed on this terminal, not yet sent to the server. */
+  queuedNotice:
+    'أُغلقت الوردية على هذا الجهاز وهي بانتظار الإرسال إلى الخادم. تُرسل تلقائيًا عند توفر الاتصال وتسجيل دخول مدير.',
   /** Any other refusal: the list is not re-read. */
   failed: 'تعذّر إغلاق هذه الوردية. حاول مرة أخرى.',
   /** The five FORCED_CLOSE_REASONS, in enum order. */

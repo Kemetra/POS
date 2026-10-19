@@ -7,8 +7,10 @@ import { StuckShiftSurface } from '../../../../../src/renderer/ui/operator/Force
 import type {
   OperatorBridgeAPI,
   ListStuckShiftsResponse,
+  StuckShiftSummary,
 } from '../../../../../src/shared/bridge-api.js';
 import { STUCK_SHIFTS_COPY as COPY } from '../../../../../src/renderer/v5/manager/stuck-shifts/stuck-shifts-copy.js';
+import { SHIFT_COPY } from '../../../../../src/renderer/v5/shift/shift-copy.js';
 
 /**
  * 004-operator-session T090 — StuckShiftSurface orchestration tests.
@@ -40,6 +42,11 @@ function cardButton(shiftId: string): HTMLElement {
   });
 }
 
+/** RT-554 (b): the manager's blind count, typed into the dialog's count field. */
+async function enterCount(value = '500'): Promise<void> {
+  await userEvent.type(screen.getByLabelText(SHIFT_COPY.countLabel), value);
+}
+
 /** A button of the dialog itself (the row buttons share the commit's name). */
 function dialogButton(name: string): HTMLElement {
   return within(screen.getByRole('dialog')).getByRole('button', { name });
@@ -68,6 +75,7 @@ function makeOperator(
   forceResult: Awaited<ReturnType<OperatorBridgeAPI['forceCloseShift']>> = {
     kind: 'forced_closed',
     audit_event_id: 'evt-1',
+    delivery: 'sent',
   },
 ): Pick<OperatorBridgeAPI, 'listStuckShifts' | 'forceCloseShift'> {
   return {
@@ -257,20 +265,40 @@ describe('StuckShiftSurface — duration formatting', () => {
 
 // ─── Dialog flow ──────────────────────────────────────────────────────────────
 
-/** Renders the surface, force-closes SHIFT_0 and answers with the refusal `category`. */
-async function submitRefusedClose(
-  category: 'not_closable_here',
+type Answer = Awaited<ReturnType<OperatorBridgeAPI['forceCloseShift']>>;
+
+/**
+ * Renders the surface over `shifts`, force-closes SHIFT_0 with a count, and answers
+ * with `answer` (RT-554). The one path every outcome test below takes.
+ */
+async function submitClose(
+  answer: Answer,
+  shifts: StuckShiftSummary[] = [SHIFT_0],
 ): Promise<Pick<OperatorBridgeAPI, 'listStuckShifts' | 'forceCloseShift'>> {
-  const op = makeOperator(
-    { kind: 'stuck_shifts', shifts: [SHIFT_0] },
-    { kind: 'refused', category },
-  );
+  const op = makeOperator({ kind: 'stuck_shifts', shifts }, answer);
   render(<StuckShiftSurface operator={op} />);
   await waitFor(() => screen.getByText('Nour Al-Hassan'));
   await userEvent.click(cardButton('shift-111'));
   await userEvent.click(screen.getByRole('radio', { name: COPY.reasons.cashier_no_show }));
+  await enterCount();
   await userEvent.click(dialogButton(COPY.close));
   return op;
+}
+
+/** The refusal outcome tests share one shape: its own copy, never another's, no re-read. */
+async function expectRefusalCopy(input: {
+  op: Awaited<ReturnType<typeof submitClose>>;
+  copy: string;
+  never: readonly string[];
+}): Promise<void> {
+  const error = await screen.findByTestId('stuck-shift-submit-error');
+  expect(error).toHaveTextContent(input.copy);
+  for (const other of input.never) {
+    expect(error).not.toHaveTextContent(other);
+  }
+  // The shift is still stuck on the backend: the list is not re-read and the card stays.
+  expect(input.op.listStuckShifts).toHaveBeenCalledTimes(1);
+  expect(screen.getByTestId('stuck-shift-card-shift-111')).toBeInTheDocument();
 }
 
 describe('StuckShiftSurface — dialog flow', () => {
@@ -311,6 +339,7 @@ describe('StuckShiftSurface — dialog flow', () => {
     // Select a reason
     const radioInput = screen.getByRole('radio', { name: COPY.reasons.takeover_supersession });
     await userEvent.click(radioInput);
+    await enterCount();
 
     // Submit
     await userEvent.click(dialogButton(COPY.close));
@@ -323,6 +352,7 @@ describe('StuckShiftSurface — dialog flow', () => {
       expect.objectContaining({
         shift_id: 'shift-111',
         reason: 'takeover_supersession',
+        counted_cash_minor: 50_000,
         event_id: expect.stringMatching(
           /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
         ) as string,
@@ -338,6 +368,7 @@ describe('StuckShiftSurface — dialog flow', () => {
 
     await userEvent.click(cardButton('shift-111'));
     await userEvent.click(screen.getByRole('radio', { name: COPY.reasons.cashier_no_show }));
+    await enterCount();
     await userEvent.click(dialogButton(COPY.close));
 
     await waitFor(() => {
@@ -360,6 +391,7 @@ describe('StuckShiftSurface — dialog flow', () => {
 
     await userEvent.click(cardButton('shift-111'));
     await userEvent.click(screen.getByRole('radio', { name: COPY.reasons.takeover_supersession }));
+    await enterCount();
     await userEvent.click(dialogButton(COPY.close));
 
     await waitFor(() => {
@@ -370,16 +402,9 @@ describe('StuckShiftSurface — dialog flow', () => {
   });
 
   it('RT-554: not_closable_here shows the clear «cannot close from this device» copy, no refetch, never «state changed»', async () => {
-    const op = await submitRefusedClose('not_closable_here');
+    const op = await submitClose({ kind: 'refused', category: 'not_closable_here' });
 
-    const error = await screen.findByTestId('stuck-shift-submit-error');
-    expect(error).toHaveTextContent(COPY.notClosableHere);
-    for (const other of [COPY.changed, COPY.failed]) {
-      expect(error).not.toHaveTextContent(other);
-    }
-    // The shift is still stuck on the backend: the list is not re-read and the card stays.
-    expect(op.listStuckShifts).toHaveBeenCalledTimes(1);
-    expect(screen.getByTestId('stuck-shift-card-shift-111')).toBeInTheDocument();
+    await expectRefusalCopy({ op, copy: COPY.notClosableHere, never: [COPY.changed, COPY.failed] });
   });
 
   it('on generic refusal (non-state_invalid): shows submit error but does NOT refetch', async () => {
@@ -393,6 +418,7 @@ describe('StuckShiftSurface — dialog flow', () => {
 
     await userEvent.click(cardButton('shift-111'));
     await userEvent.click(screen.getByRole('radio', { name: COPY.reasons.takeover_supersession }));
+    await enterCount();
     await userEvent.click(dialogButton(COPY.close));
 
     await waitFor(() => {
@@ -513,5 +539,102 @@ describe('ForcedCloseForm — annotation maxLength', () => {
 
     const textarea = screen.getByRole('textbox', { name: COPY.note });
     expect(textarea).toHaveAttribute('maxLength', '500');
+  });
+});
+
+// ─── RT-554 (b): the manager's blind count ───────────────────────────────────
+
+describe('StuckShiftSurface — the forced close takes the manager’s blind count', () => {
+  async function openDialog(op = makeOperator({ kind: 'stuck_shifts', shifts: [SHIFT_0] })) {
+    render(<StuckShiftSurface operator={op} />);
+    await waitFor(() => screen.getByText('Nour Al-Hassan'));
+    await userEvent.click(cardButton('shift-111'));
+    await userEvent.click(screen.getByRole('radio', { name: COPY.reasons.cashier_no_show }));
+    return op;
+  }
+
+  it('shows the count field and no number at all: a blind count has nothing to read', async () => {
+    await openDialog();
+
+    expect(screen.getByLabelText(SHIFT_COPY.countLabel)).toBeInTheDocument();
+    // No expected cash and no variance can be on screen if no digit is.
+    expect(screen.getByRole('dialog').textContent).not.toMatch(/[0-9٠-٩۰-۹]/);
+  });
+
+  it.each([
+    ['not a number', 'abc'],
+    ['three decimals', '5.123'],
+    ['empty', ''],
+  ])(
+    'does not call the bridge for a count that is %s, and says so under the field',
+    async (_name, text) => {
+      const op = await openDialog();
+      if (text !== '') await enterCount(text);
+
+      await userEvent.click(dialogButton(COPY.close));
+
+      expect(op.forceCloseShift).not.toHaveBeenCalled();
+      expect(await screen.findByText(SHIFT_COPY.invalidAmount)).toBeInTheDocument();
+    },
+  );
+
+  it('does not send a count above the cap (RT-278 S1), and says so', async () => {
+    const op = await openDialog();
+    await enterCount('2000000');
+
+    await userEvent.click(dialogButton(COPY.close));
+
+    expect(op.forceCloseShift).not.toHaveBeenCalled();
+    expect(screen.getByRole('dialog')).toHaveTextContent('أكبر من الحد المسموح');
+  });
+
+  it('sends the count in integer minor units (Arabic digits accepted)', async () => {
+    const op = await openDialog();
+    await enterCount('١٢٣.٤٥');
+
+    await userEvent.click(dialogButton(COPY.close));
+
+    await waitFor(() => {
+      expect(op.forceCloseShift).toHaveBeenCalledWith(
+        expect.objectContaining({ counted_cash_minor: 12_345 }),
+      );
+    });
+  });
+});
+
+describe('StuckShiftSurface — RT-554 (b) outcomes', () => {
+  it('close_blocked shows its own copy, keeps the card, and does not re-read the list', async () => {
+    const op = await submitClose({ kind: 'refused', category: 'close_blocked' });
+
+    await expectRefusalCopy({
+      op,
+      copy: COPY.closeBlocked,
+      never: [COPY.changed, COPY.failed, COPY.notClosableHere],
+    });
+  });
+
+  it('delivery queued: the card goes, and an honest notice says it is waiting to be sent', async () => {
+    await submitClose({ kind: 'forced_closed', audit_event_id: 'evt-q', delivery: 'queued' }, [
+      SHIFT_0,
+      SHIFT_1,
+    ]);
+
+    expect(await screen.findByTestId('stuck-shift-queued-notice')).toHaveTextContent(
+      COPY.queuedNotice,
+    );
+    expect(screen.queryByTestId('stuck-shift-card-shift-111')).toBeNull();
+    expect(screen.getByTestId('stuck-shift-card-shift-222')).toBeInTheDocument();
+  });
+
+  it('delivery sent: no notice', async () => {
+    await submitClose({ kind: 'forced_closed', audit_event_id: 'evt-s', delivery: 'sent' }, [
+      SHIFT_0,
+      SHIFT_1,
+    ]);
+
+    await waitFor(() => {
+      expect(screen.queryByTestId('stuck-shift-card-shift-111')).toBeNull();
+    });
+    expect(screen.queryByTestId('stuck-shift-queued-notice')).toBeNull();
   });
 });

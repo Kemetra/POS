@@ -14,6 +14,7 @@ import {
   buildCashMovementRequest,
   buildCloseShiftRequest,
   buildEnvelopeRepairRequest,
+  buildForcedCloseShiftRequest,
   buildOpenShiftRequest,
   ShiftFactInvalidError,
   type ShiftFactInvalidReason,
@@ -459,5 +460,63 @@ describe('buildEnvelopeRepairRequest', () => {
     );
     expect(new Set(keys).size).toBe(2);
     for (const key of keys) expect(key).toMatch(/^[\x21-\x7E]{16,128}$/);
+  });
+});
+
+describe('buildForcedCloseShiftRequest (RT-554: manager-envelope path only)', () => {
+  const NO_APPROVER: ShiftCloseFact = { ...CLOSE };
+  delete NO_APPROVER.varianceApprovedByUserId;
+  const forced = (over: Partial<ShiftCloseFact> = {}, forcedReason = 'cashier_no_show') =>
+    buildForcedCloseShiftRequest({
+      fact: { ...NO_APPROVER, closingUserId: MANAGER, ...over },
+      currencyCode: 'EGP',
+      forcedReason,
+    });
+
+  it('builds the contract forced close: closeKind forced, forcedReason, NO operatorUserId', () => {
+    const built = forced();
+    expect(built.request.idempotencyKey).toBe(`pos-pulse-shift-close:${SHIFT}`);
+    expect(built.request.body).toBe(
+      JSON.stringify({
+        closedAt: '2026-10-05T16:00:00.000Z',
+        closingUserId: MANAGER,
+        closeKind: 'forced',
+        forcedReason: 'cashier_no_show',
+        openingFloat: '500.00',
+        cashSalesTotal: '2450.00',
+        cashRefundsTotal: '75.00',
+        payInTotal: '0.00',
+        payOutTotal: '120.00',
+        expectedCash: '2755.00',
+        countedCash: '2750.00',
+        variance: '-5.00',
+        saleCount: 37,
+        cashRefundReturnRefs: [REF],
+      }),
+    );
+    expect(JSON.parse(built.request.body)).not.toHaveProperty('operatorUserId');
+  });
+
+  it('keeps the closing user (the manager) as the fact and lower-cases ids', () => {
+    const built = forced({ closingUserId: MANAGER.toUpperCase() });
+    expect(built.fact.closingUserId).toBe(MANAGER);
+  });
+
+  it.each([
+    ['empty', ''],
+    ['over 200 characters', 'x'.repeat(201)],
+  ])('refuses a forcedReason that is %s, naming the field', (_name, reason) => {
+    try {
+      forced({}, reason);
+      expect.unreachable('should have refused');
+    } catch (error) {
+      expect(error).toBeInstanceOf(ShiftFactInvalidError);
+      expect((error as ShiftFactInvalidError).field).toBe('forcedReason');
+      expect(String(error)).not.toContain('xxxxx');
+    }
+  });
+
+  it('refuses inconsistent arithmetic like a normal close', () => {
+    expect(() => forced({ expectedCashMinor: 1 })).toThrow(ShiftFactInvalidError);
   });
 });

@@ -1,5 +1,7 @@
 import { useState, useEffect, useCallback, type JSX } from 'react';
 
+import { Notice } from '../../v5/foundation/Notice.js';
+
 import type {
   OperatorBridgeAPI,
   StuckShiftSummary,
@@ -7,6 +9,7 @@ import type {
 } from '../../../shared/bridge-api.js';
 import { ReauthDialog, ReauthRequiredNotice } from './ReauthDialog.js';
 import { SIGN_IN_REFUSAL_COPY } from './messages.js';
+import { STUCK_SHIFTS_COPY as COPY } from '../../v5/manager/stuck-shifts/stuck-shifts-copy.js';
 import {
   ForcedCloseDialog,
   type ForcedCloseFormSubmitPayload,
@@ -125,6 +128,8 @@ type DialogState =
 export function StuckShiftSurface({ operator }: Readonly<StuckShiftSurfaceProps>): JSX.Element {
   const [surface, setSurface] = useState<SurfaceState>({ kind: 'loading' });
   const [dialog, setDialog] = useState<DialogState>({ kind: 'idle' });
+  // RT-554 (b): a forced close recorded here but not yet at the server.
+  const [queued, setQueued] = useState(false);
   const focus = useStuckShiftFocus(surface.kind !== 'loading');
   const { afterClose } = focus;
   const openShiftId = dialog.kind === 'open' ? dialog.shift.shift_id : null;
@@ -180,10 +185,12 @@ export function StuckShiftSurface({ operator }: Readonly<StuckShiftSurfaceProps>
       event_id: crypto.randomUUID(),
       shift_id: shift.shift_id,
       reason: payload.forced_close_reason,
+      counted_cash_minor: payload.counted_cash_minor,
       ...(payload.annotation !== undefined ? { annotation: payload.annotation } : {}),
     });
 
     if (res.kind === 'forced_closed') {
+      if (res.delivery === 'queued') setQueued(true);
       closeDialog(shift.shift_id);
       setSurface((prev) => {
         if (prev.kind !== 'list') return prev;
@@ -193,6 +200,9 @@ export function StuckShiftSurface({ operator }: Readonly<StuckShiftSurfaceProps>
     } else if (res.category === 'state_invalid') {
       setDialog({ kind: 'open', shift, submitting: false, refusal: 'changed' });
       void fetchShifts();
+    } else if (res.category === 'close_blocked') {
+      // RT-554 (b): parked sales or drawer cash in flight; the shift is still open.
+      setDialog({ kind: 'open', shift, submitting: false, refusal: 'blocked' });
     } else if (res.category === 'not_closable_here') {
       // RT-554: still open on the backend, and no re-read can change that.
       setDialog({ kind: 'open', shift, submitting: false, refusal: 'notClosable' });
@@ -203,6 +213,12 @@ export function StuckShiftSurface({ operator }: Readonly<StuckShiftSurfaceProps>
 
   return (
     <StuckShiftsPage>
+      {queued && (
+        <Notice tone="info" testId="stuck-shift-queued-notice">
+          {COPY.queuedNotice}
+        </Notice>
+      )}
+
       {surface.kind === 'loading' && <StuckShiftsLoading />}
 
       {surface.kind === 'empty' && <StuckShiftsEmpty focus={focus} />}

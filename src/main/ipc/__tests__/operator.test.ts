@@ -730,3 +730,88 @@ describe('operator:provision-cashier-pin — boundary input validation + delegat
     expect(JSON.stringify(res)).not.toContain('fire');
   });
 });
+
+// ─── RT-554 (b): the forced-close boundary ────────────────────────────────────
+
+describe('operator:force-close-shift — boundary input validation (the manager’s count)', () => {
+  const GOOD = {
+    event_id: 'evt-1',
+    shift_id: 'shift-1',
+    reason: 'cashier_no_show',
+    counted_cash_minor: 50_000,
+  };
+
+  function registerWithForcedClose(forceCloseShift: ReturnType<typeof vi.fn>): IpcHandler {
+    const { ipcMain, handlers } = makeIpcMain();
+    registerOperatorHandlers(ipcMain, {
+      signInHandler: fakeSignInHandler({ kind: 'refused', category: 'invalid_input' }),
+      cashierSignInHandler: fakeCashierSignInHandler(),
+      signOutHandler: fakeSignOutHandler({ kind: 'signed_out' }),
+      rosterHandler: fakeRosterHandler(),
+      sessionManager: fakeSessionManager(null),
+      inactivityMonitor: fakeInactivityMonitor().monitor,
+      auditEmitter: fakeAuditEmitter(),
+      pairingStore: fakePairingStore(),
+      takeoverHandler: fakeTakeoverHandler(),
+      pinManagementHandler: fakePinManagementHandler(),
+      forcedCloseHandler: { forceCloseShift } as unknown as ForcedCloseHandler,
+      stuckShiftsHandler: fakeStuckShiftsHandler(),
+    });
+    return getHandler(handlers, OPERATOR_IPC_CHANNELS.FORCE_CLOSE_SHIFT);
+  }
+
+  it('forwards a well-formed request, count included, and returns the handler answer', async () => {
+    const answer = { kind: 'forced_closed', audit_event_id: 'evt-1', delivery: 'queued' };
+    const forceCloseShift = vi.fn(() => Promise.resolve(answer));
+    const channel = registerWithForcedClose(forceCloseShift);
+
+    expect(await channel(FAKE_EVENT, GOOD)).toEqual(answer);
+    expect(forceCloseShift).toHaveBeenCalledWith(GOOD);
+  });
+
+  it.each([
+    ['missing', undefined],
+    ['negative', -1],
+    ['a float', 12.5],
+    ['a string', '500'],
+    ['null', null],
+    ['NaN', Number.NaN],
+    ['unsafe', Number.MAX_SAFE_INTEGER + 2],
+  ])('refuses invalid_input when the count is %s, without calling the handler', async (_n, bad) => {
+    const forceCloseShift = vi.fn();
+    const channel = registerWithForcedClose(forceCloseShift);
+    const rest = Object.fromEntries(
+      Object.entries(GOOD).filter(([key]) => key !== 'counted_cash_minor'),
+    );
+
+    const res = await channel(
+      FAKE_EVENT,
+      bad === undefined ? rest : { ...rest, counted_cash_minor: bad },
+    );
+
+    expect(res).toEqual({ kind: 'refused', category: 'invalid_input' });
+    expect(forceCloseShift).not.toHaveBeenCalled();
+  });
+
+  it('accepts a zero count (an empty drawer is a count)', async () => {
+    const forceCloseShift = vi.fn(() => Promise.resolve({ kind: 'forced_closed' }));
+    const channel = registerWithForcedClose(forceCloseShift);
+
+    await channel(FAKE_EVENT, { ...GOOD, counted_cash_minor: 0 });
+
+    expect(forceCloseShift).toHaveBeenCalledWith(
+      expect.objectContaining({ counted_cash_minor: 0 }),
+    );
+  });
+
+  it('still refuses a reason outside the closed set, and maps a throw to invalid_input', async () => {
+    const forceCloseShift = vi.fn(() => Promise.reject(new Error('boom')));
+    const channel = registerWithForcedClose(forceCloseShift);
+
+    expect(await channel(FAKE_EVENT, { ...GOOD, reason: 'because' })).toEqual({
+      kind: 'refused',
+      category: 'invalid_input',
+    });
+    expect(await channel(FAKE_EVENT, GOOD)).toEqual({ kind: 'refused', category: 'invalid_input' });
+  });
+});

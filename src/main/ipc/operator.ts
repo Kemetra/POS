@@ -236,19 +236,27 @@ function asUnlockCashierRequest(value: unknown): UnlockCashierRequest | null {
   };
 }
 
+function isForcedCloseReason(value: unknown): value is ForceCloseShiftRequest['reason'] {
+  return typeof value === 'string' && (FORCED_CLOSE_REASONS as readonly string[]).includes(value);
+}
+
+/** RT-554 (b): the manager's count: integer minor units, safe, never negative. */
+function isCountedCashMinor(value: unknown): value is number {
+  return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0;
+}
+
 function asForceCloseShiftRequest(value: unknown): ForceCloseShiftRequest | null {
   if (typeof value !== 'object' || value === null) return null;
   const v = value as Record<string, unknown>;
   if (!hasNonEmptyStringFields(v, ['event_id', 'shift_id'])) return null;
-  if (
-    typeof v['reason'] !== 'string' ||
-    !(FORCED_CLOSE_REASONS as readonly string[]).includes(v['reason'])
-  )
-    return null;
+  const reason = v['reason'];
+  const counted = v['counted_cash_minor'];
+  if (!isForcedCloseReason(reason) || !isCountedCashMinor(counted)) return null;
   const req: ForceCloseShiftRequest = {
     event_id: v['event_id'] as string,
     shift_id: v['shift_id'] as string,
-    reason: v['reason'] as ForceCloseShiftRequest['reason'],
+    reason,
+    counted_cash_minor: counted,
   };
   if (typeof v['annotation'] === 'string') req.annotation = v['annotation'];
   return req;

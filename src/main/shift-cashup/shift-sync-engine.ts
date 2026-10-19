@@ -9,20 +9,22 @@
  *      causal order (`nextFact`) and stops on `idle`, `waiting` (the head is
  *      in backoff) or `blocked` (the head is dead-lettered; nothing behind it
  *      is sent until it is repaired);
- *   3. stops on an `envelope` head (`envelope_pending`): a manager-envelope
- *      repair row is never sent with the device bearer. Sending it is a later
- *      part of RT-17 (the envelope client and drain); until then it waits;
+ *   3. an `envelope` head (a manager's forced close, RT-554, or a repair) is
+ *      never sent with the device bearer: it goes through the client's
+ *      `sendEnvelope` (the current manager / admin's envelope), and without
+ *      that method it stops (`envelope_pending`) and waits;
  *   4. sends the head through the client method of its kind and records the
  *      outcome, then reads the next head:
  *        ok → `markSynced` (a first record or an idempotent replay);
- *        transient / no_connection / device_unauthorized → `recordRetry`,
+ *        transient / no_connection / device_unauthorized / envelope_unauthorized
+ *          (RT-554: sign in again) → `recordRetry`,
  *          next retry after the bounded exponential backoff of the attempt,
  *          and never before the server's `Retry-After`. The head then waits.
  *          A device 401 is a retry, never a dead letter (revoking the device
  *          is the RT-215 detector's call; the client reports it there);
  *        rejected → `markDeadLetter` with the closed-set reason. The head
  *          then blocks;
- *        not_sent (no device token, a re-pair, an envelope row) → no state
+ *        not_sent (no device token, a re-pair, no manager envelope) → no state
  *          change, the tick stops (`held`).
  * A throwing dependency (pairing read, store, clock, client) ends the tick
  * with no further change (`dependency_failure`); so does a transition that
@@ -114,7 +116,7 @@ export interface ShiftSyncEngine {
 
 type RetryResult = Extract<
   ShiftSyncResult,
-  { kind: 'transient' | 'no_connection' | 'device_unauthorized' }
+  { kind: 'transient' | 'no_connection' | 'device_unauthorized' | 'envelope_unauthorized' }
 >;
 type SentResult = Exclude<ShiftSyncResult, { kind: 'not_sent' }>;
 
@@ -209,9 +211,19 @@ export function createShiftSyncEngine(deps: ShiftSyncEngineDeps): ShiftSyncEngin
 
   /** A device 401 is reported once per episode; any other server answer re-arms it. */
   function noteAnswer(result: SentResult): void {
-    if (result.kind === 'no_connection') return;
+    // An envelope 401 says nothing of the device credential.
+    if (result.kind === 'no_connection' || result.kind === 'envelope_unauthorized') return;
     if (result.kind === 'device_unauthorized') deviceUnauthorized.report();
     else deviceUnauthorized.rearm();
+  }
+
+  /** How `fact` is sent: by its kind on the device path, `sendEnvelope` on the envelope path. */
+  function sender(
+    fact: QueuedShiftFact,
+  ): ((input: ShiftSyncSend) => Promise<ShiftSyncResult>) | null {
+    if (fact.authPath === 'device') return (input) => SEND[fact.factKind](deps.client, input);
+    const { sendEnvelope } = deps.client;
+    return sendEnvelope === undefined ? null : (input) => sendEnvelope.call(deps.client, input);
   }
 
   /** Send one due fact; the stop when the tick must end, else null. */
@@ -221,8 +233,9 @@ export function createShiftSyncEngine(deps: ShiftSyncEngineDeps): ShiftSyncEngin
     progress: { sent: number };
   }): Promise<ShiftDrainStop | null> {
     const { terminalId, fact } = input;
-    if (fact.authPath !== 'device') return { kind: 'envelope_pending', seq: fact.seq };
-    const result = await SEND[fact.factKind](deps.client, { terminalId, fact });
+    const send = sender(fact);
+    if (send === null) return { kind: 'envelope_pending', seq: fact.seq };
+    const result = await send({ terminalId, fact });
     // Stopped while the request was in flight: touch nothing local (RT-198).
     if (isStopped()) return STOPPED;
     if (result.kind === 'not_sent') return { kind: 'held', reason: result.reason };

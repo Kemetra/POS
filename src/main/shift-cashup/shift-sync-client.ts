@@ -10,10 +10,11 @@
  * re-serialises a body, so every retry is the same request.
  *
  * Never sent:
- *   • an `envelope` row (a manager-envelope repair of a dead letter; 10919
- *     decision 4). Its body has no `operatorUserId`, and the envelope client
- *     is a later part of RT-17; it is never sent with the device bearer →
- *     `not_sent` `envelope_path`;
+ *   • an `envelope` row (a manager-envelope repair of a dead letter, 10919
+ *     decision 4, or — RT-554 — a manager's forced close). Its body has no
+ *     `operatorUserId`; it is never sent with the device bearer → `not_sent`
+ *     `envelope_path` from the device methods. `sendEnvelope` is its own
+ *     method, below;
  *   • a fact handed to the method of another kind → `not_sent` `kind_mismatch`;
  *   • without a device token (unpaired, revoked, a failing secret-store read)
  *     → `not_sent` `no_device_credential`;
@@ -69,6 +70,7 @@ export interface ShiftSyncSend {
 
 export type ShiftSyncNotSentReason =
   | 'envelope_path'
+  | 'no_envelope_credential'
   | 'kind_mismatch'
   | 'no_device_credential'
   | 'terminal_changed';
@@ -78,6 +80,11 @@ export type ShiftSyncResult =
   | { kind: 'transient'; retryAfterMs?: number }
   | { kind: 'no_connection' }
   | { kind: 'device_unauthorized' }
+  /**
+   * RT-554: the manager envelope was refused (401). A retry, never a dead
+   * letter: signing in again mints a new one (the re-auth refreshes the JWT only).
+   */
+  | { kind: 'envelope_unauthorized' }
   | { kind: 'rejected'; reason: ShiftSyncDeadLetterReason }
   | { kind: 'not_sent'; reason: ShiftSyncNotSentReason };
 
@@ -86,6 +93,11 @@ export interface ShiftSyncClient {
   openShift(input: ShiftSyncSend): Promise<ShiftSyncResult>;
   recordCashMovement(input: ShiftSyncSend): Promise<ShiftSyncResult>;
   closeShift(input: ShiftSyncSend): Promise<ShiftSyncResult>;
+  /**
+   * RT-554: sends ONE `envelope` row (any kind) under the current manager /
+   * admin's envelope. Absent on a client built without an envelope reader.
+   */
+  sendEnvelope?: (input: ShiftSyncSend) => Promise<ShiftSyncResult>;
 }
 
 export interface CreateShiftSyncClientDeps {
@@ -99,6 +111,12 @@ export interface CreateShiftSyncClientDeps {
   getDeviceToken: () => Promise<string | null>;
   /** The current pairing's `terminal_id`, synchronously; null when unpaired. */
   currentTerminalId: () => string | null;
+  /**
+   * RT-554: the CURRENT session's manager / admin envelope (016 seam), read
+   * fresh per send; null when none (no session, a cashier, locked). Absent:
+   * envelope rows are never sent. Never logged, never in a result.
+   */
+  getEnvelope?: () => string | null;
   timeoutMs?: number;
   /** Epoch-ms clock for an HTTP-date `Retry-After`. Defaults to `Date.now`. */
   nowMs?: () => number;
@@ -174,6 +192,9 @@ async function refusalReason(response: Response): Promise<ShiftSyncDeadLetterRea
   return documented ? (code as ShiftSyncDeadLetterReason) : 'rejected';
 }
 
+/** The credential an answer is mapped for: its 401 and 403 mean different things. */
+type SendPath = 'device' | 'envelope';
+
 type TokenRead =
   | { kind: 'token'; token: string }
   | { kind: 'not_sent'; reason: ShiftSyncNotSentReason };
@@ -183,7 +204,11 @@ export function createShiftSyncClient(deps: CreateShiftSyncClientDeps): ShiftSyn
   const timeoutMs = deps.timeoutMs ?? SHIFT_SYNC_REQUEST_TIMEOUT_MS;
   const nowMs = deps.nowMs ?? Date.now;
   // RT-215: every answer of this device-only fetch counts for the detector.
-  const fetchImpl = withDeviceCallObservation(deps.fetch, deps.detector, SHIFT_SYNC_DEVICE_SOURCE);
+  const deviceFetch = withDeviceCallObservation(
+    deps.fetch,
+    deps.detector,
+    SHIFT_SYNC_DEVICE_SOURCE,
+  );
 
   /** The current pairing is `terminalId` right now (fail closed). */
   function onTerminal(terminalId: string): boolean {
@@ -226,19 +251,36 @@ export function createShiftSyncClient(deps: CreateShiftSyncClientDeps): ShiftSyn
     }
   }
 
-  const outcomes: Readonly<
+  type Outcomes = Readonly<
     Record<StatusClass, (response: Response) => ShiftSyncResult | Promise<ShiftSyncResult>>
-  > = {
+  >;
+  const shared: Pick<Outcomes, 'ok' | 'retry_after' | 'transient' | 'rejected'> = {
     ok: () => ({ kind: 'ok' }),
     retry_after: retryAfter,
     transient: () => ({ kind: 'transient' }),
-    unauthorized: () => ({ kind: 'device_unauthorized' }),
-    refused: () => ({ kind: 'rejected', reason: 'cashier_claim_refused' }),
     rejected: async (response) => ({ kind: 'rejected', reason: await refusalReason(response) }),
   };
+  const outcomes: Readonly<Record<SendPath, Outcomes>> = {
+    device: {
+      ...shared,
+      unauthorized: () => ({ kind: 'device_unauthorized' }),
+      refused: () => ({ kind: 'rejected', reason: 'cashier_claim_refused' }),
+    },
+    envelope: {
+      ...shared,
+      unauthorized: () => ({ kind: 'envelope_unauthorized' }),
+      refused: () => ({ kind: 'rejected', reason: 'rejected' }),
+    },
+  };
 
-  async function post(input: { fact: QueuedShiftFact; token: string }): Promise<ShiftSyncResult> {
+  async function post(input: {
+    fact: QueuedShiftFact;
+    token: string;
+    path: SendPath;
+  }): Promise<ShiftSyncResult> {
     const { fact } = input;
+    // An envelope answer is not a device answer: only the device path feeds the RT-215 detector.
+    const fetchImpl = input.path === 'device' ? deviceFetch : deps.fetch;
     let response: Response;
     try {
       response = await fetchImpl(`${root}${shiftFactPath(fact)}`, {
@@ -254,7 +296,7 @@ export function createShiftSyncClient(deps: CreateShiftSyncClientDeps): ShiftSyn
     } catch {
       return { kind: 'no_connection' };
     }
-    return outcomes[classifyStatus(response.status)](response);
+    return outcomes[input.path][classifyStatus(response.status)](response);
   }
 
   /** Why `fact` cannot go out through the method of `kind` on the device path, or null. */
@@ -273,12 +315,33 @@ export function createShiftSyncClient(deps: CreateShiftSyncClientDeps): ShiftSyn
     if (read.kind === 'not_sent') return read;
     // T3: no await between this check and the request.
     if (!onTerminal(input.terminalId)) return { kind: 'not_sent', reason: 'terminal_changed' };
-    return post({ fact: input.fact, token: read.token });
+    return post({ fact: input.fact, token: read.token, path: 'device' });
+  }
+
+  /** The manager envelope; null when none or the read fails. */
+  function readEnvelope(): string | null {
+    try {
+      const envelope = deps.getEnvelope?.() ?? null;
+      return envelope === null || envelope.length === 0 ? null : envelope;
+    } catch {
+      return null;
+    }
+  }
+
+  async function sendEnvelope(input: ShiftSyncSend): Promise<ShiftSyncResult> {
+    if (input.fact.authPath !== 'envelope') return { kind: 'not_sent', reason: 'kind_mismatch' };
+    if (!onTerminal(input.terminalId)) return { kind: 'not_sent', reason: 'terminal_changed' };
+    const envelope = readEnvelope();
+    if (envelope === null) return { kind: 'not_sent', reason: 'no_envelope_credential' };
+    // No await between this check and the request (as on the device path).
+    if (!onTerminal(input.terminalId)) return { kind: 'not_sent', reason: 'terminal_changed' };
+    return post({ fact: input.fact, token: envelope, path: 'envelope' });
   }
 
   return {
     openShift: (input) => send('open', input),
     recordCashMovement: (input) => send('movement', input),
     closeShift: (input) => send('close', input),
+    sendEnvelope,
   };
 }

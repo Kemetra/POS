@@ -47,6 +47,7 @@ import {
   buildCashMovementRequest,
   buildCloseShiftRequest,
   buildEnvelopeRepairRequest,
+  buildForcedCloseShiftRequest,
   buildOpenShiftRequest,
   isoInstant,
   ShiftFactInvalidError,
@@ -128,7 +129,12 @@ export type NextShiftFact =
   | { kind: 'blocked'; seq: number; reason: string };
 
 /** Why a pending fact is retried (stored in `last_error_category`). */
-export type ShiftSyncRetryCategory = 'transient' | 'no_connection' | 'device_unauthorized';
+export type ShiftSyncRetryCategory =
+  | 'transient'
+  | 'no_connection'
+  | 'device_unauthorized'
+  // RT-554: the manager envelope of a forced close was refused (sign in again).
+  | 'envelope_unauthorized';
 
 /**
  * Why a fact is dead-lettered: the contract's terminal error codes
@@ -162,10 +168,28 @@ export interface ShiftSyncDeadLetter extends ShiftSyncTransition {
   reason: ShiftSyncDeadLetterReason;
 }
 
+export interface RecordForcedCloseInput extends RecordShiftFactInput<ShiftCloseFact> {
+  forcedReason: string;
+  /**
+   * Runs INSIDE the transaction, after the close row and the outbox row are
+   * written: a throw rolls both back and propagates. The forced-close handler
+   * writes its `shift.forced_close` audit event here so the close and its audit
+   * are one atomic unit.
+   */
+  within?: () => void;
+}
+
 export interface ShiftCashupRepo {
   recordOpen(input: RecordShiftFactInput<ShiftOpenFact>): RecordedShiftFact;
   recordMovement(input: RecordShiftFactInput<CashMovementFact>): RecordedShiftFact;
   recordClose(input: RecordShiftFactInput<ShiftCloseFact>): RecordedShiftFact;
+  /**
+   * RT-554 — a manager's forced close of the terminal's open shift: the close
+   * row (`close_kind = 'forced'`) and an ORIGINAL manager-envelope outbox row
+   * (never a device row), in one transaction. `forcedReason` is the closed-set
+   * reason code (1–200 characters, no PII).
+   */
+  recordForcedClose(input: RecordForcedCloseInput): RecordedShiftFact;
   findOpenShift(scope: ShiftScope): OpenShiftView | null;
   nextFact(input: { scope: ShiftDrainScope; now: string }): NextShiftFact;
   markSynced(input: ShiftSyncTransition): boolean;
@@ -214,6 +238,11 @@ interface EnqueueInput {
   now: string;
   /** Absent for a fact's original (device-path) row. */
   repairOf?: RepairLineage;
+  /**
+   * An ORIGINAL row's credential path; `device` when absent. A repair is
+   * always `envelope`. RT-554: a forced close is an original `envelope` row.
+   */
+  authPath?: ShiftAuthPath;
 }
 
 interface RepairTargetRow {
@@ -376,7 +405,7 @@ export function createShiftCashupRepo(db: DatabaseHandle): ShiftCashupRepo {
       scope.tenantId,
       scope.branchId,
       scope.terminalId,
-      repairOf === undefined ? 'device' : 'envelope',
+      repairOf === undefined ? (input.authPath ?? 'device') : 'envelope',
       request.idempotencyKey,
       request.body,
       input.now,
@@ -451,7 +480,12 @@ export function createShiftCashupRepo(db: DatabaseHandle): ShiftCashupRepo {
     })();
   }
 
-  function insertClose(input: { fact: ShiftCloseFact; now: string }): void {
+  function insertClose(input: {
+    fact: ShiftCloseFact;
+    now: string;
+    /** `null` = a normal close; the reason code = a forced close. */
+    forcedReason: string | null;
+  }): void {
     const { fact } = input;
     run(
       `INSERT INTO shift_cashup_closes (shift_id, closed_at, closing_user_id, close_kind,
@@ -459,10 +493,12 @@ export function createShiftCashupRepo(db: DatabaseHandle): ShiftCashupRepo {
          pay_in_total_minor, pay_out_total_minor, expected_cash_minor, counted_cash_minor,
          variance_minor, sale_count, cash_refund_return_refs_json, variance_approved_by_user_id,
          created_at)
-       VALUES (?, ?, ?, 'normal', NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       fact.shiftId,
       fact.closedAt,
       fact.closingUserId,
+      input.forcedReason === null ? 'normal' : 'forced',
+      input.forcedReason,
       fact.openingFloatMinor,
       fact.cashSalesTotalMinor,
       fact.cashRefundsTotalMinor,
@@ -487,13 +523,36 @@ export function createShiftCashupRepo(db: DatabaseHandle): ShiftCashupRepo {
         currencyCode: open.currencyCode,
       });
       checkCarriedTotals({ open, fact });
-      insertClose({ fact, now });
+      insertClose({ fact, now, forcedReason: null });
       return enqueue({
         scope,
         ref: { factKind: 'close', shiftId: fact.shiftId, movementId: null },
         request,
         now,
       });
+    })();
+  }
+
+  function recordForcedClose(input: RecordForcedCloseInput): RecordedShiftFact {
+    const { scope, now } = input;
+    return db.transaction(() => {
+      const open = requireOpenShift({ scope, shiftId: input.fact.shiftId });
+      const { fact, request } = buildForcedCloseShiftRequest({
+        fact: input.fact,
+        currencyCode: open.currencyCode,
+        forcedReason: input.forcedReason,
+      });
+      checkCarriedTotals({ open, fact });
+      insertClose({ fact, now, forcedReason: input.forcedReason });
+      const recorded = enqueue({
+        scope,
+        ref: { factKind: 'close', shiftId: fact.shiftId, movementId: null },
+        request,
+        now,
+        authPath: 'envelope',
+      });
+      input.within?.();
+      return recorded;
     })();
   }
 
@@ -552,6 +611,7 @@ export function createShiftCashupRepo(db: DatabaseHandle): ShiftCashupRepo {
     recordOpen,
     recordMovement,
     recordClose,
+    recordForcedClose,
     findOpenShift,
     nextFact,
     markSynced,

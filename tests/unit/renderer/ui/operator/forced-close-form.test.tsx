@@ -9,6 +9,7 @@ import {
   type ForcedCloseReason,
 } from '../../../../../src/shared/audit/payload-schemas.js';
 import { STUCK_SHIFTS_COPY } from '../../../../../src/renderer/v5/manager/stuck-shifts/stuck-shifts-copy.js';
+import { SHIFT_COPY } from '../../../../../src/renderer/v5/shift/shift-copy.js';
 
 /**
  * 004-operator-session T084 — ForcedCloseForm reason picker tests.
@@ -36,7 +37,11 @@ afterEach(() => {
 });
 
 function setup(
-  onSubmit?: (payload: { forced_close_reason: ForcedCloseReason; annotation?: string }) => void,
+  onSubmit?: (payload: {
+    forced_close_reason: ForcedCloseReason;
+    annotation?: string;
+    counted_cash_minor: number;
+  }) => void,
 ) {
   const handler = onSubmit ?? vi.fn();
   render(<ForcedCloseForm onSubmit={handler} onCancel={vi.fn()} />);
@@ -98,6 +103,7 @@ describe('ForcedCloseForm — submit payload correctness', () => {
     const user = userEvent.setup({ delay: null });
     const { onSubmit } = setup(vi.fn());
     await user.click(screen.getByDisplayValue('cashier_no_show'));
+    await user.type(screen.getByLabelText(SHIFT_COPY.countLabel), '500');
     await user.click(screen.getByRole('button', COMMIT));
     expect(onSubmit).toHaveBeenCalledOnce();
     const payload = (onSubmit as ReturnType<typeof vi.fn>).mock.calls[0][0] as {
@@ -107,12 +113,22 @@ describe('ForcedCloseForm — submit payload correctness', () => {
     expect(payload.forced_close_reason).toBe('cashier_no_show');
   });
 
+  it('payload.counted_cash_minor is the typed count in integer minor units', async () => {
+    const user = userEvent.setup({ delay: null });
+    const { onSubmit } = setup(vi.fn());
+    await user.click(screen.getByDisplayValue('cashier_no_show'));
+    await user.type(screen.getByLabelText(SHIFT_COPY.countLabel), '1234.5');
+    await user.click(screen.getByRole('button', COMMIT));
+    expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({ counted_cash_minor: 123_450 }));
+  });
+
   it('annotation text appears in payload.annotation, not in forced_close_reason', async () => {
     const user = userEvent.setup({ delay: null });
     const { onSubmit } = setup(vi.fn());
     await user.click(screen.getByDisplayValue('other'));
-    const annotationInput = screen.getByRole('textbox');
+    const annotationInput = screen.getByRole('textbox', { name: STUCK_SHIFTS_COPY.note });
     await user.type(annotationInput, 'Cashier left early without notice');
+    await user.type(screen.getByLabelText(SHIFT_COPY.countLabel), '500');
     await user.click(screen.getByRole('button', COMMIT));
     expect(onSubmit).toHaveBeenCalledOnce();
     const payload = (onSubmit as ReturnType<typeof vi.fn>).mock.calls[0][0] as {
@@ -128,6 +144,7 @@ describe('ForcedCloseForm — submit payload correctness', () => {
     const user = userEvent.setup({ delay: null });
     const { onSubmit } = setup(vi.fn());
     await user.click(screen.getByDisplayValue('terminal_failure'));
+    await user.type(screen.getByLabelText(SHIFT_COPY.countLabel), '500');
     await user.click(screen.getByRole('button', COMMIT));
     const payload = (onSubmit as ReturnType<typeof vi.fn>).mock.calls[0][0] as {
       forced_close_reason: ForcedCloseReason;
@@ -141,6 +158,7 @@ describe('ForcedCloseForm — submit payload correctness', () => {
     const user = userEvent.setup({ delay: null });
     const { onSubmit } = setup(vi.fn());
     await user.click(screen.getByDisplayValue('cashier_illness'));
+    await user.type(screen.getByLabelText(SHIFT_COPY.countLabel), '500');
     await user.click(screen.getByRole('button', COMMIT));
     const payload = (onSubmit as ReturnType<typeof vi.fn>).mock.calls[0][0] as Record<
       string,

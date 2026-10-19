@@ -386,12 +386,24 @@ export interface ForceCloseShiftRequest {
   reason: ForcedCloseReason;
   /** Optional free-text annotation for support context (PR-1: no PIN/PII). */
   annotation?: string;
+  /**
+   * RT-554 (b): the manager's blind count of the drawer, in integer minor units
+   * (>= 0). The cash-up (expected cash, variance) is computed in main from local
+   * truth and never returned.
+   */
+  counted_cash_minor: number;
 }
 
 export interface ForceCloseShiftResponse {
   kind: 'forced_closed';
   /** Echoes the caller-supplied event_id for idempotency confirmation. */
   audit_event_id: string;
+  /**
+   * RT-554 (b): `sent` - Backend-Core has the forced close; `queued` - recorded
+   * on this terminal and waiting to be sent (offline, or no manager envelope
+   * right now). Never an amount.
+   */
+  delivery: 'sent' | 'queued';
 }
 
 /**

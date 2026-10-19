@@ -253,6 +253,11 @@ export type Fr025MandatoryAttribute = (typeof FR025_MANDATORY_ATTRIBUTES)[number
  * device that opened it (pos-shifts `ShiftNotFound`), and this device holds no
  * such shift. A truthful, distinct answer — never the generic `state_invalid`
  * ("state changed"). Names no shift id and no amount.
+ *
+ * `close_blocked` (RT-554 (b)) — forced close of this terminal's own shift
+ * refused because the terminal still has parked sales or drawer cash in flight
+ * (a settled payment not yet a sale, a started refund payout). Resolve them,
+ * then close. Names no count and no amount.
  */
 export const REFUSAL_CATEGORIES = [
   'invalid_input',
@@ -266,6 +271,7 @@ export const REFUSAL_CATEGORIES = [
   'terminal_has_unresolved_payment',
   'payment_in_progress',
   'not_closable_here',
+  'close_blocked',
 ] as const;
 export type RefusalCategory = (typeof REFUSAL_CATEGORIES)[number];
 
