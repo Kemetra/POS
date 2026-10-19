@@ -486,6 +486,20 @@ describe('operator:emit-audit-event — main-only categories (RT-117 §A4 L1)', 
     'operator.offline_grant.invalidated',
     // RT-551: the sale-number day-rule switch is written only by finalize.
     'sale.number_day_rule.switched',
+    // RT-15 S2/S4 — the return facts are written only by main's returns-audit
+    // (journal, Backend-Core answer, payout, drawer kick, slip). A forged row
+    // would fake a confirmed return or a paid-out refund.
+    'sale.return.attempted',
+    'sale.return.refused',
+    'sale.return.confirmed',
+    'sale.return.payout_ready',
+    'sale.return.payout_started',
+    'sale.return.drawer_opened',
+    'sale.return.drawer_failed',
+    'sale.return.paid_out',
+    'sale.return.slip_printed',
+    'sale.return.slip_print_failed',
+    'sale.return.slip_reprinted',
   ])('refuses a renderer-forged %s and never emits it', async (action_category) => {
     const emit = vi.fn();
     const { emitAuditEvent } = setup({ auditEmitter: fakeAuditEmitter({ emit }) });
