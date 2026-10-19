@@ -35,7 +35,7 @@ export const STUCK_SHIFTS_COPY = Object.freeze({
    * opened on another device; Backend-Core resolves a shift only for the device
    * that opened it), or the cash-up is off here. The shift is closed by cash-up
    * on the device that opened it. The list is re-read (a shift closed meanwhile on
-   * its opening terminal then leaves it). Needs owner copy sign-off (UX-13).
+   * its opening terminal then leaves it). Owner-approved copy, 2026-10-19 (RT-554).
    */
   notClosableHere:
     'لا يمكن الإغلاق الإجباري لهذه الوردية من هنا. تُغلق بجرد الدرج على الجهاز الذي فتحها.',
