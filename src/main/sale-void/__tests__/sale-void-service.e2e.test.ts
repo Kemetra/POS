@@ -29,6 +29,8 @@ import {
 } from '../../operator/manager-approval-service.js';
 import type { OperatorSessionRecord } from '../../operator/session-manager.js';
 import { bindSalesRepository } from '../../sales/repositories/sales.repository.js';
+import { createSaleAccessPolicy } from '../../sales/sale-access-policy.js';
+import { resolveSessionScope } from '../../operator/resolve-session-scope.js';
 import type { AuditEvent } from '../../../shared/audit/event-shape.js';
 import type { SaleVoidRequestResponse } from '../../../shared/sale-void/types.js';
 import { createSaleVoidAudit } from '../sale-void-audit.js';
@@ -157,6 +159,10 @@ function composeVoidService(db: ReturnType<typeof handleFor>, emitter: AuditSink
     isEnabled: () => enabled,
     getSession: () => (current === null ? null : toVoidSession(current, TERMINAL, envelope)),
     isSessionLocked: () => locked,
+    access: createSaleAccessPolicy({
+      getCurrentSession: () => resolveSessionScope(current, TERMINAL),
+      isSessionLocked: () => locked,
+    }),
     sales: bindSalesRepository(db),
     repo: failableJournal(journal),
     hasLiveReturn: (saleId) => returnedSales.has(saleId),

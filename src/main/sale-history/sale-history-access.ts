@@ -12,8 +12,8 @@
  *   • the credential follows the role: the envelope for a manager/admin, the
  *     device token + the session's own cashier admission for a cashier;
  *   • a cashier is shown a sale only when its recorded operator is the
- *     cashier's own backend user id. A missing or different id is the
- *     non-disclosing `sale_not_found`, audited as `not_owner`.
+ *     cashier's own backend user id. A missing or different id refuses as
+ *     `role_denied` (RT-741, `SALE_OWNERSHIP_REFUSAL`), audited as `not_owner`.
  *
  * The credential is resolved once per request and bound to the admitted
  * session: `stillCurrent` refuses an answer that lands after the session

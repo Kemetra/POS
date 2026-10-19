@@ -478,3 +478,34 @@ describe('SalesLookup — reprint (G6-SalesReprintSent / G6-SalesReprintFailed)'
     await expectNoAxeViolations(document.body);
   });
 });
+
+describe('SalesLookup — not allowed (RT-741)', () => {
+  const DENIED = { kind: 'refused', reason: 'role_denied' } as const;
+
+  it("says «not allowed», not «not found», when a cashier asks for another operator's sale", async () => {
+    renderLookup(salesBridge(() => Promise.resolve(DENIED)));
+    search();
+    const notice = await screen.findByTestId('sale-not-allowed');
+    expect(notice).toHaveTextContent(C.notAllowed);
+    expect(notice).toHaveAttribute('role', 'status');
+    expect(screen.queryByTestId('sale-not-found')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('sale-result')).not.toBeInTheDocument();
+  });
+
+  it('a later hit clears the notice', async () => {
+    const answers = [DENIED, FOUND];
+    renderLookup(salesBridge(() => Promise.resolve(answers.shift() ?? DENIED)));
+    search();
+    await screen.findByTestId('sale-not-allowed');
+    fireEvent.click(searchButton());
+    await screen.findByTestId('sale-result');
+    expect(screen.queryByTestId('sale-not-allowed')).not.toBeInTheDocument();
+  });
+
+  it('has no axe violations', async () => {
+    const { container } = renderLookup(salesBridge(() => Promise.resolve(DENIED)));
+    search();
+    expect(await screen.findByTestId('sale-not-allowed')).toBeInTheDocument();
+    await expectNoAxeViolations(container);
+  });
+});

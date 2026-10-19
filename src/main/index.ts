@@ -2429,6 +2429,9 @@ singleInstanceReady
       isEnabled: () => parseFeatureFlags(process.env).saleVoid,
       approvals: managerApprovals,
       auditSink: auditEmitter,
+      // RT-741: `saleVoid.lookup` runs the shared RT-546 gate; its refusals are
+      // `sale.access.refused`, written like the sales and receipts bridges' own.
+      accessAudit: createSaleAuditEmitter({ sink: { write: forwardAuditEvent } }),
       logger: mainLogger,
       now: () => new Date().toISOString(),
     });

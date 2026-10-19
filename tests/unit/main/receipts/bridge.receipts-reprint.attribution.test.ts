@@ -211,13 +211,13 @@ describe('T412 — receipts.reprint role rule (RT-546 / OD-534-2)', () => {
     expect(res.kind).toBe('ok');
   });
 
-  it("a cashier cannot reprint another operator's sale (sale_not_found, no print)", async () => {
+  it("a cashier cannot reprint another operator's sale (role_denied, no print)", async () => {
     const events: SaleAuditEvent[] = [];
     const bridge = makeBridge(db, events, { ...REPRINTER, role: 'cashier' });
 
     const res = await bridge.reprint({ sale_id: 'sale-1' as SaleId, idempotency_key: 'idem-1' });
 
-    expect(res).toEqual({ kind: 'refused', reason: 'sale_not_found' });
+    expect(res).toEqual({ kind: 'refused', reason: 'role_denied' });
     const rows = bindPrintEventsRepository(makeSqlJsHandle(db)).readBySale('sale-1');
     expect(rows.filter((r) => r.purpose === 'reprint')).toEqual([]);
   });

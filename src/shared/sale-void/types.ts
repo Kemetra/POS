@@ -54,6 +54,11 @@ export const LOCAL_VOID_REFUSALS = [
   'invalid_input',
   /** No sale of this terminal has that number. */
   'sale_not_found',
+  /**
+   * RT-741: a cashier asked for another operator's sale (the shared RT-546
+   * gate), or the session's role is not allowed. Nothing else is answered.
+   */
+  'role_denied',
   /** The sale's business day has passed: use a return. */
   'not_same_day',
   /** The sale already has a live void (requested, sent or confirmed). */

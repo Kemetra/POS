@@ -3,7 +3,7 @@
  * and the reprint: credential → `readSaleHistoryDetail` → session re-check →
  * the server answered the sale asked for → OD-534-1 ownership in main (a
  * cashier sees only a sale whose recorded operator is their own backend user,
- * else the non-disclosing `sale_not_found`, audited) → this terminal's own
+ * else `role_denied` (RT-741), audited) → this terminal's own
  * record joined (`local_sale_id`). Online only: no credential is `unavailable`.
  */
 
@@ -12,6 +12,7 @@ import type {
   SaleHistoryRefusalReason,
 } from '../../shared/sale-history/types.js';
 import type { SaleId } from '../../shared/sales/types.js';
+import { SALE_OWNERSHIP_REFUSAL } from '../sales/sale-access-policy.js';
 import type { Admitted, ResolvedCredential, SaleHistoryAccess } from './sale-history-access.js';
 import type { ReadOutcome, SaleHistoryClient } from './sale-history-client.js';
 import type { SaleHistoryLocalReads } from './sale-history-local.js';
@@ -51,7 +52,7 @@ export function createDetailReader(deps: DetailReaderDeps): DetailReader {
     const { detail, operator_ref: operatorRef } = outcome.detail;
     if (detail.summary.sale_ref !== saleRef) return refusal('unavailable');
     if (!access.owns(admitted, resolved, { saleRef, operatorRef }))
-      return refusal('sale_not_found');
+      return refusal(SALE_OWNERSHIP_REFUSAL);
     const localId = deps.local.localSaleIds(admitted.scope, [saleRef]).get(saleRef) ?? null;
     const summary = { ...detail.summary, local_sale_id: localId as SaleId | null };
     return { ok: true, resolved, detail: { ...detail, summary } };
