@@ -257,6 +257,25 @@ describe('StuckShiftSurface — duration formatting', () => {
 
 // ─── Dialog flow ──────────────────────────────────────────────────────────────
 
+/**
+ * Renders the surface over `op` (default: SHIFT_0 listed, and the refusal
+ * `category` answered) and force-closes SHIFT_0.
+ */
+async function submitRefusedClose(
+  category: 'not_closable_here',
+  op: Pick<OperatorBridgeAPI, 'listStuckShifts' | 'forceCloseShift'> = makeOperator(
+    { kind: 'stuck_shifts', shifts: [SHIFT_0] },
+    { kind: 'refused', category },
+  ),
+): Promise<Pick<OperatorBridgeAPI, 'listStuckShifts' | 'forceCloseShift'>> {
+  render(<StuckShiftSurface operator={op} />);
+  await waitFor(() => screen.getByText('Nour Al-Hassan'));
+  await userEvent.click(cardButton('shift-111'));
+  await userEvent.click(screen.getByRole('radio', { name: COPY.reasons.cashier_no_show }));
+  await userEvent.click(dialogButton(COPY.close));
+  return op;
+}
+
 describe('StuckShiftSurface — dialog flow', () => {
   it('clicking a card opens the forced-close dialog', async () => {
     const op = makeOperator({ kind: 'stuck_shifts', shifts: [SHIFT_0] });
@@ -350,6 +369,42 @@ describe('StuckShiftSurface — dialog flow', () => {
       expect(screen.getByTestId('stuck-shift-submit-error')).toHaveTextContent(COPY.changed);
     });
     // Refetch should have been called (initial + refetch = 2)
+    expect(op.listStuckShifts).toHaveBeenCalledTimes(2);
+  });
+
+  // Local absence cannot prove the backend shift is still open (the opening terminal
+  // may have closed it since the list loaded), so the list is re-read, as for state_invalid.
+  it('RT-554: not_closable_here shows the clear «cannot close from this device» copy, re-reads the list, never «state changed»', async () => {
+    const op = await submitRefusedClose('not_closable_here');
+
+    const error = await screen.findByTestId('stuck-shift-submit-error');
+    expect(error).toHaveTextContent(COPY.notClosableHere);
+    for (const other of [COPY.changed, COPY.failed]) {
+      expect(error).not.toHaveTextContent(other);
+    }
+    await waitFor(() => {
+      expect(op.listStuckShifts).toHaveBeenCalledTimes(2);
+    });
+    // Still stuck on the backend: the re-read lists it again.
+    expect(await screen.findByTestId('stuck-shift-card-shift-111')).toBeInTheDocument();
+  });
+
+  it('RT-554: a shift closed meanwhile on its opening terminal leaves the list on the re-read', async () => {
+    const op = {
+      listStuckShifts: vi
+        .fn()
+        .mockResolvedValueOnce({ kind: 'stuck_shifts', shifts: [SHIFT_0] })
+        .mockResolvedValueOnce({ kind: 'stuck_shifts', shifts: [] }),
+      forceCloseShift: vi.fn(() =>
+        Promise.resolve({ kind: 'refused', category: 'not_closable_here' }),
+      ),
+    } as unknown as Pick<OperatorBridgeAPI, 'listStuckShifts' | 'forceCloseShift'>;
+
+    await submitRefusedClose('not_closable_here', op);
+
+    await waitFor(() => {
+      expect(screen.queryByTestId('stuck-shift-card-shift-111')).toBeNull();
+    });
     expect(op.listStuckShifts).toHaveBeenCalledTimes(2);
   });
 

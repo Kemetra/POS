@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { randomUUID } from 'node:crypto';
+import type { Logger } from 'pino';
 
 import { ForcedCloseHandler } from '../../../../src/main/operator/forced-close-handler.js';
 import type { ForcedCloseHandlerDeps } from '../../../../src/main/operator/forced-close-handler.js';
@@ -501,22 +502,63 @@ describe('T085 — forced-close handler audit event shape', () => {
     db.close();
   });
 
-  it('unknown shift returns state_invalid', async () => {
-    const db = freshDb();
-    const captured: CapturedEvent[] = [];
-    const handler = makeHandler(db, makeSession({ role: 'manager' }), captured);
+  // RT-554 — a stuck shift the local DB does not hold (the list comes from the
+  // backend; the shift was opened on another device). The contract resolves a
+  // shift only for the device that opened it, so this device cannot close it:
+  // refused as `not_closable_here`, never the generic `state_invalid`.
+  describe('RT-554: a stuck shift the local DB does not hold', () => {
+    /** Force-closes a shift id the local DB does not hold, as `role`. */
+    async function forceCloseUnknown(
+      role: OperatorSessionRecord['role'],
+      extra: { logger?: Logger; captured?: CapturedEvent[] } = {},
+    ): Promise<{ result: unknown; captured: CapturedEvent[] }> {
+      const db = freshDb();
+      const captured = extra.captured ?? [];
+      const handler = new ForcedCloseHandler({
+        db: bindHandle(db),
+        sessionManager: { getCurrent: () => makeSession({ role }) },
+        pairingStore: { getStatus: () => Promise.resolve(makePairingStatus()) },
+        auditEmitter: makeAuditEmitter(captured, db),
+        ...(extra.logger === undefined ? {} : { logger: extra.logger }),
+      });
+      const result = await handler.forceCloseShift({
+        shift_id: 'shift-secret-id-123',
+        reason: 'other',
+        annotation: 'private-note-xyz',
+        event_id: 'evt-secret-456',
+      });
+      db.close();
+      return { result, captured };
+    }
 
-    const result = await handler.forceCloseShift({
-      shift_id: 'shift-does-not-exist',
-      reason: 'takeover_supersession',
-      event_id: randomUUID(),
+    it.each(['manager', 'admin'] as const)(
+      '%s is refused not_closable_here and nothing is written',
+      async (role) => {
+        const { result, captured } = await forceCloseUnknown(role);
+
+        expect(result).toEqual({ kind: 'refused', category: 'not_closable_here' });
+        expect(captured).toHaveLength(0);
+      },
+    );
+
+    it('a cashier is refused role_mismatch BEFORE the shift is looked up', async () => {
+      const { result } = await forceCloseUnknown('cashier');
+
+      expect(result).toEqual({ kind: 'refused', category: 'role_mismatch' });
     });
 
-    expect(isOperatorRefusal(result)).toBe(true);
-    if (isOperatorRefusal(result)) {
-      expect(result.category).toBe('state_invalid');
-    }
-    db.close();
+    it('the log names the category only (no reason, note or ids)', async () => {
+      const lines: unknown[] = [];
+      const logger = { info: (...a: unknown[]) => lines.push(a) } as unknown as Logger;
+
+      await forceCloseUnknown('manager', { logger });
+
+      const logged = JSON.stringify(lines);
+      expect(logged).toContain('not_closable_here');
+      for (const secret of ['shift-secret-id-123', 'private-note-xyz', 'evt-secret-456']) {
+        expect(logged).not.toContain(secret);
+      }
+    });
   });
 
   it('result contains audit_event_id matching the provided event_id', async () => {

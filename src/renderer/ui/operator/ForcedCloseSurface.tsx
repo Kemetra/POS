@@ -193,6 +193,12 @@ export function StuckShiftSurface({ operator }: Readonly<StuckShiftSurfaceProps>
     } else if (res.category === 'state_invalid') {
       setDialog({ kind: 'open', shift, submitting: false, refusal: 'changed' });
       void fetchShifts();
+    } else if (res.category === 'not_closable_here') {
+      // RT-554: this terminal does not hold the shift. Local absence cannot prove the
+      // backend shift is still open (its opening terminal may have closed it since
+      // the list loaded), so the list is re-read, as for `state_invalid`.
+      setDialog({ kind: 'open', shift, submitting: false, refusal: 'notClosable' });
+      void fetchShifts();
     } else {
       setDialog({ kind: 'open', shift, submitting: false, refusal: 'failed' });
     }

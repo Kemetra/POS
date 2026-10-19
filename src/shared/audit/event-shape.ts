@@ -247,6 +247,12 @@ export type Fr025MandatoryAttribute = (typeof FR025_MANDATORY_ATTRIBUTES)[number
  *
  * `payment_in_progress` (RT-444, RT-116 §3.4) — sign-out refused: the current
  * session holds a started payment with live tender.
+ *
+ * `not_closable_here` (RT-554) — forced close refused: the stuck-shift list
+ * comes from Backend-Core, but Backend-Core resolves a shift only for the
+ * device that opened it (pos-shifts `ShiftNotFound`), and this device holds no
+ * such shift. A truthful, distinct answer — never the generic `state_invalid`
+ * ("state changed"). Names no shift id and no amount.
  */
 export const REFUSAL_CATEGORIES = [
   'invalid_input',
@@ -259,6 +265,7 @@ export const REFUSAL_CATEGORIES = [
   'reauth_required',
   'terminal_has_unresolved_payment',
   'payment_in_progress',
+  'not_closable_here',
 ] as const;
 export type RefusalCategory = (typeof REFUSAL_CATEGORIES)[number];
 
