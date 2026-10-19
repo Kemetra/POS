@@ -24,6 +24,8 @@ export const SALES_COPY = Object.freeze({
   reprint: 'إعادة طباعة الإيصال',
   reprinting: 'جارٍ إعادة الطباعة…',
   reprintSent: 'أُرسل الإيصال للطابعة.',
+  // RT-249 (D1) — the cashier's quick reprint of their own last sale, on the Sale.
+  reprintLast: 'إعادة طباعة آخر إيصال',
   reprintFailed: 'تعذّرت إعادة طباعة الإيصال. حاول مرة أخرى.',
   // RT-541 / RT-534 comment 12023: every local history answer is this
   // device's sales only (`coverage: 'this_device_only'`); never "the store".

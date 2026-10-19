@@ -13,6 +13,7 @@ import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom/vitest';
 
 import { installViewport } from '../../../../src/renderer/v5/__tests__/__helpers__/viewport-bands.js';
+import { useFeatureFlagsStore } from '../../../../src/renderer/stores/feature-flags-store.js';
 import {
   installManagerScreenApi,
   renderAppAt,
@@ -110,12 +111,25 @@ describe('one frame — every former AppShell route renders in the v5 frame', ()
     ).toBeInTheDocument();
   });
 
-  it('a cashier who opens /app/dashboard sees the refusal inside the frame, with only the Sale in the nav', async () => {
+  it('a cashier who opens /app/dashboard sees the refusal inside the frame, with only the Sale and Sales in the nav (D1)', async () => {
     signInAs('cashier');
+    useFeatureFlagsStore.setState({ saleFinalization: true });
     renderAppAt('/app/dashboard');
     const v5 = await frame();
     expect(screen.queryByTestId('app-shell')).not.toBeInTheDocument();
     expect(within(v5).getByText('لوحة المتابعة متاحة للمدير فقط.')).toBeInTheDocument();
+    const nav = within(v5).getByRole('navigation', { name: 'التنقل الرئيسي' });
+    expect(
+      within(nav)
+        .getAllByRole('link')
+        .map((l) => l.textContent),
+    ).toEqual(['نقطة البيع', 'المبيعات']);
+  });
+
+  it('with saleFinalization off the cashier nav is the Sale alone: main registers no sales bridge', async () => {
+    signInAs('cashier');
+    renderAppAt('/app/dashboard');
+    const v5 = await frame();
     const nav = within(v5).getByRole('navigation', { name: 'التنقل الرئيسي' });
     expect(
       within(nav)

@@ -1,6 +1,7 @@
 import type { JSX } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import type { ShellNavEntryId } from '../../../../specs/003-pos-ui-shell/contracts/shell-routes';
+import { useFeatureFlagsStore } from '../../stores/feature-flags-store';
 import { useOperatorSessionStore } from '../../stores/operator-session-store';
 import { Icon } from '../../icons/Icon';
 import { PharmacyCross } from '../brand/PharmacyCross';
@@ -37,7 +38,8 @@ export function V5Navigation(): JSX.Element {
   const session = useOperatorSessionStore((s) =>
     s.state.kind === 'signedIn' ? s.state.session : undefined,
   );
-  const entries = visibleNavEntries(session?.role);
+  const saleFinalization = useFeatureFlagsStore((s) => s.saleFinalization);
+  const entries = visibleNavEntries(session?.role, saleFinalization);
   const { pathname } = useLocation();
 
   return (

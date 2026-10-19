@@ -275,7 +275,7 @@ describe('OneFrameProof — renders the real router in the one frame', () => {
     );
   });
 
-  it('a cashier sees only the Sale in the nav', async () => {
+  it('a cashier sees only the Sale in the nav: the proof profile has saleFinalization off', async () => {
     window.location.hash = '#/dev/one-frame-proof?role=cashier';
     render(<OneFrameProof />);
     const frame = await screen.findByTestId('v5-frame');

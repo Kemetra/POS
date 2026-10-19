@@ -9,6 +9,7 @@ import '@testing-library/jest-dom/vitest';
 import { expectNoAxeViolations } from '../../test-utils/axe-config';
 import { useOperatorSessionStore } from '../../stores/operator-session-store';
 import type { Role } from '../../../shared/operator/role';
+import { SalesWorkspace } from '../../routes/app/SalesWorkspace';
 import { V5Frame } from '../frame/V5Frame';
 import { Dialog } from '../foundation/Dialog';
 import { V5_SALE_PATH, v5NavEntries, visibleNavEntries } from '../frame/nav-model';
@@ -105,11 +106,35 @@ describe('V5Frame — the one application frame for v5 screens', () => {
     expect(within(nav).queryByRole('link', { name: 'سجل المراجعة' })).not.toBeInTheDocument();
   });
 
-  // RT-241 / OD-6: the Dashboard refuses the cashier role, and Sales, Inventory
-  // and Settings are placeholders (freeze 15 §1: manager/admin only), so the
-  // cashier nav holds the Sale alone. Settings carried the only theme toggle on
-  // a cashier path (OD-4). Navigation only: no route guard changes.
-  it('a cashier sees only the Sale (OD-6), and no theme toggle', () => {
+  // RT-241 / OD-6, amended by D1 (RT-536, 2026-10-16; RT-249 scope note): the
+  // Dashboard refuses the cashier role, and Inventory is a placeholder, so the
+  // cashier nav holds the Sale and «المبيعات» (their own sales, RT-546). Audit
+  // and Settings stay hidden (Settings carried the only theme toggle on a
+  // cashier path, OD-4). Navigation only: no route guard changes.
+  it('a cashier sees the Sale and Sales only (OD-6 amended by D1), and no theme toggle', () => {
+    useFeatureFlagsStore.setState({ saleFinalization: true });
+    signIn('cashier');
+    renderFrame();
+    const nav = screen.getByRole('navigation', { name: 'التنقل الرئيسي' });
+    expect(
+      within(nav)
+        .getAllByRole('link')
+        .map((link) => link.textContent),
+    ).toEqual(['نقطة البيع', 'المبيعات']);
+    expect(within(nav).getByRole('link', { name: 'المبيعات' })).toHaveAttribute(
+      'href',
+      '/app/sales',
+    );
+    for (const hidden of ['لوحة المتابعة', 'المرتجعات', 'سجل المراجعة', 'المخزون', 'الإعدادات']) {
+      expect(within(nav).queryByRole('link', { name: hidden })).not.toBeInTheDocument();
+    }
+    expect(screen.queryByRole('button', { name: /theme|السمة|المظهر/i })).not.toBeInTheDocument();
+  });
+
+  // Main registers sales.* / receipts.* / saleHistory.* only when saleFinalization
+  // is on (index.ts), so with it off (the default and the rollback profile) the
+  // cashier has no «المبيعات»: the entry would lead to a screen whose reads reject.
+  it('a cashier gets no «المبيعات» while saleFinalization is off (the default)', () => {
     signIn('cashier');
     renderFrame();
     const nav = screen.getByRole('navigation', { name: 'التنقل الرئيسي' });
@@ -118,8 +143,28 @@ describe('V5Frame — the one application frame for v5 screens', () => {
         .getAllByRole('link')
         .map((link) => link.textContent),
     ).toEqual(['نقطة البيع']);
-    expect(within(nav).queryByRole('link', { name: 'الإعدادات' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /theme|السمة|المظهر/i })).not.toBeInTheDocument();
+  });
+
+  // D1 (RT-249): the entry the cashier now sees leads to a real, accessible screen.
+  it('«المبيعات» is current for a cashier on /app/sales, and the screen is axe-clean in the frame', async () => {
+    useFeatureFlagsStore.setState({ saleFinalization: true });
+    signIn('cashier');
+    render(
+      <MemoryRouter initialEntries={['/app/sales']}>
+        <V5Frame>
+          <SalesWorkspace />
+        </V5Frame>
+      </MemoryRouter>,
+    );
+    const nav = screen.getByRole('navigation', { name: 'التنقل الرئيسي' });
+    expect(within(nav).getByRole('link', { name: 'المبيعات' })).toHaveAttribute(
+      'aria-current',
+      'page',
+    );
+    expect(within(nav).getByRole('link', { name: 'نقطة البيع' })).not.toHaveAttribute(
+      'aria-current',
+    );
+    await expectNoAxeViolations(document.body);
   });
 
   // RT-701 (D8): Audit and Settings are hidden for every role, so five remain.
@@ -427,15 +472,20 @@ describe('v5 nav model', () => {
   it.each(['cashier', 'manager', 'admin', undefined] as const)(
     'never shows Audit or Settings (role: %s)',
     (role) => {
-      const ids = visibleNavEntries(role).map((e) => e.id);
+      const ids = visibleNavEntries(role, true).map((e) => e.id);
       expect(ids).not.toContain('audit');
       expect(ids).not.toContain('settings');
     },
   );
 
+  it("the flag gates only the cashier's «المبيعات»", () => {
+    expect(visibleNavEntries('cashier', false).map((e) => e.id)).toEqual(['cart']);
+    expect(visibleNavEntries('cashier', true).map((e) => e.id)).toEqual(['cart', 'sales']);
+  });
+
   it('keeps the manager and admin nav otherwise unchanged', () => {
     for (const role of ['manager', 'admin'] as const) {
-      expect(visibleNavEntries(role).map((e) => e.id)).toEqual([
+      expect(visibleNavEntries(role, false).map((e) => e.id)).toEqual([
         'dashboard',
         'cart',
         'sales',

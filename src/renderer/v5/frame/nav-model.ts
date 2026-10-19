@@ -64,10 +64,28 @@ export function isNavEntryCurrent(entry: V5NavEntry, pathname: string): boolean 
 /**
  * RT-241 / OD-6 — what the cashier's v5 nav may show. An allowlist, so a new
  * placeholder never reaches the cashier by default. The Dashboard refuses the
- * cashier role, and Sales, Inventory and Settings are placeholders (freeze 15
- * §1: manager/admin only). Navigation only: route guards are unchanged.
+ * cashier role and Inventory is a placeholder (freeze 15 §1: manager/admin
+ * only). Navigation only: route guards are unchanged.
  */
 const CASHIER_NAV: ReadonlySet<ShellNavEntryId> = new Set<ShellNavEntryId>(['cart']);
+
+/**
+ * D1 (RT-536, 2026-10-16; RT-249 scope note) — «المبيعات» is the cashier's own
+ * sales (main limits every read and reprint to them, RT-546). It needs the
+ * sales bridge: main registers `sales.*`, `receipts.*` and `saleHistory.*`
+ * only when `saleFinalization` is on (index.ts, the block opened at the
+ * `features?.saleFinalization === true` check; the default is off and it is the
+ * rollback profile), so without it the entry would lead to a screen whose every
+ * read rejects.
+ */
+const CASHIER_NAV_NEEDS_SALE_FINALIZATION: ReadonlySet<ShellNavEntryId> = new Set<ShellNavEntryId>([
+  'sales',
+]);
+
+function cashierMaySee(id: ShellNavEntryId, saleFinalization: boolean): boolean {
+  if (CASHIER_NAV.has(id)) return true;
+  return saleFinalization && CASHIER_NAV_NEEDS_SALE_FINALIZATION.has(id);
+}
 
 /**
  * RT-701 (P-26-4, D8) — entries no role sees: Audit and Settings are empty
@@ -76,10 +94,13 @@ const CASHIER_NAV: ReadonlySet<ShellNavEntryId> = new Set<ShellNavEntryId>(['car
 const HIDDEN_NAV: ReadonlySet<ShellNavEntryId> = new Set<ShellNavEntryId>(['audit', 'settings']);
 
 /** Same rule as the legacy rail (unrestricted entries, or the role is allowed), plus OD-6 and D8. */
-export function visibleNavEntries(role: Role | undefined): ReadonlyArray<V5NavEntry> {
+export function visibleNavEntries(
+  role: Role | undefined,
+  saleFinalization: boolean,
+): ReadonlyArray<V5NavEntry> {
   return v5NavEntries.filter((entry) => {
     if (HIDDEN_NAV.has(entry.id)) return false;
-    if (role === 'cashier' && !CASHIER_NAV.has(entry.id)) return false;
+    if (role === 'cashier' && !cashierMaySee(entry.id, saleFinalization)) return false;
     return entry.allow === undefined || (role !== undefined && entry.allow.includes(role));
   });
 }

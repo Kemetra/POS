@@ -164,6 +164,7 @@ describe('a cashier who opens /app/dashboard', () => {
   it.each([1280, 1024])('sees the refusal inside the frame at %i px, axe-clean', async (width) => {
     installViewport(width);
     signInAs('cashier');
+    useFeatureFlagsStore.setState({ saleFinalization: true });
     renderAppAt('/app/dashboard');
     const main = await homeMain();
     expect(within(main).getByRole('status')).toHaveTextContent(HOME_COPY.cashierRefusal);
@@ -174,7 +175,7 @@ describe('a cashier who opens /app/dashboard', () => {
       within(nav)
         .getAllByRole('link')
         .map((l) => l.textContent),
-    ).toEqual(['نقطة البيع']);
+    ).toEqual(['نقطة البيع', 'المبيعات']);
     await expectNoAxeViolations(document.body);
   });
 
