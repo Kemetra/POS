@@ -1,0 +1,36 @@
+# RT-772 slice 1 — LAB-ONLY per-user NSIS installer, signed with a self-signed TEST certificate.
+#
+# Used only as `electron-builder --win nsis --config electron-builder.lab.yml` by
+# scripts/lab/build-lab-installer.ps1. It extends the shipped config, so the frozen
+# update identity (appId / productName) and the RT-164 Electron fuses are inherited,
+# not restated. The shipped `electron-builder.yml` and its `dir` target are untouched.
+#
+# What this file deliberately does NOT do (guarded by scripts/__tests__/lab-nsis-config.test.ts):
+#   - no `publish` provider: nothing can be uploaded or promoted from a lab build;
+#   - no key material or certificate path: the lab hook signs from the CurrentUser\My store;
+#   - no switch that turns off the updater's signature verification or code-signing
+#     enforcement: the production updater's verification is never weakened (an updater
+#     does not exist yet; RT-322).
+extends: ./electron-builder.yml
+win:
+  target:
+    - target: nsis
+      arch: x64
+  signtoolOptions:
+    # Test-only publisher. The marker makes it impossible for this pin to match a
+    # production certificate subject, and vice versa.
+    publisherName: Kemetra POS LAB TEST - NOT FOR PRODUCTION
+    signingHashAlgorithms:
+      - sha256
+    # Custom hook: signs with signtool from the CurrentUser\My store, refuses any
+    # certificate without the lab marker, and makes no timestamp call by default.
+    sign: ./scripts/lab/lab-sign.cjs
+nsis:
+  # Per-user install, no UAC (ADR-0006 P-6). Keeps userData, the DB and DPAPI
+  # secrets under the installing Windows user.
+  oneClick: true
+  perMachine: false
+  allowElevation: false
+  # An uninstall must never delete the SQLite DB, outbox or DPAPI secrets.
+  deleteAppDataOnUninstall: false
+  artifactName: POS-Pulse-LAB-Setup-${version}.${ext}
