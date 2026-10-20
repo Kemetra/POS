@@ -1,10 +1,13 @@
-import type { PrintDispatcher } from '../receipts/print-dispatcher.js';
+import type { PrintPipeline } from '../receipts/print-pipeline.js';
 
 /**
  * RT-772 slice 2 — "a print is in progress" has no durable state (a print is a
  * short in-memory dispatch), so main counts the in-flight dispatches. The
  * SafePointGate reads `isActive()`; a restart clears it, which is correct (an
  * interrupted print is already recorded as a failure by the dispatcher).
+ *
+ * Counting happens at the print pipeline, the one place every print ends up (receipts, the cash
+ * return slip, sale-history reprints), so no consumer can bypass it.
  */
 
 export interface PrintActivity {
@@ -33,14 +36,13 @@ export function createPrintActivity(): PrintActivity {
   };
 }
 
-/** The same dispatcher, with every dispatch counted by `activity`. */
-export function trackPrintDispatcher(
-  dispatcher: PrintDispatcher,
+/** The same pipeline, with every print counted by `activity`. */
+export function trackPrintPipeline(
+  pipeline: PrintPipeline,
   activity: PrintActivity,
-): PrintDispatcher {
+): PrintPipeline {
   return {
-    dispatchFirstPrint: (...args) => activity.track(() => dispatcher.dispatchFirstPrint(...args)),
-    dispatchRetryPrint: (...args) => activity.track(() => dispatcher.dispatchRetryPrint(...args)),
-    dispatchReprint: (...args) => activity.track(() => dispatcher.dispatchReprint(...args)),
+    render: (payload) => activity.track(() => pipeline.render(payload)),
+    printRendered: (rendered) => activity.track(() => pipeline.printRendered(rendered)),
   };
 }

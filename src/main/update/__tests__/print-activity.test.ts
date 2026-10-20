@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { createPrintActivity, trackPrintDispatcher } from '../print-activity.js';
+import { createPrintActivity, trackPrintPipeline } from '../print-activity.js';
 
 /**
  * RT-772 slice 2 — "a print is in progress" has no durable state, so main counts
@@ -80,23 +80,21 @@ describe('createPrintActivity', () => {
   });
 });
 
-describe('trackPrintDispatcher', () => {
-  function fakeDispatcher(op: Promise<unknown>) {
-    return {
-      dispatchFirstPrint: () => op,
-      dispatchRetryPrint: () => op,
-      dispatchReprint: () => op,
-    };
+describe('trackPrintPipeline', () => {
+  // The pipeline is the one place every print goes through: the receipt dispatcher, the cash
+  // return slip and the sale-history reprint all end in `render` or `printRendered`.
+  function fakePipeline(op: Promise<unknown>) {
+    return { render: () => op, printRendered: () => op };
   }
 
-  it.each(['dispatchFirstPrint', 'dispatchRetryPrint', 'dispatchReprint'] as const)(
+  it.each(['render', 'printRendered'] as const)(
     'marks the terminal busy for the duration of %s',
     async (method) => {
       const activity = createPrintActivity();
       const op = deferred<{ ok: true }>();
-      const tracked = trackPrintDispatcher(fakeDispatcher(op.promise) as never, activity);
+      const tracked = trackPrintPipeline(fakePipeline(op.promise) as never, activity);
 
-      const pending = (tracked[method] as (...a: unknown[]) => Promise<unknown>)({}, {}, [], {});
+      const pending = (tracked[method] as (...a: unknown[]) => Promise<unknown>)({});
       expect(activity.isActive()).toBe(true);
       op.resolve({ ok: true });
       await expect(pending).resolves.toEqual({ ok: true });
@@ -104,21 +102,37 @@ describe('trackPrintDispatcher', () => {
     },
   );
 
-  it('forwards its arguments untouched', async () => {
+  it('settles the count when a print fails', async () => {
     const activity = createPrintActivity();
-    const seen: unknown[][] = [];
-    const tracked = trackPrintDispatcher(
+    const tracked = trackPrintPipeline(
       {
-        dispatchFirstPrint: (...args: unknown[]) => {
-          seen.push(args);
-          return Promise.resolve('r');
-        },
-        dispatchRetryPrint: () => Promise.resolve('r'),
-        dispatchReprint: () => Promise.resolve('r'),
+        render: () => Promise.reject(new Error('printer jammed')),
+        printRendered: () => Promise.resolve('r'),
       } as never,
       activity,
     );
-    await tracked.dispatchFirstPrint('payload' as never, 'ctx' as never);
-    expect(seen).toEqual([['payload', 'ctx']]);
+    await expect(tracked.render({} as never)).rejects.toThrow('printer jammed');
+    expect(activity.isActive()).toBe(false);
+  });
+
+  it('forwards its arguments untouched', async () => {
+    const activity = createPrintActivity();
+    const seen: unknown[] = [];
+    const tracked = trackPrintPipeline(
+      {
+        render: (payload: unknown) => {
+          seen.push(payload);
+          return Promise.resolve('r');
+        },
+        printRendered: (rendered: unknown) => {
+          seen.push(rendered);
+          return Promise.resolve('r');
+        },
+      } as never,
+      activity,
+    );
+    await tracked.render('payload' as never);
+    await tracked.printRendered('slip' as never);
+    expect(seen).toEqual(['payload', 'slip']);
   });
 });

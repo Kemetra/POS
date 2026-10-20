@@ -211,7 +211,7 @@ import { runStartupMigrations } from './app/startup-migrations.js';
 // import, and its singleton is only touched once every guard in UpdateService holds.
 import electronUpdater from 'electron-updater';
 import { createPowerShellProbe } from './update/powershell-signature-probe.js';
-import { createPrintActivity, trackPrintDispatcher } from './update/print-activity.js';
+import { createPrintActivity, trackPrintPipeline } from './update/print-activity.js';
 import { createSafePointGate } from './update/safe-point-gate.js';
 import { createSafePointInputs } from './update/safe-point-inputs.js';
 import { createFailClosedVerifier } from './update/signature-verifier.js';
@@ -1939,26 +1939,31 @@ singleInstanceReady
     // (node-thermal-printer ↔ printer status byte) remains unverified (a5
     // findings) and is NOT selected. We route to OS-print via
     // `probeEscposSupport: false`, the proven path.
-    const printPipeline = createPrintPipeline({
-      escposAdapter: createEscposAdapter({
-        transport: {
-          write: () => Promise.resolve(),
-          pollStatus: () => Promise.resolve('offline' as const),
-        },
-        statusTimeoutMs: 3000,
-      }),
-      osPrintAdapter: createOsPrintAdapter({
-        print: createOsPrintTransport({
-          createPrintWindow: createDefaultPrintWindow,
-          listPrinters: () => getCurrentPrinters(),
-          logger: mainLogger,
+    // RT-772: every print (receipt, cash return slip, sale-history reprint) is counted here, so an
+    // update never installs mid-print.
+    const printPipeline = trackPrintPipeline(
+      createPrintPipeline({
+        escposAdapter: createEscposAdapter({
+          transport: {
+            write: () => Promise.resolve(),
+            pollStatus: () => Promise.resolve('offline' as const),
+          },
+          statusTimeoutMs: 3000,
         }),
+        osPrintAdapter: createOsPrintAdapter({
+          print: createOsPrintTransport({
+            createPrintWindow: createDefaultPrintWindow,
+            listPrinters: () => getCurrentPrinters(),
+            logger: mainLogger,
+          }),
+        }),
+        // Route to the OS-print path: it is the proven transport (the ESC/POS
+        // direct path is unverified). The cashier never sees which path ran
+        // unless the print fails (path is for audit only — T212).
+        probeEscposSupport: () => Promise.resolve(false),
       }),
-      // Route to the OS-print path: it is the proven transport (the ESC/POS
-      // direct path is unverified). The cashier never sees which path ran
-      // unless the print fails (path is for audit only — T212).
-      probeEscposSupport: () => Promise.resolve(false),
-    });
+      printActivity,
+    );
     // 008 Slice 4 drawer port, hoisted (RT-15 S4) so the sale drawer-kick
     // dispatcher and the return payout share ONE drawer transport. The real
     // DK1/DK2 transport is the §A3 hardware bring-up (T200), deferred: until
@@ -2042,18 +2047,14 @@ singleInstanceReady
       // rendered slip time (bridge) matches the print_events.printed_at the
       // dispatcher writes for the same logical event (one clock read per event).
       const receiptsClock = (): string => new Date().toISOString();
-      // RT-772: every dispatch is counted, so an update never installs mid-print.
-      const printDispatcher = trackPrintDispatcher(
-        createPrintDispatcher({
-          pipeline: printPipeline,
-          printEventsRepo,
-          auditEmitter: saleAuditEmitter,
-          now: receiptsClock,
-          newPrintEventId: () => randomUUID(),
-          logger: mainLogger,
-        }),
-        printActivity,
-      );
+      const printDispatcher = createPrintDispatcher({
+        pipeline: printPipeline,
+        printEventsRepo,
+        auditEmitter: saleAuditEmitter,
+        now: receiptsClock,
+        newPrintEventId: () => randomUUID(),
+        logger: mainLogger,
+      });
 
       // 008 Slice 4 — drawer-kick dispatcher (AD-8 separate command). Chains
       // after a successful first print for cash-inclusive sales. The real
