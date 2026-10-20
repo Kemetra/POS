@@ -15,6 +15,7 @@ export default defineConfig({
   workers: 1,
   retries: 0,
   reporter: 'list',
-  // Keep artefacts out of the repo tree.
-  outputDir: path.join(os.tmpdir(), 'pos-pulse-playwright-results'),
+  // Keep artefacts out of the repo tree. Playwright empties outputDir at the
+  // start of a run, so concurrent invocations each get their own directory.
+  outputDir: path.join(os.tmpdir(), `pos-pulse-playwright-results-${String(process.pid)}`),
 });
