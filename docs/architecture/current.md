@@ -145,15 +145,36 @@ a no-op. These are the two most likely silent regressions in this area and both 
     `stable`; unset means `stable`), and the build's `app-update.yml` pins a publisher. With no
     pinned publisher it reports `verify_unavailable` and never checks: electron-updater skips
     signature verification entirely when none is pinned, so the service never lets it start without one.
+  - **Signature verification is ours, and fail-closed.** electron-updater 6.8.10's own Windows
+    verifier resolves "valid" whenever its PowerShell check cannot run (old Windows, `ConvertTo-Json`
+    unusable, a `Path` missing from the output), so the service installs its own
+    (`signature-verifier.ts`) through `verifyUpdateCodeSignature` and reads it back; if the updater did
+    not keep it, the service reports `verify_unavailable` and never checks. The verifier returns `null`
+    only on positive proof: PowerShell exited cleanly with empty stderr, the output parsed, `Status` is
+    exactly 0, the reported `Path` is the downloaded file, and the signer matches a pin (a bare pin
+    equals the CN exactly; a full-DN pin needs every key). Anything else is a non-null result.
+  - **PowerShell is launched defensively** (`powershell-signature-probe.ts`): the absolute Windows
+    PowerShell path (no PATH lookup, no shell), fixed arguments, `PSModulePath` removed, a timeout, and
+    the downloaded file passed only through the `POS_PULSE_VERIFY_FILE` environment variable (its name
+    comes from the feed, so it never appears in the script text). The script is cmdlet-only. Known
+    limits, both fail-closed: Constrained Language Mode or a locked-down policy may refuse the script,
+    and a publisher name with non-ASCII characters may not round-trip through the console code page; in
+    both cases the terminal shows `verify_unavailable` or `verify_failed` rather than installing.
   - **Roll-forward only:** `allowDowngrade` is forced false after the channel is set (the channel
     setter can flip it) and install-on-quit is off.
   - **Install only at a safe point:** one predicate (`SafePointGate`), true only with no open shift, no
     open cart, no unfinished payment or return, and no print in flight. An input that cannot be read
     blocks. It is evaluated at two triggers: the update finishing downloading before sign-in (app
     start), and a committed shift close (`onShiftClosed` on both close paths).
-  - **Failures are visible:** a signature or checksum failure is `verify_failed`, an inability to run
-    the check is `verify_unavailable`, anything else is `error`. None installs. All state changes are
-    logged as `update:state`.
+  - **A shift close never installs inside the close call.** The close returns before its own delivery
+    (a forced close drains the shift outbox, bounded by `SHIFT_SYNC_DRAIN_TIMEOUT_MS`) and its reply are
+    done, and an install quits the app. The evaluation is deferred by that bound plus a margin,
+    coalesced into one timer, cancelled on shutdown, and re-reads the gate when it fires (a shift opened
+    meanwhile keeps the update pending).
+  - **Failures are visible:** a signature or checksum failure is `verify_failed`, an inability to
+    verify (our marker, or a PowerShell failure) is `verify_unavailable`, anything else is `error`. The
+    marker is classified first, because electron-updater wraps any non-null verifier result as "not
+    signed by the application owner". None installs. All state changes are logged as `update:state`.
   - **Provisioning note:** the origin and channel are read from the process environment. The
     installer's relaunch after an update does **not** inherit them (observed in the lab drill), so a
     real terminal needs them set persistently (user or machine environment), not per launch.

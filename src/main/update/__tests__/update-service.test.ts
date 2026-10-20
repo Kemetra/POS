@@ -1,6 +1,8 @@
 import { EventEmitter } from 'node:events';
 import { describe, expect, it, vi } from 'vitest';
 
+import { VERIFIER_UNAVAILABLE_MARKER } from '../signature-verifier.js';
+import type { VerifyUpdateCodeSignature } from '../signature-verifier.js';
 import { createUpdateService } from '../update-service.js';
 import type { UpdateServiceDeps } from '../update-service.js';
 import type { SafePointVerdict } from '../update-types.js';
@@ -18,6 +20,14 @@ class FakeUpdater extends EventEmitter {
   autoDownload = false;
   autoInstallOnAppQuit = true;
   feed: unknown = null;
+  // An accessor pair, like electron-updater's NSIS updater (a class field would shadow a subclass's).
+  private verifierValue: VerifyUpdateCodeSignature | undefined;
+  get verifyUpdateCodeSignature(): VerifyUpdateCodeSignature | undefined {
+    return this.verifierValue;
+  }
+  set verifyUpdateCodeSignature(value: VerifyUpdateCodeSignature | undefined) {
+    this.verifierValue = value;
+  }
   private channelValue: string | null = null;
   get channel(): string | null {
     return this.channelValue;
@@ -33,11 +43,30 @@ class FakeUpdater extends EventEmitter {
   quitAndInstall = vi.fn();
 }
 
+/** An updater whose `verifyUpdateCodeSignature` setter does nothing (a library that dropped it). */
+class IgnoringUpdater extends FakeUpdater {
+  override get verifyUpdateCodeSignature(): VerifyUpdateCodeSignature | undefined {
+    return undefined;
+  }
+  override set verifyUpdateCodeSignature(_value: VerifyUpdateCodeSignature | undefined) {
+    // ignored on purpose
+  }
+}
+
 const SAFE: SafePointVerdict = { safe: true };
 const PIN = ['Kemetra POS LAB TEST - NOT FOR PRODUCTION'];
 
-function build(overrides: Partial<UpdateServiceDeps> = {}) {
-  const updater = new FakeUpdater();
+function build(
+  overrides: Partial<UpdateServiceDeps> = {},
+  updater: FakeUpdater = new FakeUpdater(),
+) {
+  const verifier = vi.fn<VerifyUpdateCodeSignature>(() => Promise.resolve(null));
+  const deferred: Array<() => void> = [];
+  const cancelDefer = vi.fn();
+  const defer = vi.fn((fn: () => void) => {
+    deferred.push(fn);
+    return { cancel: cancelDefer };
+  });
   const getUpdater = vi.fn(() => updater);
   const logger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
   const gate = { isSafeToInstall: vi.fn<() => SafePointVerdict>(() => SAFE) };
@@ -59,12 +88,19 @@ function build(overrides: Partial<UpdateServiceDeps> = {}) {
     logger,
     schedule,
     checkIntervalMs: 1000,
+    verifier,
+    defer,
+    afterShiftCloseDelayMs: 5000,
     ...overrides,
   };
   const service = createUpdateService(deps);
   return {
     service,
     updater,
+    verifier,
+    deferred,
+    cancelDefer,
+    defer,
     getUpdater,
     logger,
     gate,
@@ -210,6 +246,23 @@ describe('UpdateService configuration: roll-forward only', () => {
     expect(t.updater.checkForUpdates).toHaveBeenCalledTimes(1);
   });
 
+  it('installs the fail-closed verifier on the updater before it checks', () => {
+    const t = build();
+    t.service.start();
+    expect(t.updater.verifyUpdateCodeSignature).toBe(t.verifier);
+  });
+
+  it('refuses to start, and never checks, if the updater does not keep the verifier', () => {
+    const t = build({}, new IgnoringUpdater());
+    t.service.start();
+    expect(t.updater.checkForUpdates).not.toHaveBeenCalled();
+    expect(t.updater.setFeedURL).not.toHaveBeenCalled();
+    expect(t.service.getStatus()).toMatchObject({
+      state: 'verify_unavailable',
+      detail: 'verifier_not_installed',
+    });
+  });
+
   it('cancels the schedule on stop()', () => {
     const t = build();
     t.service.start();
@@ -223,6 +276,18 @@ describe('UpdateService configuration: roll-forward only', () => {
     t.service.start();
     await flush();
     expect(t.service.getStatus()).toMatchObject({ state: 'error' });
+  });
+
+  it('records a synchronous throw from the check as an error and does not throw', async () => {
+    const t = build();
+    t.updater.checkForUpdates.mockImplementationOnce(() => {
+      throw new Error('sync boom');
+    });
+    expect(() => {
+      t.service.start();
+    }).not.toThrow();
+    await flush();
+    expect(t.service.getStatus()).toMatchObject({ state: 'error', detail: 'sync boom' });
   });
 });
 
@@ -300,46 +365,107 @@ describe('UpdateService install gating (the same predicate at both triggers)', (
     expect(t.service.getStatus().state).toBe('update_pending');
   });
 
-  it('installs at shift close when the gate is clear', () => {
-    const t = build();
-    t.setBeforeSignIn(false);
-    t.service.start();
-    t.updater.emit('update-downloaded', { version: '0.1.1' });
-    t.service.notifyShiftClosed();
-    expect(t.gate.isSafeToInstall).toHaveBeenCalledTimes(2);
-    expect(t.updater.quitAndInstall).toHaveBeenCalledTimes(1);
-    expect(t.service.getStatus().state).toBe('installing');
-  });
+  describe('shift close defers the install until the close has finished delivering', () => {
+    // The close call returns before the forced-close handler has drained the shift outbox and
+    // answered its caller. Installing inside the close call would quit the app mid-delivery, so
+    // the evaluation waits `afterShiftCloseDelayMs` and re-reads the gate when it fires.
+    const pending = () => {
+      const t = build();
+      t.setBeforeSignIn(false);
+      t.service.start();
+      t.updater.emit('update-downloaded', { version: '0.1.1' });
+      return t;
+    };
 
-  it('stays pending at shift close while something is still in flight', () => {
-    const t = build();
-    t.setBeforeSignIn(false);
-    t.service.start();
-    t.updater.emit('update-downloaded', { version: '0.1.1' });
-    t.gate.isSafeToInstall.mockReturnValue({ safe: false, blockers: ['payment_in_flight'] });
-    t.service.notifyShiftClosed();
-    expect(t.updater.quitAndInstall).not.toHaveBeenCalled();
-    expect(t.service.getStatus()).toMatchObject({
-      state: 'update_pending',
-      blockers: ['payment_in_flight'],
+    it('does not touch the gate or the installer inside the close call', () => {
+      const t = pending();
+      t.gate.isSafeToInstall.mockClear();
+      t.service.notifyShiftClosed();
+      expect(t.gate.isSafeToInstall).not.toHaveBeenCalled();
+      expect(t.updater.quitAndInstall).not.toHaveBeenCalled();
+      expect(t.defer).toHaveBeenCalledTimes(1);
+      expect(t.defer).toHaveBeenCalledWith(expect.any(Function), 5000);
     });
-  });
 
-  it('ignores a shift close when no update is waiting', () => {
-    const t = build();
-    t.service.start();
-    t.service.notifyShiftClosed();
-    expect(t.gate.isSafeToInstall).not.toHaveBeenCalled();
-    expect(t.updater.quitAndInstall).not.toHaveBeenCalled();
-  });
+    it('installs when the delay elapses and the gate is still clear', () => {
+      const t = pending();
+      t.service.notifyShiftClosed();
+      t.deferred[0]?.();
+      expect(t.gate.isSafeToInstall).toHaveBeenCalledTimes(2);
+      expect(t.updater.quitAndInstall).toHaveBeenCalledTimes(1);
+      expect(t.service.getStatus().state).toBe('installing');
+    });
 
-  it('installs at most once', () => {
-    const t = build();
-    t.service.start();
-    t.updater.emit('update-downloaded', { version: '0.1.1' });
-    t.service.notifyShiftClosed();
-    t.service.notifyShiftClosed();
-    expect(t.updater.quitAndInstall).toHaveBeenCalledTimes(1);
+    it('re-reads the gate when the delay elapses: a shift opened meanwhile keeps it pending', () => {
+      const t = pending();
+      t.service.notifyShiftClosed();
+      t.gate.isSafeToInstall.mockReturnValue({ safe: false, blockers: ['open_shift'] });
+      t.deferred[0]?.();
+      expect(t.updater.quitAndInstall).not.toHaveBeenCalled();
+      expect(t.service.getStatus()).toMatchObject({
+        state: 'update_pending',
+        blockers: ['open_shift'],
+      });
+    });
+
+    it('stays pending while something is still in flight when the delay elapses', () => {
+      const t = pending();
+      t.service.notifyShiftClosed();
+      t.gate.isSafeToInstall.mockReturnValue({ safe: false, blockers: ['payment_in_flight'] });
+      t.deferred[0]?.();
+      expect(t.updater.quitAndInstall).not.toHaveBeenCalled();
+      expect(t.service.getStatus().blockers).toEqual(['payment_in_flight']);
+    });
+
+    it('coalesces repeated notifications into one pending evaluation', () => {
+      const t = pending();
+      t.service.notifyShiftClosed();
+      t.service.notifyShiftClosed();
+      expect(t.defer).toHaveBeenCalledTimes(1);
+    });
+
+    it('can be scheduled again after a deferred evaluation has run', () => {
+      const t = pending();
+      t.gate.isSafeToInstall.mockReturnValue({ safe: false, blockers: ['open_shift'] });
+      t.service.notifyShiftClosed();
+      t.deferred[0]?.();
+      t.service.notifyShiftClosed();
+      expect(t.defer).toHaveBeenCalledTimes(2);
+    });
+
+    it('ignores a shift close when no update is waiting', () => {
+      const t = build();
+      t.service.start();
+      t.service.notifyShiftClosed();
+      expect(t.defer).not.toHaveBeenCalled();
+      expect(t.gate.isSafeToInstall).not.toHaveBeenCalled();
+      expect(t.updater.quitAndInstall).not.toHaveBeenCalled();
+    });
+
+    it('does nothing when the update is no longer waiting at fire time', () => {
+      const t = pending();
+      t.service.notifyShiftClosed();
+      t.updater.emit('error', new Error('ECONNRESET'));
+      t.gate.isSafeToInstall.mockClear();
+      t.deferred[0]?.();
+      expect(t.gate.isSafeToInstall).not.toHaveBeenCalled();
+      expect(t.updater.quitAndInstall).not.toHaveBeenCalled();
+    });
+
+    it('cancels a pending evaluation on stop(), so nothing runs against a closed database', () => {
+      const t = pending();
+      t.service.notifyShiftClosed();
+      t.service.stop();
+      expect(t.cancelDefer).toHaveBeenCalledTimes(1);
+    });
+
+    it('installs at most once', () => {
+      const t = pending();
+      t.service.notifyShiftClosed();
+      t.deferred[0]?.();
+      t.service.notifyShiftClosed();
+      expect(t.updater.quitAndInstall).toHaveBeenCalledTimes(1);
+    });
   });
 
   it('reports an error, and does not claim installing, when quitAndInstall throws', () => {
@@ -363,6 +489,24 @@ describe('UpdateService failures are visible and never install', () => {
     t.service.start();
     t.updater.emit('error', Object.assign(new Error(err.message), err));
     expect(t.service.getStatus().state).toBe('verify_failed');
+    expect(t.updater.quitAndInstall).not.toHaveBeenCalled();
+  });
+
+  it('maps our own "could not verify" marker to verify_unavailable, not verify_failed', () => {
+    // electron-updater wraps any non-null verifier result as "not signed by the application
+    // owner", so the marker must win over that pattern.
+    const t = build();
+    t.service.start();
+    t.updater.emit(
+      'error',
+      Object.assign(
+        new Error(
+          `New version 0.1.1 is not signed by the application owner: ${VERIFIER_UNAVAILABLE_MARKER}: spawn EPERM`,
+        ),
+        { code: 'ERR_UPDATER_INVALID_SIGNATURE' },
+      ),
+    );
+    expect(t.service.getStatus().state).toBe('verify_unavailable');
     expect(t.updater.quitAndInstall).not.toHaveBeenCalled();
   });
 

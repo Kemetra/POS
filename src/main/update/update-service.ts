@@ -1,4 +1,6 @@
 import type { SafePointGate } from './safe-point-gate.js';
+import { VERIFIER_UNAVAILABLE_MARKER } from './signature-verifier.js';
+import type { VerifyUpdateCodeSignature } from './signature-verifier.js';
 import type { SafePointVerdict, UpdateChannel, UpdateState, UpdateStatus } from './update-types.js';
 
 /**
@@ -6,13 +8,18 @@ import type { SafePointVerdict, UpdateChannel, UpdateState, UpdateStatus } from 
  *
  *   - Packaged-only and initialised once: a dev or unpackaged build never
  *     contacts the origin.
- *   - Fail closed: no publisher pin means `verify_unavailable`; the library's own
- *     default is to SKIP verification when no pin exists, so we never let it
- *     start without one. A verification failure is `verify_failed`, never an install.
+ *   - Fail closed. No publisher pin means `verify_unavailable` (the library skips
+ *     verification entirely when none is baked, so it never starts without one).
+ *     The library's own Windows verifier also resolves "valid" when its PowerShell
+ *     check cannot run, so we install our own (`verifier`, see signature-verifier.ts),
+ *     read it back, and refuse to start if the updater did not keep it. A failure is
+ *     `verify_failed`; an inability to verify is `verify_unavailable`; neither installs.
  *   - Roll-forward only: `allowDowngrade` is forced false AFTER the channel is set
  *     (the channel setter can flip it), and install-on-quit is off.
  *   - It installs only at a safe point, via the one `SafePointGate` predicate, at
- *     two triggers: app start before sign-in, and shift close.
+ *     two triggers: app start before sign-in, and shift close. The shift-close
+ *     evaluation is deferred past the close's own delivery and reply, and re-reads
+ *     the gate when it fires.
  *
  * This slice exposes no renderer surface and no install trigger from the UI.
  */
@@ -24,6 +31,8 @@ export interface UpdaterLike {
   allowPrerelease: boolean;
   autoDownload: boolean;
   autoInstallOnAppQuit: boolean;
+  /** Present on the NSIS updater; read back after assignment to prove it was kept. */
+  verifyUpdateCodeSignature?: VerifyUpdateCodeSignature | undefined;
   setFeedURL(options: { provider: 'generic'; url: string; channel: string }): void;
   checkForUpdates(): Promise<unknown>;
   quitAndInstall(isSilent?: boolean, isForceRunAfter?: boolean): void;
@@ -50,8 +59,17 @@ export interface UpdateServiceDeps {
   /** True while no operator session exists (the app-start-before-sign-in trigger). */
   isBeforeSignIn: () => boolean;
   logger: UpdateLogger;
+  /** The fail-closed signature verifier installed on the updater. */
+  verifier: VerifyUpdateCodeSignature;
   checkIntervalMs?: number;
   schedule?: (fn: () => void, ms: number) => { cancel(): void };
+  /**
+   * How long after a committed shift close the install is evaluated. It must outlast the close's
+   * own work (a forced close drains the shift outbox and answers its caller afterwards).
+   */
+  afterShiftCloseDelayMs?: number;
+  /** One-shot timer for that evaluation. */
+  defer?: (fn: () => void, ms: number) => { cancel(): void };
 }
 
 export interface UpdateService {
@@ -63,6 +81,7 @@ export interface UpdateService {
 }
 
 const DEFAULT_CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000;
+const DEFAULT_AFTER_SHIFT_CLOSE_DELAY_MS = 30_000;
 
 /** States in which a scheduled check must not start another one. */
 const BUSY_STATES: ReadonlySet<UpdateState> = new Set([
@@ -81,6 +100,16 @@ function defaultSchedule(fn: () => void, ms: number): { cancel(): void } {
   return {
     cancel: () => {
       clearInterval(handle);
+    },
+  };
+}
+
+function defaultDefer(fn: () => void, ms: number): { cancel(): void } {
+  const handle = setTimeout(fn, ms);
+  handle.unref();
+  return {
+    cancel: () => {
+      clearTimeout(handle);
     },
   };
 }
@@ -104,6 +133,11 @@ function describeError(error: unknown): { code: string | undefined; message: str
 function classify(error: unknown): { state: UpdateState; detail: string } {
   const { code, message } = describeError(error);
   const detail = message.slice(0, 200);
+  // electron-updater wraps any non-null verifier result as "not signed by the application
+  // owner", so our own "could not verify" marker is checked first.
+  if (message.includes(VERIFIER_UNAVAILABLE_MARKER)) {
+    return { state: 'verify_unavailable', detail };
+  }
   if (/SIGNATURE|CHECKSUM/i.test(code ?? '') || VERIFY_FAILED.test(message)) {
     return { state: 'verify_failed', detail };
   }
@@ -145,6 +179,7 @@ export function createUpdateService(deps: UpdateServiceDeps): UpdateService {
   let installing = false;
   let updater: UpdaterLike | null = null;
   let timer: { cancel(): void } | null = null;
+  let shiftCloseTimer: { cancel(): void } | null = null;
 
   function setStatus(next: UpdateStatus): void {
     logger.info(
@@ -188,7 +223,7 @@ export function createUpdateService(deps: UpdateServiceDeps): UpdateService {
     return from.availableVersion === undefined ? {} : { availableVersion: from.availableVersion };
   }
 
-  function defer(verdict: SafePointVerdict, trigger: string): void {
+  function holdPending(verdict: SafePointVerdict, trigger: string): void {
     logger.info(
       { trigger, ...(verdict.safe ? {} : { blockers: verdict.blockers }) },
       'update:install_deferred',
@@ -209,16 +244,32 @@ export function createUpdateService(deps: UpdateServiceDeps): UpdateService {
       install(trigger);
       return;
     }
-    defer(verdict, trigger);
+    holdPending(verdict, trigger);
+  }
+
+  /** A verified update is downloaded and waiting for a safe point. */
+  function isWaiting(): boolean {
+    return status.state === 'update_pending' || status.state === 'downloaded';
   }
 
   function check(): void {
-    if (updater === null) return;
-    try {
-      void updater.checkForUpdates().catch(onError);
-    } catch (error) {
-      onError(error);
-    }
+    const target = updater;
+    if (target === null) return;
+    // `checkForUpdates()` is still called synchronously (the first `await` comes after it);
+    // a synchronous throw and a rejection both end up in `onError`.
+    void (async () => {
+      try {
+        await target.checkForUpdates();
+      } catch (error) {
+        onError(error);
+      }
+    })();
+  }
+
+  /** Installs the fail-closed verifier and proves the updater kept it (read back). */
+  function installVerifier(target: UpdaterLike): boolean {
+    target.verifyUpdateCodeSignature = deps.verifier;
+    return target.verifyUpdateCodeSignature === deps.verifier;
   }
 
   function configure(target: UpdaterLike, origin: string, channel: UpdateChannel): void {
@@ -273,6 +324,10 @@ export function createUpdateService(deps: UpdateServiceDeps): UpdateService {
       }
 
       const target = deps.getUpdater();
+      if (!installVerifier(target)) {
+        fail('verify_unavailable', 'verifier_not_installed');
+        return;
+      }
       updater = target;
       configure(target, plan.origin, plan.channel);
       listen(target);
@@ -286,14 +341,24 @@ export function createUpdateService(deps: UpdateServiceDeps): UpdateService {
     stop(): void {
       timer?.cancel();
       timer = null;
+      shiftCloseTimer?.cancel();
+      shiftCloseTimer = null;
     },
 
     getStatus: () => status,
 
+    /**
+     * Never evaluates inside the close call: the close returns before its own delivery and reply
+     * are done, and an install quits the app. The evaluation runs after a delay, coalesced, and
+     * re-reads the gate when it fires (a shift opened meanwhile keeps the update pending).
+     */
     notifyShiftClosed(): void {
-      if (status.state === 'update_pending' || status.state === 'downloaded') {
-        evaluate('shift_close');
-      }
+      if (!isWaiting() || shiftCloseTimer !== null) return;
+      const delay = deps.afterShiftCloseDelayMs ?? DEFAULT_AFTER_SHIFT_CLOSE_DELAY_MS;
+      shiftCloseTimer = (deps.defer ?? defaultDefer)(() => {
+        shiftCloseTimer = null;
+        if (isWaiting()) evaluate('shift_close');
+      }, delay);
     },
   };
 }

@@ -133,8 +133,19 @@ configuration, so there is no lab-only verification path.
   | open shift                      | `update_pending` with blocker `open_shift`; not installed                            |
   | same download after shift close | installs at the next app start                                                       |
   | older version offered           | `checking`, `idle`; no installer download in the feed log; version unchanged         |
+  | PowerShell cannot run           | `verify_unavailable` (the `signature verification unavailable` marker); never installs |
+
+  Which cases exercise the app's own verifier (`signature-verifier.ts`): the accept path (first
+  row), the unsigned and wrong-publisher rows, and the PowerShell row. The tampered row is refused
+  earlier, by the `sha512` check, before any signature check.
 
 - **Gotchas.**
+  - electron-updater 6.8.10's own Windows verifier resolves "valid" when its PowerShell check cannot
+    run, so it must not be left in charge: the app installs its own fail-closed verifier and reads it
+    back. The "PowerShell cannot run" case is only meaningful against that verifier. In the Sandbox,
+    `takeown /f` and `icacls ... /deny` on `powershell.exe` make the spawn fail (the file is owned by
+    TrustedInstaller, so ownership comes first); only the app's PowerShell child is affected, because
+    the driver's own process is already running.
   - The installer's relaunch after an update does **not** inherit the process environment: the
     relaunched app logs `update:disabled reason=no_origin`. A real terminal needs the origin and
     channel set persistently (user or machine environment).

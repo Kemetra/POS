@@ -57,14 +57,26 @@ describe('createPrintActivity', () => {
     expect(activity.isActive()).toBe(false);
   });
 
-  it('settles when the operation throws synchronously', () => {
+  it('turns a synchronous throw into a rejection, and settles', async () => {
     const activity = createPrintActivity();
-    expect(() =>
+    await expect(
       activity.track(() => {
         throw new Error('sync');
       }),
-    ).toThrow('sync');
+    ).rejects.toThrow('sync');
     expect(activity.isActive()).toBe(false);
+  });
+
+  it('counts the operation from the moment it is called, before it first yields', () => {
+    const activity = createPrintActivity();
+    let activeInsideOp = false;
+    const tracked = activity.track(() => {
+      activeInsideOp = activity.isActive();
+      return Promise.resolve('x');
+    });
+    expect(activeInsideOp).toBe(true);
+    expect(activity.isActive()).toBe(true);
+    return tracked;
   });
 });
 

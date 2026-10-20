@@ -148,6 +148,7 @@ import {
   scheduleReturnsResolver,
 } from './returns/compose-returns.js';
 import {
+  SHIFT_SYNC_DRAIN_TIMEOUT_MS,
   composeShiftCashupService,
   pairedShiftScope,
   registerShiftSync,
@@ -210,9 +211,11 @@ import { runStartupMigrations } from './app/startup-migrations.js';
 // RT-772 — packaged-only, fail-closed updater (ADR-0006). electron-updater is CJS: default
 // import, and its singleton is only touched once every guard in UpdateService holds.
 import electronUpdater from 'electron-updater';
+import { createPowerShellProbe } from './update/powershell-signature-probe.js';
 import { createPrintActivity, trackPrintDispatcher } from './update/print-activity.js';
 import { createSafePointGate } from './update/safe-point-gate.js';
 import { createSafePointInputs } from './update/safe-point-inputs.js';
+import { createFailClosedVerifier } from './update/signature-verifier.js';
 import { readPublisherPins, resolveUpdateConfig } from './update/update-config.js';
 import { createUpdateService } from './update/update-service.js';
 import type { UpdateService } from './update/update-service.js';
@@ -899,6 +902,12 @@ singleInstanceReady
       gate: createSafePointGate(createSafePointInputs(db, printActivity)),
       isBeforeSignIn: () => operatorSessionManager.getCurrent() === null,
       logger: mainLogger,
+      // electron-updater's own Windows verifier resolves "valid" when its PowerShell check cannot
+      // run; this one returns null only on positive proof (see signature-verifier.ts).
+      verifier: createFailClosedVerifier(createPowerShellProbe()),
+      // A forced close drains the shift outbox (bounded by SHIFT_SYNC_DRAIN_TIMEOUT_MS) and then
+      // answers its caller; the install must not quit the app inside that window.
+      afterShiftCloseDelayMs: SHIFT_SYNC_DRAIN_TIMEOUT_MS + 4_000,
     });
     updateServiceHandle = updateService;
     sessionLockProbe.isLocked = () => operatorSessionManager.isLocked();

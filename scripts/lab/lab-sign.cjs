@@ -21,7 +21,16 @@ const path = require('node:path');
 
 const { assertLabSubject, buildSigntoolArgs, normalizeThumbprint } = require('./lab-sign-lib.cjs');
 
-const SDK_BIN = 'C:\\Program Files (x86)\\Windows Kits\\10\\bin';
+const SDK_BIN = String.raw`C:\Program Files (x86)\Windows Kits\10\bin`;
+
+// An absolute path: `powershell.exe` resolved through PATH could be a planted binary.
+const POWERSHELL = path.join(
+  process.env.SystemRoot ?? String.raw`C:\Windows`,
+  'System32',
+  'WindowsPowerShell',
+  'v1.0',
+  'powershell.exe',
+);
 
 function findSigntool() {
   const fromEnv = process.env.RT772_SIGNTOOL;
@@ -31,7 +40,7 @@ function findSigntool() {
   }
   const versions = existsSync(SDK_BIN)
     ? readdirSync(SDK_BIN)
-        .filter((v) => /^10\./.test(v))
+        .filter((v) => v.startsWith('10.'))
         .sort()
         .reverse()
     : [];
@@ -55,11 +64,11 @@ function certificateSubject(thumbprint) {
     `$c = $s.Certificates.Find('FindByThumbprint','${thumbprint}',$false); $s.Close(); ` +
     'if ($c.Count -ne 1) { exit 3 }; $c[0].Subject';
   try {
-    return execFileSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', script], {
+    return execFileSync(POWERSHELL, ['-NoProfile', '-NonInteractive', '-Command', script], {
       encoding: 'utf8',
     }).trim();
   } catch {
-    throw new Error(`lab certificate ${thumbprint} not found in Cert:\\CurrentUser\\My`);
+    throw new Error(String.raw`lab certificate ${thumbprint} not found in Cert:\CurrentUser\My`);
   }
 }
 

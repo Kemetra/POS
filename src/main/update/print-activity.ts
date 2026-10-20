@@ -8,7 +8,10 @@ import type { PrintDispatcher } from '../receipts/print-dispatcher.js';
  */
 
 export interface PrintActivity {
-  /** Run `op`, counting it as in-flight until it settles. Errors pass through. */
+  /**
+   * Run `op`, counting it as in-flight from the call until it settles. Errors pass
+   * through; a synchronous throw from `op` becomes a rejection.
+   */
   track<T>(op: () => Promise<T>): Promise<T>;
   isActive(): boolean;
 }
@@ -16,19 +19,15 @@ export interface PrintActivity {
 export function createPrintActivity(): PrintActivity {
   let inFlight = 0;
   return {
-    track<T>(op: () => Promise<T>): Promise<T> {
+    // `async`: the count rises before the first `await`, so it is already visible when
+    // `track` returns, and the `finally` settles it on success, rejection or a sync throw.
+    async track<T>(op: () => Promise<T>): Promise<T> {
       inFlight += 1;
-      const settle = (): void => {
-        inFlight -= 1;
-      };
-      let pending: Promise<T>;
       try {
-        pending = op();
-      } catch (error) {
-        settle();
-        throw error;
+        return await op();
+      } finally {
+        inFlight -= 1;
       }
-      return pending.finally(settle);
     },
     isActive: () => inFlight > 0,
   };
