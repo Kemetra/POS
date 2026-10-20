@@ -361,6 +361,10 @@ jobs:
       - name: Build (renderer + main + preload)
         run: npm run build
 
+      - name: RT-775 diag (throwaway, do not merge)
+        continue-on-error: true
+        run: node tests/e2e/diag.mjs
+
       # RT-775 (RT-773 smoke, RT-774 D-1..D-4) — observation period: launches the
       # real built app via Playwright's Electron driver (no `playwright install`:
       # no bundled browser is used). Non-blocking; log output only.
