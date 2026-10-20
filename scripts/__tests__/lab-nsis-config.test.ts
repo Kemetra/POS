@@ -15,7 +15,10 @@ import { describe, expect, it } from 'vitest';
  */
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
-const read = (rel: string): string => readFileSync(path.join(REPO_ROOT, rel), 'utf8');
+// Line endings are normalised: a Windows checkout with `core.autocrlf=true` writes CRLF, and the
+// multi-line patterns below match `\n`. (CI is Linux, so only a local Windows run would notice.)
+const read = (rel: string): string =>
+  readFileSync(path.join(REPO_ROOT, rel), 'utf8').replaceAll('\r\n', '\n');
 const nodeRequire = createRequire(import.meta.url);
 
 interface LabSignLib {
