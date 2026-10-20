@@ -6,8 +6,8 @@
 >
 > **Decisions:** D-263-1 … D-263-9 (§7) are **Selected — recommended option, chosen by the
 > coordinator under the owner's standing delegation of 2026-10-17; owner may revisit.** The
-> visual judgments (D-263-1 visual fit, D-263-5 stroke weight, D-263-8 filled-on-selected) still
-> **need the owner's visual sign-off** before the slices that change pixels (IC-2, IC-3) ship.
+> visual judgments (D-263-1 visual fit, D-263-5 stroke weight, D-263-8 filled-on-selected) were
+> **approved by the owner on 2026-10-20** (RT-263 comment 13139).
 >
 > **Baselines.** `Kemetra/POS` `origin/main` = `4b8b25ba7f22b633449892176cde6d255beeb735` (RT-672,
 > #750). `Kemetra/Admin-Console` `main` = `909a71446e39a6c97573e391bfa0cfb0e657d0f0` (RT-677, #133),
