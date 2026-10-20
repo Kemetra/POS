@@ -7,8 +7,8 @@
  * - Tender buttons have accessible labels.
  */
 
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { cleanup, render, screen } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom/vitest';
 
@@ -115,6 +115,91 @@ describe('PaymentSurface — accessibility', () => {
     }
   });
 
+  it('on arrival, focus is on the first enabled tender tile (freeze 15 §3.2, RT-761)', () => {
+    // RT-754 F1: arriving at Checkout left focus on <body>, so the first Tab went to Back.
+    setup();
+    render(<PaymentSurface />);
+    const first = document.querySelector<HTMLElement>(
+      '[data-testid="tender-selection"] [role="radio"]:not([disabled])',
+    );
+    expect(first).not.toBeNull();
+    expect(first).toHaveAttribute('data-testid', 'tender-cash');
+    expect(first).toHaveFocus();
+  });
+
+  describe('held or doubled Enter right after arrival (I-9 pattern, RT-761)', () => {
+    // The Enter that left the Sale (on «المتابعة إلى الدفع») can repeat or be tapped twice
+    // while focus has just moved onto the first method tile. That is not a choice of cash.
+    // Date.now is pinned before render, so the arm window is deterministic, not wall-clock.
+    const T = 1_700_000_000_000;
+    const ARM_MS = 400;
+
+    function arrive(): void {
+      vi.spyOn(Date, 'now').mockReturnValue(T);
+      setup();
+      render(<PaymentSurface />);
+    }
+    const selected = () => screen.queryByTestId('payment-surface-tender-selected');
+
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
+
+    it('a key-repeat Enter or Space is swallowed even after the arm window (only `repeat` explains it)', () => {
+      arrive();
+      const cash = screen.getByTestId('tender-cash');
+      vi.spyOn(Date, 'now').mockReturnValue(T + ARM_MS * 5);
+      expect(fireEvent.keyDown(cash, { key: 'Enter', repeat: true })).toBe(false);
+      expect(fireEvent.keyDown(cash, { key: ' ', repeat: true })).toBe(false);
+    });
+
+    it('an Enter or Space inside the arm window is swallowed', () => {
+      arrive();
+      const cash = screen.getByTestId('tender-cash');
+      expect(fireEvent.keyDown(cash, { key: 'Enter' })).toBe(false);
+      expect(fireEvent.keyDown(cash, { key: ' ' })).toBe(false);
+    });
+
+    it('a deliberate Enter or Space after the arm window is allowed', () => {
+      arrive();
+      const cash = screen.getByTestId('tender-cash');
+      vi.spyOn(Date, 'now').mockReturnValue(T + ARM_MS);
+      expect(fireEvent.keyDown(cash, { key: 'Enter' })).toBe(true);
+      expect(fireEvent.keyDown(cash, { key: ' ' })).toBe(true);
+    });
+
+    it('a real Enter or Space right after arrival starts nothing; the same key later chooses cash', async () => {
+      const user = userEvent.setup();
+      arrive();
+      expect(screen.getByTestId('tender-cash')).toHaveFocus();
+      await user.keyboard('{Enter}');
+      await user.keyboard(' ');
+      expect(selected()).toBeNull();
+      vi.spyOn(Date, 'now').mockReturnValue(T + ARM_MS * 5);
+      await user.keyboard('{Enter}');
+      expect(selected()).toBeInTheDocument();
+    });
+
+    it('the arm window belongs to the arrival tile: another tile activates normally, a repeat is still swallowed', () => {
+      arrive();
+      const card = screen.getByTestId('tender-external-card');
+      expect(fireEvent.keyDown(card, { key: 'Enter' })).toBe(true);
+      expect(fireEvent.keyDown(card, { key: ' ' })).toBe(true);
+      expect(fireEvent.keyDown(card, { key: 'Enter', repeat: true })).toBe(false);
+    });
+
+    it('negative control: a pointer click right after arrival is not guarded', () => {
+      arrive();
+      fireEvent.click(screen.getByTestId('tender-cash'));
+      expect(selected()).toBeInTheDocument();
+    });
+
+    it('other keys are never swallowed', () => {
+      arrive();
+      expect(fireEvent.keyDown(screen.getByTestId('tender-cash'), { key: 'Tab' })).toBe(true);
+    });
+  });
+
   it('keyboard Tab reaches the cash tender button, passing only the order summary', async () => {
     // RT-243 W1-C (Direction B): the order summary sits before the tender panel
     // in RTL reading order. It is one tab stop, like the Sale cart: the scrolling
@@ -125,6 +210,9 @@ describe('PaymentSurface — accessibility', () => {
     render(<PaymentSurface />);
     const summary = screen.getByTestId('payment-cart-summary');
     const cash = screen.getByTestId('tender-cash');
+    // RT-761: focus now starts on cash on arrival; leave it so Tab order is walked from <body>.
+    (document.activeElement as HTMLElement).blur();
+    expect(cash).not.toHaveFocus();
     for (let i = 0; i < 4 && document.activeElement !== cash; i += 1) {
       await user.tab();
       if (document.activeElement !== cash) {

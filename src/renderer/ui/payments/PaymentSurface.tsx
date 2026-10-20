@@ -485,6 +485,13 @@ const RECOVERY_TEST_IDS = {
   reversalPending: 'payment-surface-reversal-pending-hint',
 } as const;
 
+/**
+ * Freeze 15 §3.2 (Checkout default focus): the first enabled method tile. Focus
+ * lands there on arrival (RT-761, covered by `guardTileKey`) and again after a
+ * partial apply (not covered by that guard).
+ */
+const FIRST_ENABLED_TENDER_TILE = '[data-testid="tender-selection"] [role="radio"]:not([disabled])';
+
 /** M-P7 — the catalogue copy, split at its sentence break into title and body. */
 const CARD_CANCEL_TITLE = 'إلغاء الدفع هنا لا يلغي الخصم على جهاز البطاقات.';
 const CARD_CANCEL_BODY = 'ألغِ العملية على الجهاز أولاً، ثم أكّد.';
@@ -578,11 +585,21 @@ function PaymentSurfaceBody({
   // RT-243 W1-C — the cash typed but not yet applied, for the ledger's preview.
   const [cashDraftMinor, setCashDraftMinor] = useState<number | null>(null);
   const [phase, setPhase] = useState<Phase>('tender_selection');
+  // RT-761: true for the first commit only, so arrival focus is not re-applied when
+  // the cashier later returns to the method tiles (Esc from an entry keeps its own rules).
+  // It is judged on that first commit alone: a stale attempt that the mount effect
+  // clears afterwards leaves focus on <body>, as before (no normal flow does this).
+  const [arriving, setArriving] = useState(true);
+  useEffect(() => {
+    setArriving(false);
+  }, []);
   // RT-238: the pinned primary slot the entry components render their apply-commit into.
   const [primarySlot, setPrimarySlot] = useState<HTMLElement | null>(null);
   // RT-238 / I-9: when focus is moved onto the settle commit, a held or doubled
   // Enter from the apply that preceded it must not settle on its own.
   const commitFocusedAtRef = useRef(0);
+  // RT-761: when arrival focus landed on the first method tile (see `guardTileKey`).
+  const tileFocusedAtRef = useRef(0);
   // RT-298 — the cancel this surface sent and has not finished (its own outcome
   // code updates the screen; see the hold-sync effect below).
   const ownCancelRef = useRef<OwnCancel | null>(null);
@@ -1159,6 +1176,29 @@ function PaymentSurfaceBody({
     if (event.key !== 'Enter' && event.key !== ' ') return;
     const tooSoon = Date.now() - commitFocusedAtRef.current < COMMIT_ARM_MS;
     if (event.repeat || tooSoon) event.preventDefault();
+  }
+
+  /**
+   * RT-761 (same I-9 pattern as the settle commit): arriving at Checkout puts
+   * focus on the first method tile, and the Enter that left the Sale on
+   * «المتابعة إلى الدفع» can repeat (key held) or be tapped twice. Swallow an
+   * Enter/Space that is a key repeat or lands inside the arm window, so it never
+   * starts a payment. Pointer clicks and later, deliberate keys are not affected.
+   * In Chromium, preventing the keydown also suppresses Enter's click and the click
+   * that Space would fire on keyup; another engine would need the keyup guarded too.
+   */
+  function guardTileKey(event: ReactKeyboardEvent<HTMLButtonElement>): void {
+    if (event.key !== 'Enter' && event.key !== ' ') return;
+    if (event.repeat) {
+      event.preventDefault();
+      return;
+    }
+    // The arm window belongs to the tile that arrival focus landed on; a tile the
+    // cashier has since tabbed to activates normally.
+    const onArrivalTile = event.currentTarget === document.querySelector(FIRST_ENABLED_TENDER_TILE);
+    if (onArrivalTile && Date.now() - tileFocusedAtRef.current < COMMIT_ARM_MS) {
+      event.preventDefault();
+    }
   }
 
   function commitClickHandler(): void {
@@ -1771,6 +1811,7 @@ function PaymentSurfaceBody({
               selectedTender={selectedTender}
               voucherEnabled={voucherTenderFlag}
               cardEnabled={cardTenderFlag}
+              onTileKeyDown={guardTileKey}
               onTenderSelect={(tender) => {
                 void handleTenderSelect(tender);
               }}
@@ -1861,11 +1902,17 @@ function PaymentSurfaceBody({
         />
         <FocusWhen
           active={phase === 'tender_selection' && hasAppliedLine && !fullyTendered}
-          find={() =>
-            document.querySelector<HTMLElement>(
-              '[data-testid="tender-selection"] [role="radio"]:not([disabled])',
-            )
+          find={() => document.querySelector<HTMLElement>(FIRST_ENABLED_TENDER_TILE)}
+        />
+        {/* RT-761 / freeze 15 §3.2: arriving at Checkout puts focus on the first method tile. */}
+        <FocusWhen
+          active={
+            arriving && phase === 'tender_selection' && !hasAppliedLine && cancelHold === 'none'
           }
+          find={() => document.querySelector<HTMLElement>(FIRST_ENABLED_TENDER_TILE)}
+          onFocused={() => {
+            tileFocusedAtRef.current = Date.now();
+          }}
         />
       </section>
     </PrimarySlotContext.Provider>
