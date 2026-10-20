@@ -17,9 +17,18 @@ test('POS launches, renders the pairing screen on a fresh profile, closes cleanl
   // under the default userData and are never touched.
   const userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'pos-pulse-e2e-'));
 
-  const env = { ...process.env } as Record<string, string>;
-  delete env['ELECTRON_RUN_AS_NODE'];
-  delete env['NODE_ENV'];
+  // Hermetic launch env: drop Node-mode/dev-mode switches and every POS_PULSE_*
+  // dev or feature flag from the caller's shell (e.g. POS_PULSE_DEV_SKIP_PAIRING
+  // would seed pairing and route past the screen this test asserts).
+  const env = Object.fromEntries(
+    Object.entries(process.env).filter(
+      (entry): entry is [string, string] =>
+        entry[1] !== undefined &&
+        !entry[0].startsWith('POS_PULSE_') &&
+        entry[0] !== 'ELECTRON_RUN_AS_NODE' &&
+        entry[0] !== 'NODE_ENV',
+    ),
+  );
 
   let app: ElectronApplication | undefined;
   try {
@@ -31,9 +40,12 @@ test('POS launches, renders the pairing screen on a fresh profile, closes cleanl
     const proc = app.process();
 
     // The window is created asynchronously after `ready`; wait for it first.
+    // `loadFile` is not awaited by the window factory, so the URL can still be
+    // `about:blank` right after the window appears: assert it after the
+    // pairing element is up.
     const page = await app.firstWindow();
-    expect(page.url()).toContain('/renderer/index.html');
     await expect(page.getByTestId('route-pairing')).toBeVisible({ timeout: 30_000 });
+    expect(page.url()).toContain('/renderer/index.html');
 
     // The app really is using the temp profile (SQLite lives under userData).
     const reportedUserData = await app.evaluate(({ app: electronApp }) =>
