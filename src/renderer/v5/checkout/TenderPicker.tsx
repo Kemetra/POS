@@ -1,4 +1,4 @@
-import type { JSX } from 'react';
+import type { JSX, KeyboardEvent as ReactKeyboardEvent } from 'react';
 
 import type { PaymentIntentEnvelope } from '../../../shared/cart/handoff-envelope';
 import { Icon } from '../../icons/Icon';
@@ -38,6 +38,8 @@ export interface TenderPickerProps {
   voucherEnabled?: boolean;
   /** RT-700: whether the card tile is rendered. Fail-closed default (pilot rule). */
   cardEnabled?: boolean;
+  /** RT-761: lets the owner swallow a held or doubled Enter/Space on a tile right after arrival. */
+  onTileKeyDown?: (event: ReactKeyboardEvent<HTMLButtonElement>) => void;
 }
 
 interface Tile {
@@ -80,6 +82,7 @@ export function TenderPicker({
   selectedTender = null,
   voucherEnabled = false,
   cardEnabled = false,
+  onTileKeyDown,
 }: Readonly<TenderPickerProps>): JSX.Element | null {
   // Route guard: no envelope, nothing to pay.
   if (envelope === null) return null;
@@ -112,6 +115,7 @@ export function TenderPicker({
               aria-label={unavailable ? `${tile.label} — ${tile.detail}` : tile.label}
               disabled={unavailable}
               aria-disabled={unavailable ? 'true' : undefined}
+              onKeyDown={onTileKeyDown}
               onClick={() => {
                 if (!unavailable) onTenderSelect(tile.kind);
               }}
