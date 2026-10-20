@@ -213,6 +213,42 @@ describe('SafePointInputs on the real schema', () => {
       sqlDb.run("UPDATE payment_attempts SET state = 'settled' WHERE payment_attempt_id = 'pa-1'");
       expect(createSafePointInputs(handle(), noPrint).hasNonTerminalPayment()).toBe(false);
     });
+
+    // A voucher compensation that cannot reach the authority leaves the parent attempt `failed`
+    // while its tender line waits for the deferred resolver: an external request is still due.
+    it.each(['applying', 'reversal_pending'])(
+      'is in flight while a tender line is %s, even when its attempt already failed',
+      (lineState) => {
+        insert('payment_attempts', {
+          payment_attempt_id: 'pa-2',
+          state: 'failed',
+          failure_reason: 'split_tender_rollback',
+        });
+        insert('payment_tender_lines', {
+          tender_line_id: 'tl-1',
+          payment_attempt_id: 'pa-2',
+          state: lineState,
+          tender_type: 'internal_voucher',
+          apply_order: 1,
+        });
+        expect(createSafePointInputs(handle(), noPrint).hasNonTerminalPayment()).toBe(true);
+      },
+    );
+
+    it.each(['applied', 'refused', 'reversed'])(
+      'is clear when the only tender lines are %s',
+      (lineState) => {
+        insert('payment_attempts', { payment_attempt_id: 'pa-3', state: 'settled' });
+        insert('payment_tender_lines', {
+          tender_line_id: 'tl-2',
+          payment_attempt_id: 'pa-3',
+          state: lineState,
+          tender_type: 'cash',
+          apply_order: 1,
+        });
+        expect(createSafePointInputs(handle(), noPrint).hasNonTerminalPayment()).toBe(false);
+      },
+    );
   });
 
   describe('return in flight', () => {

@@ -12,7 +12,9 @@ import type { SafePointInputs } from './update-types.js';
  *   open cart    a live sale with something to lose: not cancelled, not parked
  *                (a parked sale is already durably saved, RT-440), not settled,
  *                with at least one active line (same predicate as the lock screen)
- *   payment      any `payment_attempts` row still `started`
+ *   payment      any `payment_attempts` row still `started`, or a tender line whose external
+ *                request is still due (`applying`, `reversal_pending`) even after its attempt
+ *                failed: the deferred reversal resolver is then mid-call
  *   return       a `return_journal` row that is unfinished (`pending`, `unknown`,
  *                or `confirmed` and awaiting its cash payout)
  *   print        the in-memory dispatch counter
@@ -39,7 +41,11 @@ const OPEN_CART = `
      )
    LIMIT 1`;
 
-const PAYMENT_IN_FLIGHT = `SELECT 1 FROM payment_attempts WHERE state = 'started' LIMIT 1`;
+const PAYMENT_IN_FLIGHT = `
+  SELECT 1 FROM payment_attempts WHERE state = 'started'
+  UNION ALL
+  SELECT 1 FROM payment_tender_lines WHERE state IN ('applying', 'reversal_pending')
+  LIMIT 1`;
 
 const RETURN_IN_FLIGHT = `
   SELECT 1 FROM return_journal WHERE state IN ('pending', 'unknown', 'confirmed') LIMIT 1`;

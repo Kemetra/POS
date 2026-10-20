@@ -163,7 +163,8 @@ a no-op. These are the two most likely silent regressions in this area and both 
   - **Roll-forward only:** `allowDowngrade` is forced false after the channel is set (the channel
     setter can flip it) and install-on-quit is off.
   - **Install only at a safe point:** one predicate (`SafePointGate`), true only with no open shift, no
-    open cart, no unfinished payment or return, and no print in flight (counted at the print pipeline, so
+    open cart, no unfinished payment (including a tender line still
+    awaiting an external apply or reversal) or return, and no print in flight (counted at the print pipeline, so
     receipts, the cash return slip and sale-history reprints are all covered). An input that cannot be read
     blocks. It is evaluated at two triggers: the update finishing downloading before sign-in (app
     start), and a committed shift close.
