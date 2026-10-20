@@ -31,14 +31,17 @@ for (const s of [2, 5, 10, 20]) {
       title: document.title,
       testids: [...document.querySelectorAll('[data-testid]')].map((e) => e.getAttribute('data-testid')),
       text: document.body?.innerText?.slice(0, 600),
-      bridge: typeof window.pos,
+      bridge: typeof window.pos, inner: [innerWidth, innerHeight], screen: [screen.width, screen.height, screen.availWidth, screen.availHeight], dpr: devicePixelRatio,
     }))
     .catch((e) => ({ evalError: String(e) }));
   out(`t+${s}s`, JSON.stringify(snap));
 }
 const info = await app
-  .evaluate(({ app: a, BrowserWindow, safeStorage }) => ({
+  .evaluate(({ app: a, BrowserWindow, safeStorage, screen }) => ({
     windows: BrowserWindow.getAllWindows().length,
+    bounds: BrowserWindow.getAllWindows()[0]?.getBounds(),
+    content: BrowserWindow.getAllWindows()[0]?.getContentBounds(),
+    displays: screen.getAllDisplays().map((d) => ({ size: d.size, work: d.workAreaSize, scale: d.scaleFactor })),
     safeStorage: safeStorage.isEncryptionAvailable(),
     userData: a.getPath('userData'),
     gpu: a.getGPUFeatureStatus(),
