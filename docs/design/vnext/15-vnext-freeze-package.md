@@ -39,7 +39,7 @@ The pack's four "unresolved on every screen" assumptions are handled as follows:
 
 - **Digits:** Western digits everywhere, per OD-3 (approved). Validation against real receipts is still pending and gates only `shared/money` grouping.
 - **Currency label:** `EGP` (OD-3). The pack's «ج.م» is overridden.
-- **Keyboard shortcuts:** the wave-1 key set is frozen in §3.5. The F-key map stays an open decision (D-K1).
+- **Keyboard shortcuts:** the wave-1 key set is frozen in §3.5. The F-key map is deferred (D-K1, owner 2026-10-20): wave 1 stays keyless.
 - **Focus and scanner:** frozen in §3.
 
 ---
@@ -93,7 +93,7 @@ Reference IDs: pack `I2-*` / `I3-*`, older `VN-R*`, re-audit `K*`.
 | # | State | Primary | Blocked (shown with reason) | Status shown | Recovery | Behaviour | Ref | Evidence |
 |---|---|---|---|---|---|---|---|---|
 | S1 | Empty cart | (scan) | «الدفع» (no items) | scan target «جاهز للمسح» | — | RT-24 §3 ✅ | I2-Sale | scan with no click adds a line |
-| S2 | Active sale / long cart | «الدفع» | — | total pinned; last-added row flashed and in view | undo last line (D-C1) | RT-24 §4, D-C1 ✅; undo ⏳ D-U1 | I2-Sale, I2-LongCart, K05/K06 | ≥6 rows at 1024 with banners; newest row visible |
+| S2 | Active sale / long cart | «الدفع» | — | total pinned; last-added row flashed and in view | undo last line (D-C1) | RT-24 §4, D-C1 ✅; undo ✅ D-U1 | I2-Sale, I2-LongCart, K05/K06 | ≥6 rows at 1024 with banners; newest row visible |
 | S3 | Scan not found / item unavailable | (keep scanning) | — | inline notice with the scanned code (LTR) | rescan or search | RT-24 §5 ✅ | — (copy §5 M-S3) | burst of an unknown code; focus unchanged |
 | S4 | Flagged item (e.g. `prescription_required`) | (keep scanning) | — | line badge «بوصفة طبية» | — | D-C1 ✅ (display only, I-17) | — | flag visible on the row, no blocking |
 | S5 | Discount requested | (manager) | discount entry for a cashier | «يحتاج موافقة المدير» | — | **RT-28 In Review, RT-114 To Do** ⏳ | I3-Manager | not implementation-safe |
@@ -244,8 +244,8 @@ primitives, owned by one slice), and lists the four additions.
 
 **Additions (not in 06):**
 - **A1 `UndoNotice`.** An inline, time-boxed (8 s) «تراجع» for the last add or delete. It is
-  focusable and announced politely. **Behaviour is pending D-U1** (no restore-line operation
-  exists today).
+  focusable and announced politely. **Shipped** (D-U1, ratified by the owner 2026-10-20): RT-242
+  W1-B PR4 (#621) through the main-authoritative `cart.undoLast` (RT-254).
 - **A2 `ActionSlots`.** A region's actions live in fixed slots: inline-end = primary/commit,
   inline-start = cancel/back. A slot that is empty in one state stays empty rather than being
   reused by an action of the opposite consequence (N-02).
@@ -290,13 +290,13 @@ Conditional rows (marked ⏳) depend on the named contract and must not ship bef
 |---|---|---|---|
 | **Scanning and sale** | | | |
 | M-S1 | Scan owner ready / paused (search) / paused (dialog) / unavailable | «جاهز للمسح» / «المسح متوقف — البحث مفتوح» / «المسح متوقف — نافذة مفتوحة» / «المسح غير متاح» | neutral |
-| M-S2 | Item added (direct add) | «أُضيف: ‹الاسم›» · undo «تراجع» ⏳ D-U1 | neutral |
+| M-S2 | Item added (direct add) | «أُضيف: ‹الاسم›» · undo «تراجع» ✅ D-U1 | neutral |
 | M-S3 | Unknown barcode | «الباركود ‹code› غير موجود في الكتالوج. امسح مرة أخرى أو ابحث بالاسم.» | warning |
 | M-S4 | Item unavailable | «‹الاسم› غير متاح للبيع حاليًا.» | warning |
 | M-S5 | Scan into a money field / PIN field / card reference | «لا يُقبل المسح في حقل المبلغ. أدخل المبلغ بالأرقام.» / «لا يُقبل المسح في حقل الرقم السري. أدخل الرقم السري بالأرقام.» / «لا يُقبل المسح في حقل المرجع. اكتب المرجع من إيصال جهاز البطاقات.» | warning |
 | M-S6 | Scan while a dialog is open | «أغلق النافذة أولاً ثم امسح الصنف.» | warning |
 | M-S7 | Scan on a completed sale | «هذا البيع مكتمل. اضغط «بيع جديد» ثم امسح الصنف.» | info |
-| M-S8 | Line deleted | «حُذف ‹الاسم›.» · «تراجع» ⏳ D-U1 | neutral |
+| M-S8 | Line deleted | «حُذف ‹الاسم›.» · «تراجع» ✅ D-U1 | neutral |
 | M-S9 | Prescription flag | «بوصفة طبية» (line badge) | info |
 | M-S10 | Catalogue stale / never downloaded | «الكتالوج لم يُحدَّث منذ ‹time›.» / «لم يُنزَّل الكتالوج بعد — جارٍ التحديث…» | warning |
 | **Checkout and payment** | | | |
@@ -461,7 +461,7 @@ Every implementation slice:
 | Slice | Scope | Workflow owner | Work Mode | Depends on | Refs | Evidence |
 |---|---|---|---|---|---|---|
 | **W1-A** Foundation + frame | VN-S2 (role tokens, forced-colors, RouteLoading, ErrorScreen, Arabic ScreenTooSmall) + `Banner`/`Dialog`/`ConfirmDialog` primitives + cashier lands on Sale + OD-6 placeholders hidden for the cashier role (drawer-banner placement waits for D-B1) | W2 cashier flow | Implementation | owner acceptance of 15 | VN-S2 rows of 09; I2-Consistency | before/after captures identical except intended |
-| **W1-B** Sale Direction B + direct add | VN-S12 (command bar, cart-first, money column, slim nav) + **D-C1 direct add** for scan and search pick + `ScanStatus` + newest row in view + ↑/↓ row focus | W2 | Implementation | W1-A, A2; **the direct-add and undo part also depends on D-U1** (the layout part may proceed without it, keeping confirm-first until D-U1 closes) | I2-Sale, I2-LongCart | ≥6 rows at 1024 with a banner; scan-without-click adds; KLM before/after |
+| **W1-B** Sale Direction B + direct add | VN-S12 (command bar, cart-first, money column, slim nav) + **D-C1 direct add** for scan and search pick + `ScanStatus` + newest row in view + ↑/↓ row focus | W2 | Implementation | W1-A, A2; D-U1 (closed 2026-10-20; shipped in #621) | I2-Sale, I2-LongCart | ≥6 rows at 1024 with a banner; scan-without-click adds; KLM before/after |
 | **W1-C** Checkout + completion clean-room | VN-S4 on the frozen states (S7–S10, S12–S14) with `PaymentLedger`, `ProofList`, the M-P/M-C copy | W2 | Implementation | W1-A, A1, A3 | I2-Checkout*, I2-PayUnknown, I3-Receipt | every payment state in the harness; packaged sale |
 | **W1-D** Sign-in / Ready / pairing recompose | VN-S8 minus lock; the PIN pad in view; Arabic copy M-F1 | W2 | Implementation | W1-A, **G-1 references for sign-in, PIN, Ready and pairing** | new G-1 references (all four surfaces) | 1024/1280; roster unreachable state |
 
@@ -469,8 +469,8 @@ Every implementation slice:
 
 | ID | Decision / contract | Blocks | Recommendation |
 |---|---|---|---|
-| **D-K1** | RT-24 §C.5 key map (F-keys) | VN-S5 keys, keycaps | Keep wave 1 keyless (§3.5); conflict-test on the bench with the pilot scanner suffix |
-| **D-U1** | Undo of the last add / delete: restore contract + audit event | A1 `UndoNotice`, M-S8 | Define all three inverses, each audited: **undo of a new line** removes that line; **undo of a merged +1** decrements that line by exactly one, never below its quantity before the add; **undo of a delete** restores the line (cart-bridge "restore line", `cart.line_restored`). Undo is offered only for the last action and only while the cart is editable. Until D-U1 closes, delete stays immediate (today) and the direct-add part of W1-B waits |
+| **D-K1** | RT-24 §C.5 key map (F-keys) | VN-S5 keys, keycaps | **Deferred** (owner 2026-10-20): wave 1 stays keyless (§3.5); conflict-test on the bench with the pilot scanner suffix before the map is decided |
+| **D-U1** | Undo of the last add / delete: restore contract + audit event | A1 `UndoNotice`, M-S8 | Define all three inverses, each audited: **undo of a new line** removes that line; **undo of a merged +1** decrements that line by exactly one, never below its quantity before the add; **undo of a delete** restores the line (cart-bridge "restore line", `cart.line_restored`). Undo is offered only for the last action and only while the cart is editable. **Closed** (owner 2026-10-20, RT-159 comment 13138): shipped in RT-242 W1-B PR4 (#621) through `cart.undoLast` (RT-254), where main chooses and applies the inverse |
 | **D-F2** | Main-process plausibility bound on cash received | F-02 main side | Bound by currency maximum (RT-17 already has a shift-amount bound) |
 | **D-S1** | Shift is advisory by design (RT-17 comment 10919). Confirm on the bench whether a settled pre-shift cash sale is counted in the next shift's expected cash | S20, N-06 | Bench check under RT-17; only if it is not counted, raise a contract item |
 | **D-B1** | Drawer-failure presentation: today a persistent bilingual banner (about 178 px) on every screen, across sessions and restarts (N-08) | W1-A banner work, M-C4 | Show it inside cash completion and in the status indicator; clear it after an acknowledgement or the next successful drawer event. This changes 008's presentation and needs an owner decision |

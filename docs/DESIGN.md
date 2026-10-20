@@ -243,10 +243,10 @@ components:
 >   *(VN-S2)*. Do not describe them as shipped and do not implement them outside that slice's
 >   Jira issue ([`09-implementation-slices.md`](design/vnext/09-implementation-slices.md)).
 > - **Still open** (do not resolve them by design): the RT-24 §C confirmations — lazy cart,
->   same-device suspend/resume, key map (direct add vs confirm-first is resolved by owner decision
+>   same-device suspend/resume, key map (D-K1 deferred by the owner on 2026-10-20: wave 1 stays keyless; direct add vs confirm-first is resolved by owner decision
 >   D-C1, 2026-10-07: direct add, see `design/vnext/15-vnext-freeze-package.md` §3); OD-3's validation against real
->   Egyptian pharmacy receipts (printed receipts, Q-4); and the real-app capacity capture that must confirm Direction B
->   before VN-S12 ships.
+>   Egyptian pharmacy receipts (printed receipts, Q-4). Undo of the last add or delete (D-U1) shipped in #621 and was
+>   ratified by the owner on 2026-10-20.
 > - Superseded: the v3.5 navy / Inter / dark-default system and `docs/design/pos-v3.5/`
 >   (historical reference only).
 
@@ -265,7 +265,7 @@ lands.
 | Money typeface | Monospace with tabular figures (`amount-hero`, `amount-total`, `money-row`) | The UI sans with **tabular lining numerals**; monospace only for IDs, codes and evidence | UX-03. Owner decision 2026-10-07: UX-03 wins over the Rebaseline's "superseded" wording | Mono money stays until the **RT-262** rendered same-screen A/B prototype proves the sans treatment better |
 | UI font | Dubai | Dubai stays the incumbent. IBM Plex Sans Arabic is the challenger; Noto Sans Arabic UI is the readability control | UX-03 | Only after a same-screen A/B (RT-262) shows a clear gain |
 | Type role names | `--type-*` aliases (RT-241), values unchanged | UX-03's role vocabulary (`money-hero`, `money-total`, `numeric-row`, `machine`, …) | UX-03 | Mapping in [Typography](#typography). Renaming waits for a later slice |
-| Icons | The semantic registry with vendored Fluent Regular glyphs is shipped (`src/renderer/icons/`, IC-1 / RT-692, no npm dependency), but product UI still draws the hand-drawn `V5Icon` set | Every consumer on the registry: **Fluent System Icons** by semantic name (`icon.sale`, `icon.cart`, …) | UX-03; RT-263 plan [25](design/vnext/25-rt263-icon-registry-fluent-poc.md) | IC-2 moves the POS consumers. The owner's visual sign-off is still needed before the pixel-changing slices (IC-2, IC-3) |
+| Icons | The semantic registry with vendored Fluent Regular glyphs is shipped (`src/renderer/icons/`, IC-1 / RT-692, no npm dependency), and every POS consumer uses it (IC-2 / RT-695, #760; `V5Icon` deleted) | Every consumer on the registry: **Fluent System Icons** by semantic name (`icon.sale`, `icon.cart`, …) | UX-03; RT-263 plan [25](design/vnext/25-rt263-icon-registry-fluent-poc.md) | Done for POS. Visual fit owner-approved 2026-10-20 (D-263-1, D-263-5, D-263-8) |
 | Radius | Control 10 px, panel 14 px, overlay 16 px, pill | Control **8 px**, contained object **12 px**, overlay **16 px**; work surfaces near-square; pills only for status, counts and tags | UX-04 | A staged migration in its own slice. Shipped tokens stay as they are until then |
 | Density | Two profiles: compact and comfortable | Three modes: Comfortable, Operational, Compact | UX-04 | Open (Q-1) |
 | Motion | 80 / 150 / 220 ms and `ease-out`; a fourth 320 ms duration token also exists | Contact 80 ms, Signal 150 ms, Continuity 220 ms, same easing; no arbitrary durations | UX-06 | No value change. New work uses only the three roles |
@@ -456,8 +456,8 @@ Shipped today: the renderer's UX-12 formatter `src/renderer/ui/format/human-form
 Icons reinforce; text decides (UX-03). Domain, destructive, financial and recovery actions always show their text; an icon is a supporting cue, never the only meaning, and technical concepts (ERP posting, held sales, returns, shift operations) are never icon-only puzzles.
 
 - **Shipped, registry (IC-1 / RT-692):** `src/renderer/icons/` holds the semantic registry (`registry.ts`), the `Icon` component and vendored **Fluent System Icons** Regular path data (`fluent-paths.ts`, MIT notice alongside). It renders by meaning, owns RTL mirroring per name, and adds **no npm dependency** (D-263-2 vendored path data, D-263-3 no package). Do not add `@fluentui/*` packages.
-- **Shipped, consumers:** product UI still draws the closed, hand-drawn inline-SVG set (`V5Icon`, 24 grid, `currentColor`).
-- **Target *(UX-03, RT-263)*:** every consumer names icons through the registry, so product code never names a vendor glyph or a `V5Icon` shape. IC-2 moves the POS consumers ([25](design/vnext/25-rt263-icon-registry-fluent-poc.md) §8). Decisions D-263-1…9 were selected by the coordinator under the owner's standing delegation; the visual ones still need the owner's sign-off before the pixel-changing slices (IC-2, IC-3) ship.
+- **Shipped, consumers (IC-2 / RT-695, #760):** every POS consumer names icons through the registry. `V5Icon` is deleted; the brand cross is the `PharmacyCross` brand component. A test forbids raw `<svg>` in `src/renderer` outside `icons/` and the brand components.
+- **Target *(UX-03, RT-263)*:** every consumer names icons through the registry, so product code never names a vendor glyph or a `V5Icon` shape. Met for POS by IC-2 ([25](design/vnext/25-rt263-icon-registry-fluent-poc.md) §8). Decisions D-263-1…9 were selected by the coordinator under the owner's standing delegation; the owner approved the visual fit on 2026-10-20.
 - **One icon grammar:** never mix Fluent, Lucide, Phosphor and bespoke glyphs in ordinary product UI. A custom glyph needs a proven gap: a frequent concept whose library metaphor fails even with its label (the cash drawer is a candidate, not a requirement).
 - **Regular by default:** regular forms for wayfinding and actions; a filled form only for a persistent selected state when it helps recognition. Selection does not stack every signal (filled icon, strong teal, heavy fill, Signal Line and bold text) without need.
 - **Colour:** icons inherit `currentColor`; interaction and status tokens decide their colour. No category palettes and no decorative coloured icon tiles unless the surface is a real launcher.

@@ -59,7 +59,7 @@
 | G-6 Returns content references (RT-660, Docs / design, **owner-approved 2026-10-17: decisions as recommended**): the RT-15 Returns content on the shared G-6 controls (frozen `g6.css` imported unchanged) — lookup (empty, blank, not found, refused), line selection, quote, outcomes, payout incl. its refusals, history (empty, rows, reprint failed, load failed) and the fail-closed gate at 1024 and 1280, light and forced colours; every string verbatim from `src/renderer/returns/`, decisions RD-1…RD-10 proposed. Replaces the frame-only G6-Returns stand-in for content | [G6R-Spec.html](visual-acceptance/G6-Returns/G6R-Spec.html) |
 | RT-497 S10-R G-6 reference coverage map (Docs / design, **coverage check only, nothing drawn**): every manager/admin surface and state RT-497 names mapped to its owner-approved reference on `main` (all 21 in `G6-Manager/`, plus the later G6R, G6P, VD, G2, RC, G3 and PK3 sets); missing: none. Lists the later RT-536 D7 / D8 / D1 decisions that touch G-6 and where each belongs; proposes RT-497 is satisfied | [27-rt497-s10r-reference-coverage.md](27-rt497-s10r-reference-coverage.md) |
 | VN-S6 plan: a truthful connection and sync-status signal (RT-599, Planning, **owner-approved 2026-10-17: D-6-1…D-6-11 as recommended**): what main knows today (truthful vs inferred), the signal and its hysteresis, the proposed `terminalStatus` bridge contract with §A4 notes, the state → `StatusIndicator` / `Banner` / M-O\* mapping, the test and bench plan, and slices S6-0…S6-V that retire the 007 `StatusBanner` | [24-vn-s6-connection-sync-signal.md](24-vn-s6-connection-sync-signal.md) |
-| UX-03 icon plan: semantic icon registry + Fluent System Icons fit / licence / bundle PoC (RT-263, Planning, **D-263-1…D-263-9 selected as recommended under the owner's standing delegation of 2026-10-17; visual fit needs owner sign-off**): POS + Admin icon inventory, the 53-name registry with RTL mirror rules, sizes and the a11y rule, Fluent coverage / RTL / weight / MIT licence, measured bundle cost of each packaging option, recommendation (vendored path data, no dependency) and slices IC-1…IC-4 | [25-rt263-icon-registry-fluent-poc.md](25-rt263-icon-registry-fluent-poc.md) · [25-rt263-icon-candidates.html](25-rt263-icon-candidates.html) |
+| UX-03 icon plan: semantic icon registry + Fluent System Icons fit / licence / bundle PoC (RT-263, Planning, **D-263-1…D-263-9 selected as recommended under the owner's standing delegation of 2026-10-17; visual fit owner-approved 2026-10-20**; IC-1 and IC-2 merged): POS + Admin icon inventory, the 53-name registry with RTL mirror rules, sizes and the a11y rule, Fluent coverage / RTL / weight / MIT licence, measured bundle cost of each packaging option, recommendation (vendored path data, no dependency) and slices IC-1…IC-4 | [25-rt263-icon-registry-fluent-poc.md](25-rt263-icon-registry-fluent-poc.md) · [25-rt263-icon-candidates.html](25-rt263-icon-candidates.html) |
 | Cashier operational feature-completeness and benchmark gap review (RT-536, Planning, `main@673a8f9`, **applies owner decisions D1–D8 of 2026-10-16; OD-26-1…OD-26-4 selected as recommended, owner may revisit**): the operational-day inventory, the G-01…G-24 parity / gap matrix with evidence levels, 12 cashier journeys (all marked untested on current `main`), the top five gaps, Lightspeed X-Series as the only new benchmark, and proposed slices P-26-1…P-26-6 (none created) | [26-rt536-cashier-feature-completeness.md](26-rt536-cashier-feature-completeness.md) |
 | Manual-discount contract (RT-699 step 1, P-26-6 / G-19, Planning, `main@2d3cba07`, **money, VAT, receipt and fiscal rules OD-28-1…4, 9 (list), 10, 11 left Open for the owner; behaviour OD-28-5…9 selected as recommended, owner may revisit; Backend-Core capture and ERPNext-Connector posting named as dependencies**): discount kind and token, integer minor-unit rounding, per-line scope, totals, the cashier-approval and manager-direct flows on RT-114, the receipt row, capture facts and options, refusals, audit, test plan, bounded slices | [28-rt699-manual-discount-contract.md](28-rt699-manual-discount-contract.md) |
 | Shift amount bounds against scanner digits (RT-278, Planning, `main@d63ee893`, **awaiting owner decisions OD-278-1…9**): the four shift money inputs and their bounds today (RT-17's storage bound is 2⁵³ − 1 minor, about 9.0×10¹³ EGP, and misses F-02), risk ranked by damage (counted cash first), flat per-field caps that keep the blind count blind, the `amount_out_of_range` refusal and copy, the S1 slice with its tests, and gated slices S2 (local migration), S3 (Backend-Core contract), S4 (audit sync contract) | [29-rt278-shift-amount-bounds.md](29-rt278-shift-amount-bounds.md) |
@@ -148,7 +148,7 @@ regenerated, re-worded or re-classified by the import.
 |---|---|
 | OD-1 | Keep the shipped teal direction. Tower Blue is not adopted as a palette. |
 | OD-2 | Keep Dubai for the pilot. No font is bundled. |
-| OD-3 | Western digits, grouped money formatting and the `EGP` label. Not yet implemented (VN-S3, absorbed into VN-S12); still to be checked against real Egyptian pharmacy receipts. |
+| OD-3 | Western digits, grouped money formatting and the `EGP` label. The renderer formatter applies it; `shared/money` `format()` does not yet (see [`DESIGN.md`](../../DESIGN.md) Numerals). Still to be checked against real Egyptian pharmacy receipts. |
 | OD-4 | Light-first for the pilot; high-contrast / forced-colors support is required. Dark is maintained but not offered. |
 | OD-5 | Keep the in-product name «POS Pulse» for now. |
 | OD-6 | Hide unavailable or unauthorised placeholder navigation from the cashier role. |
@@ -189,16 +189,18 @@ The approval did not close these. They stay open until separately evidenced or a
 slices that depend on them must not assume an answer:
 
 - **RT-24 §C confirmations:** item 2 (lazy cart), item 4 (same-device suspend/resume) and item 5
-  (key map). These gate VN-S5 (keys) and VN-S11 (suspend/resume). **Item 1 (direct add vs
+  (key map; D-K1 deferred by the owner on 2026-10-20, wave 1 stays keyless). These gate VN-S5
+  (keys) and VN-S11 (suspend/resume). **Item 1 (direct add vs
   confirm-first) is resolved by owner decision D-C1 (2026-10-07):** direct add for scans and
-  search picks, with undo pending D-U1 (see [14 §5](14-rt159-packaged-reaudit.md) and
+  search picks, with undo (D-U1, shipped in #621 and ratified 2026-10-20; see [14 §5](14-rt159-packaged-reaudit.md) and
   [15](15-vnext-freeze-package.md) §3, §7). See [08](08-rt24-invariants.md).
   The keycaps drawn in the approved references are part of this open key map, not bound
   shortcuts ([references](references/README.md)).
 - **OD-3 receipt validation:** the numeral and grouping policy must be checked against real
-  Egyptian pharmacy receipts before VN-S3/VN-S12 changes `shared/money` output.
-- **VN-S12 capacity capture:** one real-app Electron capture with the 10-line cart must confirm
-  the Direction B capacity gain ([10](10-direction-comparison.md)) before Sale layout B ships.
+  Egyptian pharmacy receipts before `shared/money` output changes.
+- **VN-S12 capacity capture:** supplied by the RT-159 runtime audit
+  ([12](12-cashier-ux-usability-audit.md), A03/A04/A06/A07). Sale layout B has since shipped
+  (RT-242, #610 and #611); its packaged evidence is still open (RT-754).
 - **Evidence limits** below are unchanged.
 
 ## Evidence limits (read before approving)
