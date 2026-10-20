@@ -207,6 +207,15 @@ import { openDatabase } from './db/client.js';
 import { bindMigrationsDb, readMigrationsFromDisk } from './db/migrate.js';
 import { bindVacuumInto } from './db/pre-migration-snapshot.js';
 import { runStartupMigrations } from './app/startup-migrations.js';
+// RT-772 — packaged-only, fail-closed updater (ADR-0006). electron-updater is CJS: default
+// import, and its singleton is only touched once every guard in UpdateService holds.
+import electronUpdater from 'electron-updater';
+import { createPrintActivity, trackPrintDispatcher } from './update/print-activity.js';
+import { createSafePointGate } from './update/safe-point-gate.js';
+import { createSafePointInputs } from './update/safe-point-inputs.js';
+import { readPublisherPins, resolveUpdateConfig } from './update/update-config.js';
+import { createUpdateService } from './update/update-service.js';
+import type { UpdateService } from './update/update-service.js';
 import { createSecretStore } from './secrets/index.js';
 import { createLogger, waitForLogDrain } from './logging/logger.js';
 import { initSentryMain, mainIntegrations } from './observability/sentry-main.js';
@@ -488,6 +497,13 @@ const dbHolder = createDatabaseHolder({ logger: console });
  * mid-flight background tick can never run against a closed handle.
  */
 const workerRegistry = createWorkerRegistry({ logger: console });
+
+/**
+ * RT-772 — the updater's scheduled check. Held at module level (like
+ * `pairedWorkers`) so `closeDbHandle()` can stop it before the DB handle closes:
+ * a late tick would otherwise read the safe-point inputs from a closed handle.
+ */
+let updateServiceHandle: UpdateService | null = null;
 
 /**
  * RT-202 — once-latch for the paired-only workers (read-down driver, finalize
@@ -865,6 +881,26 @@ singleInstanceReady
     //     closures. Keyed on backend_session_id, in-process only, never bridged.
     const operatorEnvelopeHolder = createJwtHolder(refuseWhileRevoked);
     const operatorSessionManager = new SessionManager();
+
+    // RT-772 slice 2 — the POS updater (ADR-0006; design §4-§6). Constructed here,
+    // before the shift close paths and the print dispatcher that report to it, and
+    // started after the last IPC registration. It does nothing unless this is the
+    // shipped app AND an origin is configured AND a publisher is pinned (fail
+    // closed). It installs only at a safe point: no open shift, nothing in flight.
+    const printActivity = createPrintActivity();
+    const updateConfig = resolveUpdateConfig(process.env);
+    const updateService = createUpdateService({
+      isShippedApp: shippedApp,
+      origin: updateConfig.origin,
+      channel: updateConfig.channel,
+      readPublisherPins: () =>
+        readPublisherPins(path.join(process.resourcesPath, 'app-update.yml')),
+      getUpdater: () => electronUpdater.autoUpdater,
+      gate: createSafePointGate(createSafePointInputs(db, printActivity)),
+      isBeforeSignIn: () => operatorSessionManager.getCurrent() === null,
+      logger: mainLogger,
+    });
+    updateServiceHandle = updateService;
     sessionLockProbe.isLocked = () => operatorSessionManager.isLocked();
     recoveryModeProbe.active = () => operatorSessionManager.getCurrent()?.recovery_of !== undefined;
     // RT-444 (RT-116 S3, §4) — ONE sign-in admission guard for every path
@@ -1428,6 +1464,10 @@ singleInstanceReady
           pairingEpoch: () => pairingStore.getPairingEpoch(),
           managerPins,
           now: () => new Date().toISOString(),
+          // RT-772: a manager's forced close is a safe-point trigger for an update install.
+          onShiftClosed: () => {
+            updateService.notifyShiftClosed();
+          },
         }),
         deliverNow: () =>
           shiftSyncDrainNowRef.current === null
@@ -1990,14 +2030,18 @@ singleInstanceReady
       // rendered slip time (bridge) matches the print_events.printed_at the
       // dispatcher writes for the same logical event (one clock read per event).
       const receiptsClock = (): string => new Date().toISOString();
-      const printDispatcher = createPrintDispatcher({
-        pipeline: printPipeline,
-        printEventsRepo,
-        auditEmitter: saleAuditEmitter,
-        now: receiptsClock,
-        newPrintEventId: () => randomUUID(),
-        logger: mainLogger,
-      });
+      // RT-772: every dispatch is counted, so an update never installs mid-print.
+      const printDispatcher = trackPrintDispatcher(
+        createPrintDispatcher({
+          pipeline: printPipeline,
+          printEventsRepo,
+          auditEmitter: saleAuditEmitter,
+          now: receiptsClock,
+          newPrintEventId: () => randomUUID(),
+          logger: mainLogger,
+        }),
+        printActivity,
+      );
 
       // 008 Slice 4 — drawer-kick dispatcher (AD-8 separate command). Chains
       // after a successful first print for cash-inclusive sales. The real
@@ -2600,7 +2644,15 @@ singleInstanceReady
       logger: mainLogger,
       // RT-443: the one store, shared with the approval service (audited there).
       managerPins,
+      // RT-772: the cashier's shift close is a safe-point trigger for an update install.
+      onShiftClosed: () => {
+        updateService.notifyShiftClosed();
+      },
     });
+
+    // RT-772: after the last IPC registration, so a download that completes at once
+    // already sees the real shift, cart, payment, return and print state.
+    updateService.start();
 
     createWindow();
     mainLogger.info('app:ready');
@@ -2625,6 +2677,7 @@ function closeDbHandle(): void {
   // and idempotency are owned by the worker registry; this function preserves
   // the sequencing (drain, then close).
   pairedWorkers?.close();
+  updateServiceHandle?.stop();
   workerRegistry.stopAll();
   dbHolder.close();
 }

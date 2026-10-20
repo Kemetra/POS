@@ -114,6 +114,7 @@ Background workers **must** all stop before the DB handle closes, or a mid-fligh
 against a closed handle. `closeDbHandle()` preserves that sequencing:
 
 ```
+updateServiceHandle?.stop() // the updater's scheduled check (RT-772)
 workerRegistry.stopAll()   // finalize listener → read-down driver → sale-sync interval
 dbHolder.close()           // only then
 ```
@@ -136,6 +137,26 @@ a no-op. These are the two most likely silent regressions in this area and both 
   - **Database ahead of the build:** if `schema_migrations` names a migration this build does not ship, startup is refused with an operator dialog (`SchemaAheadError`, `src/main/app/startup-migrations.ts`). A newer build has migrated the DB.
   - **Pre-migration snapshot:** before the first pending migration on an already-migrated DB, a `VACUUM INTO` snapshot is written to `<userData>/backups/` (newest 3 kept). It is never restored automatically. If the snapshot fails, startup halts.
   - **Shipped migrations are immutable:** a migration file that has shipped in any signed release is never edited, renamed, renumbered or deleted. Corrections go in a new migration.
+- **Updater (RT-772 slice 2, ADR-0006; `src/main/update/`):** `UpdateService` is main-process only,
+  constructed in the composition root and started after the last IPC registration. It has no renderer
+  surface and no UI install trigger.
+  - **Guards, in order:** it does nothing unless this is the shipped app, `ELECTRON_UPDATE_FEED_URL`
+    is set to an **https** origin, `POS_PULSE_UPDATE_CHANNEL` is a known channel (`lab`, `canary`,
+    `stable`; unset means `stable`), and the build's `app-update.yml` pins a publisher. With no
+    pinned publisher it reports `verify_unavailable` and never checks: electron-updater skips
+    signature verification entirely when none is pinned, so the service never lets it start without one.
+  - **Roll-forward only:** `allowDowngrade` is forced false after the channel is set (the channel
+    setter can flip it) and install-on-quit is off.
+  - **Install only at a safe point:** one predicate (`SafePointGate`), true only with no open shift, no
+    open cart, no unfinished payment or return, and no print in flight. An input that cannot be read
+    blocks. It is evaluated at two triggers: the update finishing downloading before sign-in (app
+    start), and a committed shift close (`onShiftClosed` on both close paths).
+  - **Failures are visible:** a signature or checksum failure is `verify_failed`, an inability to run
+    the check is `verify_unavailable`, anything else is `error`. None installs. All state changes are
+    logged as `update:state`.
+  - **Provisioning note:** the origin and channel are read from the process environment. The
+    installer's relaunch after an update does **not** inherit them (observed in the lab drill), so a
+    real terminal needs them set persistently (user or machine environment), not per launch.
 - **Append-only tables** are enforced by SQLite triggers, not by convention.
 - **Money is integer minor units everywhere.** No floats, guarded by `Number.isSafeInteger`.
 

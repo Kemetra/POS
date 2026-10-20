@@ -64,8 +64,17 @@ describe('RT-772 electron-builder.lab.yml', () => {
     expect(lab).toMatch(/deleteAppDataOnUninstall:\s*false/);
   });
 
-  it('has no publish provider, so nothing can be uploaded or promoted from it', () => {
-    expect(lab).not.toMatch(/^\s*publish:/m);
+  it('has exactly one publish provider: generic, https, a reserved .test host, channel lab', () => {
+    expect(lab.match(/^\s*-?\s*provider:/gm)).toHaveLength(1);
+    expect(lab).toMatch(
+      /^publish:\n\s+- provider: generic\n\s+url: https:\/\/[a-z0-9-]+\.test(:\d+)?\/\S*\n\s+channel: lab\n/m,
+    );
+  });
+
+  it('can never upload: no uploading provider, no token, and the build is --publish never', () => {
+    expect(lab).not.toMatch(/provider:\s*(github|s3|spaces|bitbucket|keygen|snapcraft|custom)/i);
+    expect(lab).not.toMatch(/token|accessKey|secretKey|bucket/i);
+    expect(read('scripts/lab/build-lab-installer.ps1')).toMatch(/--publish never/);
   });
 
   it('does not override the frozen identity or the fuses', () => {

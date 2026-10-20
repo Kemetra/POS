@@ -27,7 +27,8 @@ param(
   [Parameter(Mandatory = $true)][ValidatePattern('^\d+\.\d+\.\d+$')][string]$Version,
   [string]$OutRoot = 'D:\rt772-lab',
   [string]$CertSha1 = $env:RT772_LAB_CERT_SHA1,
-  [switch]$LabFixtureMigration
+  [switch]$LabFixtureMigration,
+  [switch]$AllowDirtyAppInputs
 )
 
 $ErrorActionPreference = 'Stop'
@@ -43,14 +44,25 @@ if (-not (Test-Path 'electron-builder.lab.yml')) { throw 'run from a checkout th
 #    HEAD. The lab scripts and docs themselves may be uncommitted. The one allowed
 #    extra is the throwaway fixture migration, on request.
 $appPaths = '^..\s+(src/|migrations/|package(-lock)?\.json|electron-builder\.yml|vite\.|tsconfig|postcss|tailwind)'
-$dirty = @(git status --porcelain | Where-Object { $_ -match $appPaths })
+$dirty = @(git status --porcelain -uall | Where-Object { $_ -match $appPaths })
 if ($LabFixtureMigration) {
   if (-not (Test-Path $fixtureRel)) { throw "-LabFixtureMigration needs $fixtureRel to exist" }
   $dirty = @($dirty | Where-Object { $_ -notmatch [regex]::Escape($fixtureRel) })
 } elseif (Test-Path $fixtureRel) {
   throw "$fixtureRel exists but -LabFixtureMigration was not given"
 }
-if ($dirty.Count -gt 0) { throw "app inputs differ from HEAD:`n$($dirty -join "`n")" }
+# -AllowDirtyAppInputs builds work that is not committed yet. It is never silent: the
+# manifest records the blob id of every differing file, so the exact app content can be
+# reproduced or checked against a later commit (`git hash-object <path>`).
+$dirtyInputs = @()
+if ($dirty.Count -gt 0) {
+  if (-not $AllowDirtyAppInputs) { throw "app inputs differ from HEAD (use -AllowDirtyAppInputs to record them):`n$($dirty -join "`n")" }
+  $dirtyInputs = @($dirty | ForEach-Object {
+    $rel = ($_.Substring(3).Trim('"') -split ' -> ')[-1]
+    $blob = if (Test-Path -LiteralPath $rel) { (git hash-object -- $rel).Trim() } else { 'DELETED' }
+    [ordered]@{ path = $rel; status = $_.Substring(0, 2).Trim(); blob = $blob }
+  })
+}
 $gitSha = (git rev-parse HEAD).Trim()
 $labFilesUncommitted = @(git status --porcelain -- scripts/lab electron-builder.lab.yml docs/runbook | Where-Object { $_ }).Count -gt 0
 
@@ -93,6 +105,7 @@ $manifest = [ordered]@{
   sizeBytes        = $installer.Length
   gitSha           = $gitSha
   labFilesUncommitted = $labFilesUncommitted
+  dirtyAppInputs   = $dirtyInputs
   fixtureMigration = [bool]$LabFixtureMigration
   signerSubject    = $sig.SignerCertificate.Subject
   signerThumbprint = $sig.SignerCertificate.Thumbprint

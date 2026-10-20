@@ -96,8 +96,57 @@ delete both certificates from `Cert:\CurrentUser\My` on the build machine and di
 sandbox (its trust and `userData` die with it). Create a new pair with
 `new-lab-signing-cert.ps1`; old installers then fail verification, which is intended.
 
+## Slice 2: the update leg (lab only)
+
+Slice 2 adds the packaged-only, fail-closed `UpdateService` and the `SafePointGate` (see
+`docs/architecture/current.md` §4). Production behaviour is unchanged: the lab differs only by
+configuration, so there is no lab-only verification path.
+
+- **Lab feed.** `electron-builder.lab.yml` carries one `generic` publish entry on the reserved host
+  `rt772-lab.test` with channel `lab`. It exists so electron-builder bakes an `app-update.yml` with
+  the pinned lab publisher (electron-updater skips signature verification when none is baked).
+  Builds still run with `--publish never`: nothing is uploaded, and a build also writes `lab.yml`
+  next to the installer. The running app takes its origin from `ELECTRON_UPDATE_FEED_URL` and its
+  channel from `POS_PULSE_UPDATE_CHANNEL`.
+- **Serve it only inside the Sandbox.** `scripts/lab/serve-lab-feed.ps1` is a static HTTPS server
+  (GET/HEAD, no Range, every request logged). It refuses to run outside the Sandbox user and for any
+  host that is not `.test`. In the Sandbox: create a self-signed TLS certificate for the host name,
+  trust it in the Sandbox's own store, add a hosts entry to `127.0.0.1`, and pass the thumbprint.
+  The TLS certificate and the trust never leave the Sandbox.
+- **Feeds for the drill.** One directory per case, each with `lab.yml` and the installer:
+  `happy` (the newer, signed build), `tamper` (one byte flipped; `lab.yml` keeps the real hash),
+  `unsigned` (signature removed with `signtool remove /s`; `lab.yml` rewritten to the new
+  `sha512` and size), `wrongpub` (re-signed by a second leaf of the **same lab root** with a
+  different subject; `lab.yml` rewritten) and `older` (the older build's `lab.yml` and installer).
+  No `.blockmap` is served, so a full download is used.
+- **Build with uncommitted changes.** `build-lab-installer.ps1 -AllowDirtyAppInputs` records the blob
+  id of every differing app input in the manifest (`git hash-object <path>`), so the exact content
+  can be checked against a later commit. Without the switch the build still refuses.
+- **Cases and what to look for** (the `update:state` lines in `userData\logs\main-*.log`):
+
+  | Case                            | Expected                                                                             |
+  | :------------------------------ | :----------------------------------------------------------------------------------- |
+  | newer signed build, no shift    | `checking`, `downloading`, `downloaded`, `installing` (app start); relaunch as new   |
+  | tampered installer              | `verify_failed` (`sha512 checksum mismatch`); version unchanged                      |
+  | unsigned installer              | `verify_failed` (`not signed by the application owner`); version unchanged           |
+  | wrong publisher, valid chain    | `verify_failed` (pin mismatch); version unchanged                                    |
+  | open shift                      | `update_pending` with blocker `open_shift`; not installed                            |
+  | same download after shift close | installs at the next app start                                                       |
+  | older version offered           | `checking`, `idle`; no installer download in the feed log; version unchanged         |
+
+- **Gotchas.**
+  - The installer's relaunch after an update does **not** inherit the process environment: the
+    relaunched app logs `update:disabled reason=no_origin`. A real terminal needs the origin and
+    channel set persistently (user or machine environment).
+  - A "was this state reached" check must read only the current session. Logs accumulate across
+    launches, so a count over the whole file reports an earlier `installing` line (this made the
+    first driver mark the older-version case as failed although that session behaved correctly).
+  - A shift can be simulated by seeding rows (`shift_cashup_opens`, then `shift_cashup_closes`) into a
+    copy of the DB. That exercises the app-start trigger; the shift-close trigger is covered by unit
+    tests, not by this drill.
+
 ## Next
 
-The update leg (an `electron-updater` dependency, `UpdateService`, `SafePointGate`) is the
-RT-322-shaped slice 2. It needs explicit dependency approval and an owner decision on the lab
-update origin and its TLS trust. It is not part of this slice.
+Beyond the lab: the production feed, signing service and promotion are RT-321 and RT-322, the
+fleet visibility and minimum-supported-version contract is RT-323, and the drill on the rt9 lab is
+RT-324. None of those is started here.

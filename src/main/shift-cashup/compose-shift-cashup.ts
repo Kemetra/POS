@@ -89,10 +89,51 @@ export interface ComposeShiftCashupServiceDeps extends Pick<
   currencyCode?: string;
   /** Defaults to a UUIDv7. */
   newId?: () => string;
+  /**
+   * RT-772: called after a shift close is committed, by either close path (the
+   * cashier's close or a manager's forced close). It is a safe-point trigger for
+   * an update install and can never fail a close.
+   */
+  onShiftClosed?: () => void;
+}
+
+/**
+ * RT-772 — the same service, with `onShiftClosed` called once a close has been
+ * committed. A failed close does not notify; a throwing callback does not fail a
+ * close that is already durable (the callback owns its own logging).
+ */
+export function notifyOnShiftClose(
+  service: ShiftCashupService,
+  onShiftClosed: () => void,
+): ShiftCashupService {
+  const notify = (): void => {
+    try {
+      onShiftClosed();
+    } catch {
+      // The close is already committed; the callback logs its own failures.
+    }
+  };
+  return {
+    openShift: (input) => service.openShift(input),
+    recordCashMovement: (input) => service.recordCashMovement(input),
+    closeShift: (input) => {
+      const closed = service.closeShift(input);
+      notify();
+      return closed;
+    },
+    forceCloseShift: (input) => {
+      const closed = service.forceCloseShift(input);
+      notify();
+      return closed;
+    },
+    verifyApprover: (input) => service.verifyApprover(input),
+    listApprovers: () => service.listApprovers(),
+    readStatus: () => service.readStatus(),
+  };
 }
 
 export function composeShiftCashupService(deps: ComposeShiftCashupServiceDeps): ShiftCashupService {
-  return createShiftCashupService({
+  const service = createShiftCashupService({
     isEnabled: deps.isEnabled,
     getSession: deps.getSession,
     isSessionLocked: deps.isSessionLocked,
@@ -109,6 +150,9 @@ export function composeShiftCashupService(deps: ComposeShiftCashupServiceDeps): 
     now: deps.now,
     newId: deps.newId ?? (() => uuidv7()),
   });
+  return deps.onShiftClosed === undefined
+    ? service
+    : notifyOnShiftClose(service, deps.onShiftClosed);
 }
 
 /** The paired terminal's scope, or null while unpaired or needing a re-pair. */

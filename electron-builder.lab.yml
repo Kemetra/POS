@@ -6,7 +6,10 @@
 # not restated. The shipped `electron-builder.yml` and its `dir` target are untouched.
 #
 # What this file deliberately does NOT do (guarded by scripts/__tests__/lab-nsis-config.test.ts):
-#   - no `publish` provider: nothing can be uploaded or promoted from a lab build;
+#   - no uploading publish provider: the only `publish` entry is a `generic` provider on a
+#     reserved `.test` host. It exists so electron-builder bakes an app-update.yml with the
+#     pinned publisher (electron-updater skips signature verification when none is baked),
+#     and builds run with `--publish never`, so nothing is uploaded or promoted from here;
 #   - no key material or certificate path: the lab hook signs from the CurrentUser\My store;
 #   - no switch that turns off the updater's signature verification or code-signing
 #     enforcement: the production updater's verification is never weakened (an updater
@@ -25,6 +28,14 @@ win:
     # Custom hook: signs with signtool from the CurrentUser\My store, refuses any
     # certificate without the lab marker, and makes no timestamp call by default.
     sign: ./scripts/lab/lab-sign.cjs
+# RT-772 slice 2 — the lab update feed (design §10, channel `lab`). `.test` is reserved
+# (RFC 6761) and never resolves publicly, so this URL can only ever be reached through a
+# hosts entry on a disposable lab device. The running app takes its origin from
+# ELECTRON_UPDATE_FEED_URL; the URL here is only the baked default.
+publish:
+  - provider: generic
+    url: https://rt772-lab.test:8443/lab
+    channel: lab
 nsis:
   # Per-user install, no UAC (ADR-0006 P-6). Keeps userData, the DB and DPAPI
   # secrets under the installing Windows user.
