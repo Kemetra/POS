@@ -19,15 +19,18 @@ test('POS launches, renders the pairing screen on a fresh profile, closes cleanl
 
   // Hermetic launch env: drop Node-mode/dev-mode switches and every POS_PULSE_*
   // dev or feature flag from the caller's shell (e.g. POS_PULSE_DEV_SKIP_PAIRING
-  // would seed pairing and route past the screen this test asserts).
+  // would seed pairing and route past the screen this test asserts). Windows
+  // env names are case-insensitive, so compare upper-cased.
   const env = Object.fromEntries(
-    Object.entries(process.env).filter(
-      (entry): entry is [string, string] =>
+    Object.entries(process.env).filter((entry): entry is [string, string] => {
+      const name = entry[0].toUpperCase();
+      return (
         entry[1] !== undefined &&
-        !entry[0].startsWith('POS_PULSE_') &&
-        entry[0] !== 'ELECTRON_RUN_AS_NODE' &&
-        entry[0] !== 'NODE_ENV',
-    ),
+        !name.startsWith('POS_PULSE_') &&
+        name !== 'ELECTRON_RUN_AS_NODE' &&
+        name !== 'NODE_ENV'
+      );
+    }),
   );
 
   let app: ElectronApplication | undefined;
