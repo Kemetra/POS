@@ -1,4 +1,4 @@
-# Lab NSIS installer (RT-772 slice 1)
+# Lab NSIS installer (RT-772 slices 1 and 2)
 
 > **LAB ONLY.** This builds a per-user NSIS installer signed with a **self-signed test
 > certificate** for one disposable Windows device. It is not a release path: nothing here
@@ -10,9 +10,9 @@
 
 | Proves                                                                               | Does not prove                                                      |
 | :----------------------------------------------------------------------------------- | :------------------------------------------------------------------ |
-| A reproducible per-user NSIS build of the shipped app, with a recorded SHA-256       | That any updater exists (there is none; `electron-updater` is RT-322) |
+| A reproducible per-user NSIS build of the shipped app, with a recorded SHA-256       | The production feed, signing service or promotion (RT-321 / RT-322) |
 | The lab signature is `Valid` only where the lab root is trusted                      | Production signing, HSM custody, RFC 3161 timestamping              |
-| The installed app keeps `userData` (SQLite, outbox, DPAPI secrets) across 0.1.0 → 0.1.1 | Staged rollout, safe-point install gating, compat gate              |
+| The installed app keeps `userData` (SQLite, outbox, DPAPI secrets) across 0.1.0 → 0.1.1 | Staged rollout or the compat gate (slice 2 covers the update leg and safe-point gating) |
 | A newer schema triggers the pre-migration snapshot; an older build then refuses to start (RT-320) on a **packaged** build | RT-321 / RT-322 / RT-324 acceptance (they stay open and independent) |
 
 ## Trust boundary
@@ -24,8 +24,8 @@
 - Only the **public** root (`D:\rt772-lab\certs\rt772-lab-root.cer`) leaves the build
   machine. It is imported **only on the disposable lab device**, by its owner. It is never
   trusted on the build machine: there the signature is expected to report `NotTrusted`.
-- `electron-builder.lab.yml` has no `publish` block, no certificate path, and does not touch
-  the shipped `electron-builder.yml`, the frozen identity (`tech.smartdatapulse.pos` /
+- `electron-builder.lab.yml` has no uploading publish provider (one `generic` entry on the reserved
+  `.test` host, see slice 2), no certificate path, and does not touch the shipped `electron-builder.yml`, the frozen identity (`tech.smartdatapulse.pos` /
   `POS Pulse`) or the RT-164 fuses. `scripts/__tests__/lab-nsis-config.test.ts` pins this.
 - No timestamp call is made. A signature without a timestamp stops verifying when the leaf
   expires (90 days), so lab artifacts are short-lived by design. A timestamp is added only

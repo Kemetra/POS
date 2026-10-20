@@ -165,12 +165,15 @@ a no-op. These are the two most likely silent regressions in this area and both 
   - **Install only at a safe point:** one predicate (`SafePointGate`), true only with no open shift, no
     open cart, no unfinished payment or return, and no print in flight. An input that cannot be read
     blocks. It is evaluated at two triggers: the update finishing downloading before sign-in (app
-    start), and a committed shift close (`onShiftClosed` on both close paths).
-  - **A shift close never installs inside the close call.** The close returns before its own delivery
-    (a forced close drains the shift outbox, bounded by `SHIFT_SYNC_DRAIN_TIMEOUT_MS`) and its reply are
-    done, and an install quits the app. The evaluation is deferred by that bound plus a margin,
-    coalesced into one timer, cancelled on shutdown, and re-reads the gate when it fires (a shift opened
-    meanwhile keeps the update pending).
+    start), and a committed shift close.
+  - **A shift close notifies the updater only when its own work is done.** The cashier's close
+    notifies (`onShiftClosed`) once it is committed. A manager's forced close drains the shift outbox
+    (bounded by `SHIFT_SYNC_DRAIN_TIMEOUT_MS`) and then answers its caller, so `ForcedCloseHandler`
+    notifies (`onCloseDelivered`) only after that delivery attempt has finished (sent or queued), never
+    during it and never for a refused close. Even then the evaluation is deferred by a short margin
+    (`SHIFT_CLOSE_REPLY_MARGIN_MS`) so the answer reaches the renderer before an install quits the app;
+    it is coalesced into one timer, cancelled on shutdown, and re-reads the gate when it fires (a
+    shift opened meanwhile keeps the update pending).
   - **Failures are visible:** a signature or checksum failure is `verify_failed`, an inability to
     verify (our marker, or a PowerShell failure) is `verify_unavailable`, anything else is `error`. The
     marker is classified first, because electron-updater wraps any non-null verifier result as "not

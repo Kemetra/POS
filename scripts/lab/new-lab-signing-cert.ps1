@@ -34,6 +34,22 @@ function Find-Valid([string]$subject) {
     Sort-Object NotAfter -Descending | Select-Object -First 1
 }
 
+# True only when $leaf was issued by exactly $root (not merely by a root with the same name) and
+# outlives neither it: a leaf from an earlier root must never be reused under a new one.
+function Test-IssuedBy($leaf, $root) {
+  if ($leaf.NotAfter -gt $root.NotAfter) { return $false }
+  $chain = New-Object System.Security.Cryptography.X509Certificates.X509Chain
+  try {
+    $chain.ChainPolicy.RevocationMode = [System.Security.Cryptography.X509Certificates.X509RevocationMode]::NoCheck
+    # The lab root is deliberately untrusted here; only the issuer link is being checked.
+    $chain.ChainPolicy.VerificationFlags = [System.Security.Cryptography.X509Certificates.X509VerificationFlags]::AllowUnknownCertificateAuthority
+    if (-not $chain.Build($leaf)) { return $false }
+    return ($chain.ChainElements.Count -ge 2) -and ($chain.ChainElements[1].Certificate.Thumbprint -eq $root.Thumbprint)
+  } finally {
+    $chain.Reset()
+  }
+}
+
 $root = Find-Valid $rootSubject
 if (-not $root) {
   $root = New-SelfSignedCertificate -Type Custom -Subject $rootSubject `
@@ -48,11 +64,14 @@ if (-not $root) {
 }
 
 $leaf = Find-Valid $leafSubject
-if (-not $leaf -or $leaf.Issuer -ne $rootSubject) {
+if (-not $leaf -or -not (Test-IssuedBy $leaf $root)) {
+  # A leaf never outlives its root.
+  $leafNotAfter = (Get-Date).AddDays($LeafDays)
+  if ($leafNotAfter -gt $root.NotAfter) { $leafNotAfter = $root.NotAfter }
   $leaf = New-SelfSignedCertificate -Type CodeSigningCert -Subject $leafSubject -Signer $root `
     -KeyAlgorithm RSA -KeyLength 3072 -HashAlgorithm SHA256 `
     -KeyExportPolicy NonExportable -CertStoreLocation $store `
-    -NotAfter (Get-Date).AddDays($LeafDays)
+    -NotAfter $leafNotAfter
   Write-Host "created lab leaf  $($leaf.Thumbprint)"
 } else {
   Write-Host "reusing lab leaf  $($leaf.Thumbprint) (expires $($leaf.NotAfter.ToString('yyyy-MM-dd')))"

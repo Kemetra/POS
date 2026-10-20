@@ -148,7 +148,6 @@ import {
   scheduleReturnsResolver,
 } from './returns/compose-returns.js';
 import {
-  SHIFT_SYNC_DRAIN_TIMEOUT_MS,
   composeShiftCashupService,
   pairedShiftScope,
   registerShiftSync,
@@ -393,6 +392,9 @@ const shippedApp = isShippedApp({
 
 /** RT-164 — longest a refused launch waits for its log line to reach disk. */
 const LAUNCH_REFUSAL_LOG_DRAIN_MS = 2000;
+
+/** RT-772 — room for a shift close's answer to reach the renderer before an update install quits. */
+const SHIFT_CLOSE_REPLY_MARGIN_MS = 4_000;
 
 /**
  * The trusted renderer origin allow-list. Dev = the Vite server; prod = the
@@ -905,9 +907,9 @@ singleInstanceReady
       // electron-updater's own Windows verifier resolves "valid" when its PowerShell check cannot
       // run; this one returns null only on positive proof (see signature-verifier.ts).
       verifier: createFailClosedVerifier(createPowerShellProbe()),
-      // A forced close drains the shift outbox (bounded by SHIFT_SYNC_DRAIN_TIMEOUT_MS) and then
-      // answers its caller; the install must not quit the app inside that window.
-      afterShiftCloseDelayMs: SHIFT_SYNC_DRAIN_TIMEOUT_MS + 4_000,
+      // Both close paths notify only once their own work is done (the forced close after its
+      // delivery, see ForcedCloseHandler); this is just room for the answer to reach the renderer.
+      afterShiftCloseDelayMs: SHIFT_CLOSE_REPLY_MARGIN_MS,
     });
     updateServiceHandle = updateService;
     sessionLockProbe.isLocked = () => operatorSessionManager.isLocked();
@@ -1473,15 +1475,16 @@ singleInstanceReady
           pairingEpoch: () => pairingStore.getPairingEpoch(),
           managerPins,
           now: () => new Date().toISOString(),
-          // RT-772: a manager's forced close is a safe-point trigger for an update install.
-          onShiftClosed: () => {
-            updateService.notifyShiftClosed();
-          },
         }),
         deliverNow: () =>
           shiftSyncDrainNowRef.current === null
             ? Promise.resolve(false)
             : shiftSyncDrainNowRef.current(),
+        // RT-772: a manager's forced close is a safe-point trigger for an update install, but
+        // only after its delivery has finished: the install quits the app.
+        onCloseDelivered: () => {
+          updateService.notifyShiftClosed();
+        },
       }),
       stuckShiftsHandler: new StuckShiftsHandler({
         sessionManager: operatorSessionManager,

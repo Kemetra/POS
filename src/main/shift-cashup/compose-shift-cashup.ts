@@ -90,17 +90,19 @@ export interface ComposeShiftCashupServiceDeps extends Pick<
   /** Defaults to a UUIDv7. */
   newId?: () => string;
   /**
-   * RT-772: called after a shift close is committed, by either close path (the
-   * cashier's close or a manager's forced close). It is a safe-point trigger for
-   * an update install and can never fail a close.
+   * RT-772: called after the cashier's shift close is committed. It is a safe-point trigger
+   * for an update install and can never fail a close. A manager's forced close is not
+   * notified here: it drains the outbox and answers its caller after the service returns,
+   * so its handler notifies once that delivery has finished (`onCloseDelivered`).
    */
   onShiftClosed?: () => void;
 }
 
 /**
- * RT-772 — the same service, with `onShiftClosed` called once a close has been
- * committed. A failed close does not notify; a throwing callback does not fail a
- * close that is already durable (the callback owns its own logging).
+ * RT-772 — the same service, with `onShiftClosed` called once the cashier's close has been
+ * committed. A failed close does not notify; a throwing callback does not fail a close that is
+ * already durable (the callback owns its own logging). A forced close is deliberately not
+ * wrapped: it is notified by its handler after delivery.
  */
 export function notifyOnShiftClose(
   service: ShiftCashupService,
@@ -121,11 +123,7 @@ export function notifyOnShiftClose(
       notify();
       return closed;
     },
-    forceCloseShift: (input) => {
-      const closed = service.forceCloseShift(input);
-      notify();
-      return closed;
-    },
+    forceCloseShift: (input) => service.forceCloseShift(input),
     verifyApprover: (input) => service.verifyApprover(input),
     listApprovers: () => service.listApprovers(),
     readStatus: () => service.readStatus(),

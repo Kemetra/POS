@@ -348,9 +348,11 @@ export function createUpdateService(deps: UpdateServiceDeps): UpdateService {
     getStatus: () => status,
 
     /**
-     * Never evaluates inside the close call: the close returns before its own delivery and reply
-     * are done, and an install quits the app. The evaluation runs after a delay, coalesced, and
-     * re-reads the gate when it fires (a shift opened meanwhile keeps the update pending).
+     * Called by each close path once its own work is done (the forced close after its delivery,
+     * see ForcedCloseHandler.onCloseDelivered). It still never evaluates inside that call: an
+     * install quits the app, so the evaluation runs after a short margin for the answer to reach
+     * the renderer, coalesced, and re-reads the gate when it fires (a shift opened meanwhile
+     * keeps the update pending).
      */
     notifyShiftClosed(): void {
       if (!isWaiting() || shiftCloseTimer !== null) return;

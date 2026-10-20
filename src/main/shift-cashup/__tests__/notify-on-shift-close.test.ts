@@ -5,8 +5,8 @@ import type { ShiftCashupService } from '../shift-cashup-service.js';
 
 /**
  * RT-772 slice 2 — shift close is one of the two safe-point triggers for an
- * update install. Both close paths (the cashier's close and a manager's forced
- * close) go through the service, so the notification is a decorator on it.
+ * update install. The cashier's close is notified by a decorator on the service; a manager's
+ * forced close is notified by its handler after delivery (see forced-close-handler tests).
  * It fires only after a close is committed, and it can never fail one.
  */
 
@@ -46,12 +46,13 @@ describe('notifyOnShiftClose', () => {
     expect(calls).toEqual(['closeShift', 'notified']);
   });
 
-  it('notifies after a manager forced close too', () => {
+  it('does not notify for a manager forced close: its handler notifies after delivery', () => {
     const { service, calls } = fakeService();
     const onClosed = vi.fn(() => calls.push('notified'));
     const wrapped = notifyOnShiftClose(service, onClosed);
     expect(wrapped.forceCloseShift({} as never)).toEqual({ shiftId: 'forced' });
-    expect(calls).toEqual(['forceCloseShift', 'notified']);
+    expect(calls).toEqual(['forceCloseShift']);
+    expect(onClosed).not.toHaveBeenCalled();
   });
 
   it('does not notify when the close fails, and the failure still propagates', () => {

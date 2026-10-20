@@ -12,8 +12,8 @@
 #     and builds run with `--publish never`, so nothing is uploaded or promoted from here;
 #   - no key material or certificate path: the lab hook signs from the CurrentUser\My store;
 #   - no switch that turns off the updater's signature verification or code-signing
-#     enforcement: the production updater's verification is never weakened (an updater
-#     does not exist yet; RT-322).
+#     enforcement: the production updater's verification is never weakened (UpdateService
+#     requires this pinned publisher and verifies fail-closed; see docs/architecture/current.md).
 extends: ./electron-builder.yml
 win:
   target:
