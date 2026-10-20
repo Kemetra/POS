@@ -394,12 +394,12 @@ jobs:
           }
           "@
           $cur = [Disp]::Blank()
-          [void][Disp]::EnumDisplaySettings($null, -1, [ref]$cur)
+          [void][Disp]::EnumDisplaySettings([NullString]::Value, -1, [ref]$cur)
           "current: $($cur.dmPelsWidth)x$($cur.dmPelsHeight) @ $($cur.dmBitsPerPel)bpp"
           $modes = @{}
           for ($i = 0; ; $i++) {
             $m = [Disp]::Blank()
-            if (-not [Disp]::EnumDisplaySettings($null, $i, [ref]$m)) { break }
+            if (-not [Disp]::EnumDisplaySettings([NullString]::Value, $i, [ref]$m)) { break }
             $modes["$($m.dmPelsWidth)x$($m.dmPelsHeight)"] = $m
           }
           "supported: " + (($modes.Keys | Sort-Object) -join ' ')
@@ -412,7 +412,7 @@ jobs:
             if ($rc -eq 0) { break }
           }
           $now = [Disp]::Blank()
-          [void][Disp]::EnumDisplaySettings($null, -1, [ref]$now)
+          [void][Disp]::EnumDisplaySettings([NullString]::Value, -1, [ref]$now)
           "now: $($now.dmPelsWidth)x$($now.dmPelsHeight)"
           if ($now.dmPelsWidth -lt 1280 -or $now.dmPelsHeight -lt 800) { throw "display still below 1280x800" }
 
