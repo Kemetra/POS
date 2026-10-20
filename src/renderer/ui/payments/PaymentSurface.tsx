@@ -1189,8 +1189,16 @@ function PaymentSurfaceBody({
    */
   function guardTileKey(event: ReactKeyboardEvent<HTMLButtonElement>): void {
     if (event.key !== 'Enter' && event.key !== ' ') return;
-    const tooSoon = Date.now() - tileFocusedAtRef.current < COMMIT_ARM_MS;
-    if (event.repeat || tooSoon) event.preventDefault();
+    if (event.repeat) {
+      event.preventDefault();
+      return;
+    }
+    // The arm window belongs to the tile that arrival focus landed on; a tile the
+    // cashier has since tabbed to activates normally.
+    const onArrivalTile = event.currentTarget === document.querySelector(FIRST_ENABLED_TENDER_TILE);
+    if (onArrivalTile && Date.now() - tileFocusedAtRef.current < COMMIT_ARM_MS) {
+      event.preventDefault();
+    }
   }
 
   function commitClickHandler(): void {

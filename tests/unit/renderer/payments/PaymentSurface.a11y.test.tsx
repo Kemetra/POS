@@ -180,6 +180,14 @@ describe('PaymentSurface — accessibility', () => {
       expect(selected()).toBeInTheDocument();
     });
 
+    it('the arm window belongs to the arrival tile: another tile activates normally, a repeat is still swallowed', () => {
+      arrive();
+      const card = screen.getByTestId('tender-external-card');
+      expect(fireEvent.keyDown(card, { key: 'Enter' })).toBe(true);
+      expect(fireEvent.keyDown(card, { key: ' ' })).toBe(true);
+      expect(fireEvent.keyDown(card, { key: 'Enter', repeat: true })).toBe(false);
+    });
+
     it('negative control: a pointer click right after arrival is not guarded', () => {
       arrive();
       fireEvent.click(screen.getByTestId('tender-cash'));
