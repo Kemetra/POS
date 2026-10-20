@@ -61,6 +61,14 @@
 #        build/scripts, .github/**, ...) needs the Windows job. Pushes to main
 #        always package. The `ci` aggregate FAILS if `package` was needed but
 #        did not succeed (skipped, failed or cancelled).
+#        RT-775 exception: `tests/e2e/` is carved out of the `tests/**` skip, so
+#        a PR touching it still runs the Windows job (it is the only job that
+#        runs that suite). The rest of `tests/**` and `src/renderer/**` still skip.
+#        Observation period: the RT-773 Playwright Electron smoke runs in
+#        `package` between `npm run build` and `package:dir` with
+#        `continue-on-error: true`, so it can never fail `package` or `ci`.
+#        Log output only (no artifact/trace upload). Making it blocking is a
+#        separate change after the observation period (RT-775 exit criterion).
 
 name: ci
 
@@ -138,6 +146,11 @@ jobs:
           skip_re='^(src/renderer|tests|docs|specs|\.impeccable|\.specify|\.claude)/|^[^/]*\.md$'
           changed="$(git diff --no-renames --name-only HEAD^1 HEAD)"
           needs="$(printf '%s\n' "$changed" | grep -v '^$' | grep -Ev "$skip_re" || true)"
+          # RT-775 — tests/e2e/ is on the skip allowlist via `tests/`, but the
+          # Playwright Electron smoke only runs in this Windows job. ERE has no
+          # lookahead, so add it back with a second match rather than editing skip_re.
+          e2e="$(printf '%s\n' "$changed" | grep -E '^tests/e2e/' || true)"
+          if [ -n "$e2e" ]; then needs="$(printf '%s\n%s\n' "$needs" "$e2e" | grep -v '^$')"; fi
           if [ -z "$changed" ] || [ -n "$needs" ]; then needs_package=true; else needs_package=false; fi
           echo "Paths that require the package job:"
           printf '  %s\n' "${needs:-<none>}"
@@ -347,6 +360,13 @@ jobs:
 
       - name: Build (renderer + main + preload)
         run: npm run build
+
+      # RT-775 (RT-773 smoke, RT-774 D-1..D-4) — observation period: launches the
+      # real built app via Playwright's Electron driver (no `playwright install`:
+      # no bundled browser is used). Non-blocking; log output only.
+      - name: Playwright Electron smoke (RT-773, non-blocking)
+        continue-on-error: true
+        run: npx playwright test -c tests/e2e/playwright.config.ts
 
       - name: Package (Windows --dir, unsigned)
         run: npm run package:dir
