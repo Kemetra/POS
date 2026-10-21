@@ -26,7 +26,7 @@ environment `POS Pulse.exe` inherits when it starts.**
 | Main-process settings | Main is compiled with `tsc`, not Vite. It reads `process.env` directly (`src/main/index.ts`; flags in `src/main/app/feature-flags.ts`). Nothing is baked in at build time. |
 | `.env` file | **Not read by any build.** No `dotenv` or `--env-file` exists. `.env` is gitignored and not in `electron-builder.yml` `files`. A `.env` placed next to the exe does nothing. |
 | Renderer | Gets settings only through the `app:config` bridge call (`window.api.appConfig()`), which main answers from its own `process.env`. No runtime `import.meta.env.VITE_*` value is inlined into the bundle. |
-| Installer / auto-update | None. `electron-builder.yml` targets `dir` (an unpacked folder). There is no NSIS/MSI step that could write config, and no updater. |
+| Installer / auto-update | The installer never writes config. The RT-772 `UpdateService` (`src/main/update/`) reads its origin and channel from the same process environment (§3.2, `ELECTRON_UPDATE_FEED_URL`, `POS_PULSE_UPDATE_CHANNEL`); it has no other source. The installer is spawned from the POS process, so its `--force-run` relaunch inherits Machine-scope values; a per-launch override does not survive it (RT-322). |
 | In-app settings screen / DB | None for these settings. |
 | Device credential | **Not** an environment value. Pairing stores the device token in the local DB, encrypted with Electron `safeStorage` (DPAPI). Never put it, or any credential, in the environment. |
 
@@ -99,6 +99,8 @@ start the POS.
 | `POS_PULSE_FEATURE_SHIFT_CASHUP` | **Off (unset) on every pilot terminal until the owner accepts the RT-17 evidence.** Then `1` turns on the shift cash-up: open a shift with a float, record pay-ins and pay-outs, close with a blind count. It needs Backend-Core `481eb26` or later with migration `0036_shift_cash_up` and both domain-grant scripts applied first (the Backend-Core deploy runbook, `deploy/README.md`). See §7 for the rule when a terminal is revoked, re-paired or moved. | Not a secret. |
 | `POS_PULSE_FEATURE_SALE_TENDERS_SINCE` | Set **only** as the RT-79 tender rollout instructs: a future ISO instant with an explicit zone. Unparseable means tenders are off, with a warning. | Not a secret. |
 | `POS_PULSE_FEATURE_SALE_RECEIPT_SINCE` | Set **only** as the RT-540 receipt-snapshot rollout instructs: a future ISO instant with an explicit zone, later than both the Backend-Core RT-539 deploy and the restart that loads it. Sales finalized at or after it send the optional `receipt` (sale number, terminal label, operator name, branch header, change given). A sale with a missing or oversized fact, or an operator name containing `@`, still syncs, without it. Once set, never move, unset or clear it while sales are queued (a retry would then send a different body under the same key, a 409): drain the outbox first. Do not set it earlier than `POS_PULSE_FEATURE_SALE_TENDERS_SINCE`, so the change given always pairs with a cash tender. Unparseable means off, with a warning. | Not a secret. |
+| `ELECTRON_UPDATE_FEED_URL` | The update origin: an **`https://`** URL, supplied by the deployment owner. Unset or empty means updates are disabled (`update:disabled reason=no_origin`), which is the normal state for a terminal that does not self-update. A non-https or malformed value is refused (`origin_not_https`), never contacted. The origin confers no trust: authenticity is the publisher signature pinned in the build. Machine scope only (§4). | Not a secret, but environment endpoints are **not** published in the repo, Jira or screenshots. |
+| `POS_PULSE_UPDATE_CHANNEL` | Exactly `lab`, `canary` or `stable`, set **once at provisioning** by the admin. Never cashier-editable (no UI, no renderer setter). Any other value, including a different case or stray whitespace, is refused (the update service does not start); unset or empty means `stable`, so always set it explicitly on a terminal that has an origin. Machine scope only (§4). | Not a secret. |
 | `POS_PULSE_RECEIPT_WEBSITE` | Optional receipt footer text. | Not a secret. |
 | `POS_PULSE_SUPPORT_RESET_CASHIER_CLAIM_REFUSED` | **Support only, normally unset.** `1` re-queues, once per start, this terminal's sales dead-lettered as `cashier_claim_refused` (RT-225). See §7. Any other value does nothing. | Not a secret. |
 
@@ -123,8 +125,8 @@ launching process (wrapper / shell)  >  User (HKCU)  >  Machine (HKLM)  >  unset
 Pilot rules that follow:
 
 1. POS variables live **only** in Machine scope.
-2. **User scope holds no `POS_PULSE_*` variable** for any account that runs the
-   POS. The readiness check fails if it finds one.
+2. **User scope holds no `POS_PULSE_*` variable and no `ELECTRON_UPDATE_FEED_URL`**
+   for any account that runs the POS. The readiness check fails if it finds one.
 3. The POS is launched only from the plain shortcut. A wrapper, `--` switches
    (especially `--remote-debugging-port` or `--user-data-dir`; the packaged build
    refuses the debugging ones at startup since RT-164, §11) and launching from
@@ -142,7 +144,10 @@ Pilot rules that follow:
 restarts and reboots, and Windows loads them into every new logon session. A
 change reaches the POS only after the POS is **fully quit** and Windows has a
 refreshed environment. The pilot rule is simple: **every change is followed by a
-reboot, then the readiness check (§6).**
+reboot, then the readiness check (§6).** This includes the update origin and
+channel. After an update the installer relaunches the POS from the POS process
+itself, so the relaunched app keeps the same Machine-scope values; nothing needs
+to be re-set after an update.
 
 ## 5. Provisioning procedure (per terminal)
 
@@ -168,6 +173,9 @@ removes the reason for choosing it. The §6.1 check fails on such an account.
      'POS_PULSE_FEATURE_CARD_TENDER'       = '0'
      'VITE_API_BASE_URL'                   = '<pilot Backend-Core base URL>'
      'CLERK_PUBLISHABLE_KEY'               = '<pilot Clerk publishable key>'
+     # Only on a terminal that self-updates (RT-322): the https update origin and the channel, lab | canary | stable.
+     'ELECTRON_UPDATE_FEED_URL'            = '<update origin, https>'
+     'POS_PULSE_UPDATE_CHANNEL'            = '<lab|canary|stable>'
      # Optional, only when instructed: SENTRY_DSN, POS_PULSE_FEATURE_SALE_TENDERS_SINCE, POS_PULSE_FEATURE_SALE_RECEIPT_SINCE,
      # POS_PULSE_RECEIPT_WEBSITE
    }
@@ -236,6 +244,22 @@ $userPos = @((Get-Item 'HKCU:\Environment').Property | Where-Object { $_ -like '
 Check ($userPos.Count -eq 0) "no POS_PULSE_* variable in User scope (found: $($userPos -join ', '))"
 foreach ($n in 'VITE_API_BASE_URL','CLERK_PUBLISHABLE_KEY') {
   Check (-not [string]::IsNullOrWhiteSpace([Environment]::GetEnvironmentVariable($n, 'Machine'))) "$n is set in Machine scope (value not shown)"
+}
+# RT-322 update origin and channel. Skip this block on a terminal that does not self-update
+# (both unset in Machine scope); if either is set, both must pass. The origin value is never printed.
+$userUpd = @((Get-Item 'HKCU:\Environment').Property | Where-Object { $_ -eq 'ELECTRON_UPDATE_FEED_URL' -or $_ -like 'POS_PULSE_UPDATE_*' })
+Check ($userUpd.Count -eq 0) "no update origin/channel in User scope (found: $($userUpd -join ', '))"
+$feedM = [Environment]::GetEnvironmentVariable('ELECTRON_UPDATE_FEED_URL', 'Machine')
+$feedP = [Environment]::GetEnvironmentVariable('ELECTRON_UPDATE_FEED_URL', 'Process')
+$chanM = [Environment]::GetEnvironmentVariable('POS_PULSE_UPDATE_CHANNEL', 'Machine')
+$chanP = [Environment]::GetEnvironmentVariable('POS_PULSE_UPDATE_CHANNEL', 'Process')
+if (-not [string]::IsNullOrEmpty($feedM) -or -not [string]::IsNullOrEmpty($chanM)) {
+  $feedUri = $null
+  $feedOk = [Uri]::TryCreate($feedM, [UriKind]::Absolute, [ref]$feedUri) -and $feedUri.Scheme -eq 'https'
+  Check $feedOk 'ELECTRON_UPDATE_FEED_URL is an https URL in Machine scope (value not shown)'
+  Check ($feedP -ceq $feedM) 'ELECTRON_UPDATE_FEED_URL effective value comes from Machine scope'
+  Check (@('lab','canary','stable') -ccontains $chanM) 'POS_PULSE_UPDATE_CHANNEL is exactly lab, canary or stable in Machine scope'
+  Check ($chanP -ceq $chanM) 'POS_PULSE_UPDATE_CHANNEL effective value comes from Machine scope'
 }
 foreach ($n in 'NODE_ENV','ELECTRON_RUN_AS_NODE') {
   Check ([string]::IsNullOrEmpty([Environment]::GetEnvironmentVariable($n, 'Process'))) "$n is unset"
