@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -105,6 +105,62 @@ describe('RT-772 electron-builder.lab.yml', () => {
     const hook = /^\s*sign:\s*(\S+)$/m.exec(lab);
     expect(hook?.[1]).toBe('./scripts/lab/lab-sign.cjs');
     expect(existsSync(path.join(REPO_ROOT, 'scripts/lab/lab-sign.cjs'))).toBe(true);
+  });
+});
+
+describe('RT-322 differential download stays on, with a full-download fallback', () => {
+  const lab = read('electron-builder.lab.yml');
+  const nsisTarget = read('node_modules/app-builder-lib/out/targets/nsis/NsisTarget.js');
+  const updater = read('node_modules/electron-updater/out/AppUpdater.js');
+  const updateService = read('src/main/update/update-service.ts');
+  const feed = read('scripts/lab/serve-lab-feed.ps1');
+
+  it('lab builder config does not switch off the differential package (so a .blockmap is emitted)', () => {
+    expect(lab).not.toMatch(/differentialPackage/);
+    expect(lab).not.toMatch(/disableDifferentialDownload/);
+    expect(read('electron-builder.yml')).not.toMatch(/differentialPackage/);
+    // electron-builder writes the blockmap for every non-portable NSIS build unless
+    // `differentialPackage: false` is set; the lab target is a plain `nsis` one.
+    expect(nsisTarget).toMatch(/options\.differentialPackage !== false/);
+    expect(nsisTarget).toMatch(/createBlockmap\)\(installerPath/);
+    expect(lab).not.toMatch(/target:\s*portable/);
+  });
+
+  it('no updater wiring (src/main/update/**, src/main/index.ts) disables differential download', () => {
+    const files = [
+      'src/main/index.ts',
+      ...readdirSync(path.join(REPO_ROOT, 'src/main/update'), { recursive: true })
+        .map(String)
+        .filter((f) => f.endsWith('.ts') && !f.includes('__tests__'))
+        .map((f) => `src/main/update/${f.replaceAll(path.sep, '/')}`),
+    ];
+    expect(files).toContain('src/main/update/update-service.ts');
+    for (const f of files) {
+      expect(read(f), f).not.toMatch(/disableDifferentialDownload|differentialPackage/);
+    }
+    expect(updateService).not.toMatch(/disableDifferentialDownload/);
+  });
+
+  it('NsisUpdater verifies the signature after the download block, on both paths', () => {
+    const nsis = read('node_modules/electron-updater/out/NsisUpdater.js');
+    expect(nsis).toMatch(
+      /await this\.httpExecutor\.download\(fileInfo\.url, destinationFile, downloadOptions\);\s*\}\s*const signatureVerificationStatus = await this\.verifySignature\(destinationFile\)/,
+    );
+  });
+
+  it('the pinned electron-updater falls back to a full download on any differential error', () => {
+    expect(updater).toMatch(/Cannot download differentially, fallback to full download/);
+    // outside test mode the catch returns true, which NsisUpdater reads as "download in full"
+    expect(updater).toMatch(/_testOnlyOptions != null\) \{[^}]*throw e;[^}]*\}\s*return true;/);
+  });
+
+  it('the lab feed corrupts or hides only .blockmap paths and is off by default', () => {
+    expect(feed).toMatch(
+      /\[ValidateSet\('Normal', 'Corrupt', 'Missing'\)\]\[string\]\$BlockmapMode = 'Normal'/,
+    );
+    expect(feed).toMatch(/\$isBlockmap -and \$BlockmapMode -eq 'Missing'/);
+    expect(feed).toMatch(/\$isBlockmap -and \$BlockmapMode -eq 'Corrupt'/);
+    expect(feed).toMatch(/Assert-LabFeedAllowed/);
   });
 });
 

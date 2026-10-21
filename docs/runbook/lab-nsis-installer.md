@@ -118,7 +118,8 @@ configuration, so there is no lab-only verification path.
   `unsigned` (signature removed with `signtool remove /s`; `lab.yml` rewritten to the new
   `sha512` and size), `wrongpub` (re-signed by a second leaf of the **same lab root** with a
   different subject; `lab.yml` rewritten) and `older` (the older build's `lab.yml` and installer).
-  No `.blockmap` is served, so a full download is used.
+  The five cases above serve no `.blockmap`, so a full download is used; the fallback drill below
+  covers a differential attempt that fails.
 - **Build with uncommitted changes.** `build-lab-installer.ps1 -AllowDirtyAppInputs` records the blob
   id of every differing app input in the manifest (`git hash-object <path>`), so the exact content
   can be checked against a later commit. Without the switch the build still refuses.
@@ -161,3 +162,45 @@ configuration, so there is no lab-only verification path.
 Beyond the lab: the production feed, signing service and promotion are RT-321 and RT-322, the
 fleet visibility and minimum-supported-version contract is RT-323, and the drill on the rt9 lab is
 RT-324. None of those is started here.
+
+## Slice 3: differential-to-full fallback drill (RT-322, lab only)
+
+Design §4/§12.9: a differential download that fails must fall back to a full download, and the full
+download is still checked (`sha512`, then the pinned-publisher signature). No updater logic is added
+for this; the pinned `electron-updater` 6.8.10 already does it (`AppUpdater.differentialDownloadInstaller`
+catches any error and returns `true`, which `NsisUpdater` reads as "download in full"; `verifySignature`
+runs after both paths). `scripts/__tests__/lab-nsis-config.test.ts` pins the configuration side: the
+lab builder emits a `.blockmap` next to the installer, and neither the config nor `UpdateService`
+disables differential download. This section is the runtime proof. Run it in the Sandbox only.
+
+- **Feed.** Add `-BlockmapMode Corrupt` (or `Missing`) to `serve-lab-feed.ps1`; default is `Normal`.
+  `Corrupt` answers every `*.blockmap` request with non-gzip bytes, `Missing` with 404. It never
+  touches the installer or `lab.yml`.
+- **Layout.** Copy the `happy` feed, plus the new build's `POS-Pulse-LAB-Setup-<new>.exe.blockmap`
+  and the old build's blockmap, from the build output next to the installers, in every feed
+  directory (electron-updater fetches both; a missing old map would fail step 0 on a 404 instead of
+  the cause it is meant to show). `Corrupt` and `Missing` answer before the file lookup, so they
+  hold either way.
+- **Where the evidence is.** The app never routes electron-updater's own logger into `main-*.log`
+  (`UpdateService` records only `update:*` state lines), so the fallback line and its cause are
+  written to the process console. Launch the packaged lab POS from PowerShell with its output piped
+  to a file, for example `& "$env:LOCALAPPDATA\Programs\POS Pulse\POS Pulse.exe" 2>&1 | Tee-Object C:\rt322-console.log`
+  (piping keeps the console handle attached), and read the fallback line and the error text after it
+  there; the `update:*` states and `verify_failed` stay in `main-*.log`.
+  The build writes them by default (`createBlockmap`); do not pass `--config.nsis.differentialPackage=false`.
+
+| Step | Expected |
+| :--- | :------- |
+| 0. `Normal`, real blockmaps, `happy` installer | the fallback line with cause `Server doesn't support Accept-Ranges` (the lab feed has no Range support), then a full download, `downloaded`, safe-point install. Proves the fallback on a failure that is not injected |
+| 1. `-BlockmapMode Corrupt`, `happy` installer | fallback line preceded by `Cannot parse blockmap` for a `.blockmap` URL (the new one in 6.8.10, which fetches it first; either map is accepted, `Corrupt` serves junk for both) and not the Accept-Ranges cause, then a full installer GET in the feed log, `downloaded`, install at the safe point; relaunch as the new version |
+| 2. `-BlockmapMode Missing`, `happy` installer | fallback line preceded by a `404` HTTP error on the `.blockmap` URL, then full download and verified install |
+| 3. `-BlockmapMode Corrupt`, `tamper` installer | the fallback line, then `verify_failed` (`sha512 checksum mismatch`); version unchanged; the installer never runs |
+| 4. `-BlockmapMode Corrupt`, `wrongpub` installer | the fallback line, then `verify_failed` from the signature check (pin mismatch); version unchanged. Proves the publisher pin holds on the fallback path |
+
+A successful differential download is **not** exercised: the lab feed serves no HTTP Range, so every
+differential attempt ends in the fallback. Only the fallback and the checks after it are proven here.
+
+Pass criteria: in steps 0-2 the update never ends in an error state and the install happens
+only after the safe-point gate; in steps 3 and 4 nothing is installed. Reset the Sandbox between steps (the
+downloaded-update cache would otherwise short-circuit the download). Record the log excerpts in Jira
+RT-322 and update the Confluence lab runbook page afterwards.

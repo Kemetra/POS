@@ -8,6 +8,11 @@
   GET and HEAD only, no directory listing, no Range support (so electron-updater falls back
   to a full download), and every request is logged.
 
+  -BlockmapMode (default Normal) lets the drill force the differential-to-full fallback
+  (RT-322): Corrupt answers every "*.blockmap" request with bytes that are not a gzip blockmap,
+  Missing answers it with 404. Normal serves the file as it is. It touches only "*.blockmap"
+  paths and never the installer or lab.yml, so the sha512 and signature checks are unaffected.
+
   It refuses to run anywhere but inside the Windows Sandbox (user WDAGUtilityAccount) unless
   -AllowOutsideSandbox is given, and only for a reserved ".test" host, so a lab TLS feed can
   not be stood up by accident on a real machine or under a real domain.
@@ -24,6 +29,7 @@ param(
   [string]$HostName = 'rt772-lab.test',
   [int]$Port = 8443,
   [string]$RequestLog,
+  [ValidateSet('Normal', 'Corrupt', 'Missing')][string]$BlockmapMode = 'Normal',
   [switch]$AllowOutsideSandbox
 )
 
@@ -60,9 +66,24 @@ function Resolve-FeedFile([string]$rootFull, [string]$urlPath) {
   return $null
 }
 
+# Lab fault injection: a body that is not a gzip stream, so the blockmap cannot be parsed.
+function Send-CorruptBlockmap($req, $res) {
+  $junk = [Text.Encoding]::ASCII.GetBytes('RT-322 LAB CORRUPT BLOCKMAP - not gzip, not json')
+  $res.ContentType = 'application/octet-stream'
+  $res.ContentLength64 = $junk.Length
+  if ($req.HttpMethod -eq 'HEAD') { return @{ Status = 200; Bytes = 0 } }
+  $res.OutputStream.Write($junk, 0, $junk.Length)
+  return @{ Status = 200; Bytes = $junk.Length }
+}
+
 # Answers one request. Returns the status code and the number of body bytes sent.
 function Send-Response($req, $res, [string]$rootFull) {
   if ($req.HttpMethod -notin @('GET', 'HEAD')) { return @{ Status = 405; Bytes = 0 } }
+  # Blockmap faults are decided before the file is looked up, so they hold even when the
+  # backing .blockmap is absent from the feed directory.
+  $isBlockmap = $req.Url.AbsolutePath.EndsWith('.blockmap', [StringComparison]::OrdinalIgnoreCase)
+  if ($isBlockmap -and $BlockmapMode -eq 'Missing') { return @{ Status = 404; Bytes = 0 } }
+  if ($isBlockmap -and $BlockmapMode -eq 'Corrupt') { return Send-CorruptBlockmap $req $res }
   $file = Resolve-FeedFile $rootFull $req.Url.AbsolutePath
   if ($null -eq $file) { return @{ Status = 404; Bytes = 0 } }
   $length = (Get-Item -LiteralPath $file).Length
