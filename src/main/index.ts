@@ -129,6 +129,8 @@ import { composeTerminalStatus } from './terminal-status/compose-terminal-status
 import { createTerminalStatusPublisher } from './terminal-status/terminal-status-publisher.js';
 import { createTerminalSyncAggregateReader } from './terminal-status/sync-aggregate.js';
 import { registerTerminalStatusHandlers } from './ipc/terminal-status.js';
+import { registerUpdateStatusHandlers, wireUpdateStatusPush } from './ipc/update-status.js';
+import { UPDATE_STATUS_IPC_CHANNELS } from '../shared/update-status/types.js';
 import { TERMINAL_STATUS_IPC_CHANNELS } from '../shared/terminal-status/types.js';
 import { composeSaleSyncDevicePath } from './sales-sync/compose-device-path.js';
 import { createCurrentTerminalResolver } from './sales-sync/current-terminal.js';
@@ -319,6 +321,18 @@ const singleInstanceReady = acquireSingleInstance(app, () => {
  * the default intentionally fails closed.
  */
 const DEFAULT_API_BASE_URL = 'https://example.invalid';
+
+/** Sends one payload to every open app window; a closing one never starves the others. */
+function broadcastToWindows(channel: string, payload: unknown): void {
+  for (const win of BrowserWindow.getAllWindows()) {
+    if (win.isDestroyed() || win.webContents.isDestroyed()) continue;
+    try {
+      win.webContents.send(channel, payload);
+    } catch {
+      // Skip it; the next change reaches the windows still open.
+    }
+  }
+}
 
 function resolveApiBaseUrl(): string {
   const fromEnv = process.env['VITE_API_BASE_URL'];
@@ -895,6 +909,17 @@ singleInstanceReady
       afterShiftCloseDelayMs: SHIFT_CLOSE_REPLY_MARGIN_MS,
     });
     updateServiceHandle = updateService;
+    // RT-322 (S-B) — the read-only update status bridge: `updateStatus:get` plus the
+    // `updateStatus:changed` push to the app windows. Sanitized in main; no install
+    // trigger and no channel or origin setter cross it.
+    registerUpdateStatusHandlers(guardedIpcMain, { read: () => updateService.getStatus() });
+    // The listener lives as long as the service; there is nothing to stop at quit.
+    wireUpdateStatusPush({
+      subscribe: (listener) => updateService.onStatusChange(listener),
+      send: (snapshot) => {
+        broadcastToWindows(UPDATE_STATUS_IPC_CHANNELS.CHANGED, snapshot);
+      },
+    });
     sessionLockProbe.isLocked = () => operatorSessionManager.isLocked();
     recoveryModeProbe.active = () => operatorSessionManager.getCurrent()?.recovery_of !== undefined;
     // RT-444 (RT-116 S3, §4) — ONE sign-in admission guard for every path

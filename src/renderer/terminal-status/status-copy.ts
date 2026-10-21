@@ -44,6 +44,14 @@ export const STATUS_COPY = {
 } as const;
 
 /**
+ * RT-322 (S-B, design §6) — the update notice: the single cashier-facing update
+ * string, «update ready, installs after shift close». No version, no cause.
+ */
+export const UPDATE_COPY = {
+  ready: 'تحديث جاهز — سيُثبَّت بعد إغلاق الوردية.',
+} as const;
+
+/**
  * RT-605 (VN-S6 S6-4) — the two status banners in the notices stack, from
  * doc 15 §M-O (D-6-11); M-O3's count-aware forms are RT-646 (§5.1).
  * `status-banners.test.ts` and `counted-copy.test.ts` check them against doc

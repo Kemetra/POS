@@ -309,6 +309,28 @@ describe('UpdateService states follow the updater events', () => {
     });
   });
 
+  it('tells a status listener about each change until it unsubscribes (RT-322)', () => {
+    const t = build();
+    const seen: string[] = [];
+    const stop = t.service.onStatusChange((s) => seen.push(s.state));
+    t.service.start();
+    t.updater.emit('checking-for-update');
+    t.updater.emit('update-available', { version: '0.1.1' });
+    stop();
+    t.updater.emit('update-not-available');
+    expect(seen).toEqual(['checking', 'downloading']);
+  });
+
+  it('keeps going when a status listener throws (RT-322)', () => {
+    const t = build();
+    t.service.onStatusChange(() => {
+      throw new Error('window gone');
+    });
+    t.service.start();
+    expect(() => t.updater.emit('checking-for-update')).not.toThrow();
+    expect(t.service.getStatus().state).toBe('checking');
+  });
+
   it('returns to idle when a check finds nothing newer', () => {
     const t = build();
     t.service.start();

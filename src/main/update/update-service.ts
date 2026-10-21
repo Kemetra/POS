@@ -76,6 +76,8 @@ export interface UpdateService {
   start(): void;
   stop(): void;
   getStatus(): UpdateStatus;
+  /** Calls `listener` after every status change; returns the unsubscribe. */
+  onStatusChange(listener: (status: UpdateStatus) => void): () => void;
   /** Shift close committed: re-evaluate the install predicate. */
   notifyShiftClosed(): void;
 }
@@ -175,6 +177,7 @@ function preflight(deps: UpdateServiceDeps): Preflight {
 export function createUpdateService(deps: UpdateServiceDeps): UpdateService {
   const { gate, logger } = deps;
   let status: UpdateStatus = { state: 'idle' };
+  const listeners = new Set<(status: UpdateStatus) => void>();
   let started = false;
   let installing = false;
   let updater: UpdaterLike | null = null;
@@ -193,6 +196,13 @@ export function createUpdateService(deps: UpdateServiceDeps): UpdateService {
       'update:state',
     );
     status = next;
+    for (const listener of [...listeners]) {
+      try {
+        listener(next);
+      } catch {
+        // A listener must never break the updater.
+      }
+    }
   }
 
   function fail(state: UpdateState, detail: string): void {
@@ -346,6 +356,13 @@ export function createUpdateService(deps: UpdateServiceDeps): UpdateService {
     },
 
     getStatus: () => status,
+
+    onStatusChange(listener): () => void {
+      listeners.add(listener);
+      return () => {
+        listeners.delete(listener);
+      };
+    },
 
     /**
      * Called by each close path once its own work is done (the forced close after its delivery,
