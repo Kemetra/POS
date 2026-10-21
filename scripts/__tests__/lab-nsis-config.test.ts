@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -126,9 +126,26 @@ describe('RT-322 differential download stays on, with a full-download fallback',
     expect(lab).not.toMatch(/target:\s*portable/);
   });
 
-  it('UpdateService never disables differential download', () => {
+  it('no updater wiring (src/main/update/**, src/main/index.ts) disables differential download', () => {
+    const files = [
+      'src/main/index.ts',
+      ...readdirSync(path.join(REPO_ROOT, 'src/main/update'), { recursive: true })
+        .map(String)
+        .filter((f) => f.endsWith('.ts') && !f.includes('__tests__'))
+        .map((f) => `src/main/update/${f.replaceAll(path.sep, '/')}`),
+    ];
+    expect(files).toContain('src/main/update/update-service.ts');
+    for (const f of files) {
+      expect(read(f), f).not.toMatch(/disableDifferentialDownload|differentialPackage/);
+    }
     expect(updateService).not.toMatch(/disableDifferentialDownload/);
-    expect(updateService).not.toMatch(/differentialPackage/);
+  });
+
+  it('NsisUpdater verifies the signature after the download block, on both paths', () => {
+    const nsis = read('node_modules/electron-updater/out/NsisUpdater.js');
+    expect(nsis).toMatch(
+      /await this\.httpExecutor\.download\(fileInfo\.url, destinationFile, downloadOptions\);\s*\}\s*const signatureVerificationStatus = await this\.verifySignature\(destinationFile\)/,
+    );
   });
 
   it('the pinned electron-updater falls back to a full download on any differential error', () => {

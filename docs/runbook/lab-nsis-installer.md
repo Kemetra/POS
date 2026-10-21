@@ -180,14 +180,18 @@ disables differential download. This section is the runtime proof. Run it in the
   (and, for the baseline row, the old build's blockmap) from the build output next to the installers.
   The build writes them by default (`createBlockmap`); do not pass `--config.nsis.differentialPackage=false`.
 
-| Step                                                            | Expected                                                                                                                                                              |
-| :-------------------------------------------------------------- | :-------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 0. baseline: `Normal`, real blockmaps, installed older build    | feed log shows `.blockmap` and installer GETs; install as in the happy row (differential or full, both accepted; record which)                           |
-| 1. `-BlockmapMode Corrupt`, `happy` installer                   | `main-*.log` has `Cannot download differentially, fallback to full download`, then a full installer GET in the feed log, `downloaded`, and install at the safe point; relaunch as the new version |
-| 2. repeat step 1 with `-BlockmapMode Missing`                   | same log line (blockmap 404), full download, verified install                                                                                                         |
-| 3. `-BlockmapMode Corrupt`, `tamper` installer                  | the fallback line, then `verify_failed` (`sha512 checksum mismatch`); version unchanged; the installer never runs                                                      |
+| Step | Expected |
+| :--- | :------- |
+| 0. `Normal`, real blockmaps, `happy` installer | the fallback line with cause `Server doesn't support Accept-Ranges` (the lab feed has no Range support), then a full download, `downloaded`, safe-point install. Proves the fallback on a failure that is not injected |
+| 1. `-BlockmapMode Corrupt`, `happy` installer | fallback line preceded by `Cannot parse blockmap` for the new `.blockmap` URL (not the Accept-Ranges cause), then a full installer GET in the feed log, `downloaded`, install at the safe point; relaunch as the new version |
+| 2. `-BlockmapMode Missing`, `happy` installer | fallback line preceded by a `404` HTTP error on the `.blockmap` URL, then full download and verified install |
+| 3. `-BlockmapMode Corrupt`, `tamper` installer | the fallback line, then `verify_failed` (`sha512 checksum mismatch`); version unchanged; the installer never runs |
+| 4. `-BlockmapMode Corrupt`, `wrongpub` installer | the fallback line, then `verify_failed` from the signature check (pin mismatch); version unchanged. Proves the publisher pin holds on the fallback path |
 
-Pass criteria: in steps 1 and 2 the update never ends in an error state and the install happens
-only after the safe-point gate; in step 3 nothing is installed. Reset the Sandbox between steps (the
-downloaded-update cache would otherwise short-circuit the download). Record the three log excerpts in Jira
+A successful differential download is **not** exercised: the lab feed serves no HTTP Range, so every
+differential attempt ends in the fallback. Only the fallback and the checks after it are proven here.
+
+Pass criteria: in steps 0-2 the update never ends in an error state and the install happens
+only after the safe-point gate; in steps 3 and 4 nothing is installed. Reset the Sandbox between steps (the
+downloaded-update cache would otherwise short-circuit the download). Record the log excerpts in Jira
 RT-322 and update the Confluence lab runbook page afterwards.
