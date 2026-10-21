@@ -191,4 +191,31 @@ describe('SaleVoidNotice', () => {
     });
     expect(screen.queryByTestId('void-attention-banner')).not.toBeInTheDocument();
   });
+
+  // The frame notices strip lays banners on full rows and lets the quiet links
+  // share one row, so the banner and the link render as separate parts: the
+  // operational notices place the banner with the banners, the link after
+  // «حالة الوردية».
+  it('renders only the banner for part="banner", only the link for part="link"', async () => {
+    signIn();
+    enable();
+    const refused = fakeSaleVoidBridge([
+      journalView({
+        state: 'refused',
+        refusal_reason: 'void_outside_business_day',
+        needs_attention: true,
+      }),
+    ]);
+    at('/app/cart', <SaleVoidNotice bridge={refused} refreshMs={0} part="banner" />);
+    expect(await screen.findByTestId('void-attention-banner')).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: VOID_COPY.link })).not.toBeInTheDocument();
+    cleanup();
+
+    const linkOnly = fakeSaleVoidBridge();
+    at('/app/cart', <SaleVoidNotice bridge={linkOnly} refreshMs={0} part="link" />);
+    expect(screen.getByRole('link', { name: VOID_COPY.link })).toHaveAttribute('href', '/app/void');
+    expect(screen.queryByTestId('void-attention-banner')).not.toBeInTheDocument();
+    // The link needs no attention count: it never reads the journal.
+    expect(linkOnly.list).not.toHaveBeenCalled();
+  });
 });

@@ -14,6 +14,12 @@ interface Props {
   readonly bridge?: SaleVoidBridgeAPI | null;
   /** How often the attention count re-reads (ms); 0 turns the refresh off. */
   readonly refreshMs?: number;
+  /**
+   * Which part to render: the attention banner, the quiet link, or both. The
+   * frame notices strip renders the banner with the other banners and the link
+   * after «حالة الوردية», so the two quiet links can share one row.
+   */
+  readonly part?: 'banner' | 'link' | 'all';
 }
 
 function windowBridge(): SaleVoidBridgeAPI | null {
@@ -59,34 +65,57 @@ function useAttentionCount(
  * acknowledged yet (a refused void is never dropped silently). Renders nothing
  * with the flag off, no session or no bridge, and calls nothing then.
  */
-export function SaleVoidNotice({ bridge, refreshMs = 15_000 }: Props): JSX.Element | null {
+export function SaleVoidNotice({
+  bridge,
+  refreshMs = 15_000,
+  part = 'all',
+}: Props): JSX.Element | null {
   const enabled = useFeatureFlagsStore((s) => s.saleVoid);
   const signedIn = useOperatorSessionStore((s) => s.state.kind === 'signedIn');
   const api = bridge === undefined ? windowBridge() : bridge;
   if (!enabled || !signedIn) return null;
   if (api === null) return null;
-  return <RoutedNotice bridge={api} refreshMs={refreshMs} />;
-}
-
-function RoutedNotice(props: { bridge: SaleVoidBridgeAPI; refreshMs: number }): JSX.Element {
-  const { pathname } = useLocation();
-  const attention = useAttentionCount(props.bridge, pathname, props.refreshMs);
-  const onVoidScreen = pathname.startsWith(VOID_PATH);
   return (
     <>
-      {attention !== null && attention > 0 && !onVoidScreen && (
-        <div className="v5-void-banner" role="alert" data-testid="void-attention-banner">
-          <p>{VOID_COPY.attentionBanner}</p>
-          <Link className="v5-live-btn v5-live-btn--primary v5-btn v5-btn--primary" to={VOID_PATH}>
-            {VOID_COPY.attentionAction}
-          </Link>
-        </div>
-      )}
-      {!onVoidScreen && (
-        <p className="v5-void-link">
-          <Link to={VOID_PATH}>{VOID_COPY.link}</Link>
-        </p>
-      )}
+      {part !== 'link' && <AttentionBanner bridge={api} refreshMs={refreshMs} />}
+      {part !== 'banner' && <VoidLink />}
     </>
+  );
+}
+
+/** A refused void needs attention, and the operator is not already on the void screen. */
+function needsAttentionBanner(attention: number | null, pathname: string): boolean {
+  const unseen = attention !== null && attention > 0;
+  return unseen && !pathname.startsWith(VOID_PATH);
+}
+
+/** The persistent banner while a refused void is unacknowledged. */
+function AttentionBanner(
+  props: Readonly<{
+    bridge: SaleVoidBridgeAPI;
+    refreshMs: number;
+  }>,
+): JSX.Element | null {
+  const { pathname } = useLocation();
+  const attention = useAttentionCount(props.bridge, pathname, props.refreshMs);
+  if (!needsAttentionBanner(attention, pathname)) return null;
+  return (
+    <div className="v5-void-banner" role="alert" data-testid="void-attention-banner">
+      <p>{VOID_COPY.attentionBanner}</p>
+      <Link className="v5-live-btn v5-live-btn--primary v5-btn v5-btn--primary" to={VOID_PATH}>
+        {VOID_COPY.attentionAction}
+      </Link>
+    </div>
+  );
+}
+
+/** The quiet way to «إلغاء بيع»; it needs no attention count. */
+function VoidLink(): JSX.Element | null {
+  const { pathname } = useLocation();
+  if (pathname.startsWith(VOID_PATH)) return null;
+  return (
+    <p className="v5-void-link">
+      <Link to={VOID_PATH}>{VOID_COPY.link}</Link>
+    </p>
   );
 }

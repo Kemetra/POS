@@ -26,10 +26,29 @@
   overflow: hidden;
 }
 
+/*
+ * Banners take a full row each; the quiet one-line links («حالة الوردية»,
+ * «إلغاء بيع») share a single row after them instead of a row each. At
+ * 1024×768 those stacked rows were what pushed the Checkout keypad's last row
+ * out of view (UX-04 pressure priority: whitespace before workflow).
+ */
 .v5-frame__notices {
-  display: grid;
-  gap: var(--space-2);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-2) var(--space-5);
   padding: var(--v5-gutter) var(--v5-gutter) 0;
+}
+
+.v5-frame__notices > * {
+  flex: 1 1 100%;
+  min-inline-size: 0;
+}
+
+/* Flush on the shared row: the row gap alone separates the two links. */
+.v5-frame__notices > :is(.v5-shift-notice, .v5-void-link) {
+  flex: 0 1 auto;
+  padding-inline: 0;
 }
 
 .v5-frame__notices:empty {
