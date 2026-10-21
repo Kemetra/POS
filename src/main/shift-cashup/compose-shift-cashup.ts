@@ -89,10 +89,49 @@ export interface ComposeShiftCashupServiceDeps extends Pick<
   currencyCode?: string;
   /** Defaults to a UUIDv7. */
   newId?: () => string;
+  /**
+   * RT-772: called after the cashier's shift close is committed. It is a safe-point trigger
+   * for an update install and can never fail a close. A manager's forced close is not
+   * notified here: it drains the outbox and answers its caller after the service returns,
+   * so its handler notifies once that delivery has finished (`onCloseDelivered`).
+   */
+  onShiftClosed?: () => void;
+}
+
+/**
+ * RT-772 — the same service, with `onShiftClosed` called once the cashier's close has been
+ * committed. A failed close does not notify; a throwing callback does not fail a close that is
+ * already durable (the callback owns its own logging). A forced close is deliberately not
+ * wrapped: it is notified by its handler after delivery.
+ */
+export function notifyOnShiftClose(
+  service: ShiftCashupService,
+  onShiftClosed: () => void,
+): ShiftCashupService {
+  const notify = (): void => {
+    try {
+      onShiftClosed();
+    } catch {
+      // The close is already committed; the callback logs its own failures.
+    }
+  };
+  return {
+    openShift: (input) => service.openShift(input),
+    recordCashMovement: (input) => service.recordCashMovement(input),
+    closeShift: (input) => {
+      const closed = service.closeShift(input);
+      notify();
+      return closed;
+    },
+    forceCloseShift: (input) => service.forceCloseShift(input),
+    verifyApprover: (input) => service.verifyApprover(input),
+    listApprovers: () => service.listApprovers(),
+    readStatus: () => service.readStatus(),
+  };
 }
 
 export function composeShiftCashupService(deps: ComposeShiftCashupServiceDeps): ShiftCashupService {
-  return createShiftCashupService({
+  const service = createShiftCashupService({
     isEnabled: deps.isEnabled,
     getSession: deps.getSession,
     isSessionLocked: deps.isSessionLocked,
@@ -109,6 +148,9 @@ export function composeShiftCashupService(deps: ComposeShiftCashupServiceDeps): 
     now: deps.now,
     newId: deps.newId ?? (() => uuidv7()),
   });
+  return deps.onShiftClosed === undefined
+    ? service
+    : notifyOnShiftClose(service, deps.onShiftClosed);
 }
 
 /** The paired terminal's scope, or null while unpaired or needing a re-pair. */

@@ -207,6 +207,17 @@ import { openDatabase } from './db/client.js';
 import { bindMigrationsDb, readMigrationsFromDisk } from './db/migrate.js';
 import { bindVacuumInto } from './db/pre-migration-snapshot.js';
 import { runStartupMigrations } from './app/startup-migrations.js';
+// RT-772 — packaged-only, fail-closed updater (ADR-0006). electron-updater is CJS: default
+// import, and its singleton is only touched once every guard in UpdateService holds.
+import electronUpdater from 'electron-updater';
+import { createPowerShellProbe } from './update/powershell-signature-probe.js';
+import { createPrintActivity, trackPrintPipeline } from './update/print-activity.js';
+import { createSafePointGate } from './update/safe-point-gate.js';
+import { createSafePointInputs } from './update/safe-point-inputs.js';
+import { createFailClosedVerifier } from './update/signature-verifier.js';
+import { readPublisherPins, resolveUpdateConfig } from './update/update-config.js';
+import { createUpdateService } from './update/update-service.js';
+import type { UpdateService } from './update/update-service.js';
 import { createSecretStore } from './secrets/index.js';
 import { createLogger, waitForLogDrain } from './logging/logger.js';
 import { initSentryMain, mainIntegrations } from './observability/sentry-main.js';
@@ -382,6 +393,9 @@ const shippedApp = isShippedApp({
 /** RT-164 — longest a refused launch waits for its log line to reach disk. */
 const LAUNCH_REFUSAL_LOG_DRAIN_MS = 2000;
 
+/** RT-772 — room for a shift close's answer to reach the renderer before an update install quits. */
+const SHIFT_CLOSE_REPLY_MARGIN_MS = 4_000;
+
 /**
  * The trusted renderer origin allow-list. Dev = the Vite server; prod = the
  * packaged renderer dir on disk (`pathToFileURL` → a normalized `file://` URL,
@@ -488,6 +502,13 @@ const dbHolder = createDatabaseHolder({ logger: console });
  * mid-flight background tick can never run against a closed handle.
  */
 const workerRegistry = createWorkerRegistry({ logger: console });
+
+/**
+ * RT-772 — the updater's scheduled check. Held at module level (like
+ * `pairedWorkers`) so `closeDbHandle()` can stop it before the DB handle closes:
+ * a late tick would otherwise read the safe-point inputs from a closed handle.
+ */
+let updateServiceHandle: UpdateService | null = null;
 
 /**
  * RT-202 — once-latch for the paired-only workers (read-down driver, finalize
@@ -865,6 +886,32 @@ singleInstanceReady
     //     closures. Keyed on backend_session_id, in-process only, never bridged.
     const operatorEnvelopeHolder = createJwtHolder(refuseWhileRevoked);
     const operatorSessionManager = new SessionManager();
+
+    // RT-772 slice 2 — the POS updater (ADR-0006; design §4-§6). Constructed here,
+    // before the shift close paths and the print dispatcher that report to it, and
+    // started after the last IPC registration. It does nothing unless this is the
+    // shipped app AND an origin is configured AND a publisher is pinned (fail
+    // closed). It installs only at a safe point: no open shift, nothing in flight.
+    const printActivity = createPrintActivity();
+    const updateConfig = resolveUpdateConfig(process.env);
+    const updateService = createUpdateService({
+      isShippedApp: shippedApp,
+      origin: updateConfig.origin,
+      channel: updateConfig.channel,
+      readPublisherPins: () =>
+        readPublisherPins(path.join(process.resourcesPath, 'app-update.yml')),
+      getUpdater: () => electronUpdater.autoUpdater,
+      gate: createSafePointGate(createSafePointInputs(db, printActivity)),
+      isBeforeSignIn: () => operatorSessionManager.getCurrent() === null,
+      logger: mainLogger,
+      // electron-updater's own Windows verifier resolves "valid" when its PowerShell check cannot
+      // run; this one returns null only on positive proof (see signature-verifier.ts).
+      verifier: createFailClosedVerifier(createPowerShellProbe()),
+      // Both close paths notify only once their own work is done (the forced close after its
+      // delivery, see ForcedCloseHandler); this is just room for the answer to reach the renderer.
+      afterShiftCloseDelayMs: SHIFT_CLOSE_REPLY_MARGIN_MS,
+    });
+    updateServiceHandle = updateService;
     sessionLockProbe.isLocked = () => operatorSessionManager.isLocked();
     recoveryModeProbe.active = () => operatorSessionManager.getCurrent()?.recovery_of !== undefined;
     // RT-444 (RT-116 S3, §4) — ONE sign-in admission guard for every path
@@ -1433,6 +1480,11 @@ singleInstanceReady
           shiftSyncDrainNowRef.current === null
             ? Promise.resolve(false)
             : shiftSyncDrainNowRef.current(),
+        // RT-772: a manager's forced close is a safe-point trigger for an update install, but
+        // only after its delivery has finished: the install quits the app.
+        onCloseDelivered: () => {
+          updateService.notifyShiftClosed();
+        },
       }),
       stuckShiftsHandler: new StuckShiftsHandler({
         sessionManager: operatorSessionManager,
@@ -1887,26 +1939,31 @@ singleInstanceReady
     // (node-thermal-printer ↔ printer status byte) remains unverified (a5
     // findings) and is NOT selected. We route to OS-print via
     // `probeEscposSupport: false`, the proven path.
-    const printPipeline = createPrintPipeline({
-      escposAdapter: createEscposAdapter({
-        transport: {
-          write: () => Promise.resolve(),
-          pollStatus: () => Promise.resolve('offline' as const),
-        },
-        statusTimeoutMs: 3000,
-      }),
-      osPrintAdapter: createOsPrintAdapter({
-        print: createOsPrintTransport({
-          createPrintWindow: createDefaultPrintWindow,
-          listPrinters: () => getCurrentPrinters(),
-          logger: mainLogger,
+    // RT-772: every print (receipt, cash return slip, sale-history reprint) is counted here, so an
+    // update never installs mid-print.
+    const printPipeline = trackPrintPipeline(
+      createPrintPipeline({
+        escposAdapter: createEscposAdapter({
+          transport: {
+            write: () => Promise.resolve(),
+            pollStatus: () => Promise.resolve('offline' as const),
+          },
+          statusTimeoutMs: 3000,
         }),
+        osPrintAdapter: createOsPrintAdapter({
+          print: createOsPrintTransport({
+            createPrintWindow: createDefaultPrintWindow,
+            listPrinters: () => getCurrentPrinters(),
+            logger: mainLogger,
+          }),
+        }),
+        // Route to the OS-print path: it is the proven transport (the ESC/POS
+        // direct path is unverified). The cashier never sees which path ran
+        // unless the print fails (path is for audit only — T212).
+        probeEscposSupport: () => Promise.resolve(false),
       }),
-      // Route to the OS-print path: it is the proven transport (the ESC/POS
-      // direct path is unverified). The cashier never sees which path ran
-      // unless the print fails (path is for audit only — T212).
-      probeEscposSupport: () => Promise.resolve(false),
-    });
+      printActivity,
+    );
     // 008 Slice 4 drawer port, hoisted (RT-15 S4) so the sale drawer-kick
     // dispatcher and the return payout share ONE drawer transport. The real
     // DK1/DK2 transport is the §A3 hardware bring-up (T200), deferred: until
@@ -2600,7 +2657,15 @@ singleInstanceReady
       logger: mainLogger,
       // RT-443: the one store, shared with the approval service (audited there).
       managerPins,
+      // RT-772: the cashier's shift close is a safe-point trigger for an update install.
+      onShiftClosed: () => {
+        updateService.notifyShiftClosed();
+      },
     });
+
+    // RT-772: after the last IPC registration, so a download that completes at once
+    // already sees the real shift, cart, payment, return and print state.
+    updateService.start();
 
     createWindow();
     mainLogger.info('app:ready');
@@ -2625,6 +2690,7 @@ function closeDbHandle(): void {
   // and idempotency are owned by the worker registry; this function preserves
   // the sequencing (drain, then close).
   pairedWorkers?.close();
+  updateServiceHandle?.stop();
   workerRegistry.stopAll();
   dbHolder.close();
 }

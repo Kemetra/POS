@@ -61,6 +61,12 @@ export interface ForcedCloseHandlerDeps {
    * afterwards (the forced close reached Backend-Core). Absent: never "sent".
    */
   deliverNow?: () => Promise<boolean>;
+  /**
+   * RT-772: called once a committed forced close has finished its delivery attempt (sent or
+   * queued), just before the handler answers. A safe-point trigger for an update install: it
+   * runs after the drain, never during it, and can never fail the close.
+   */
+  onCloseDelivered?: () => void;
   /** Optional logger. Tests omit it. */
   logger?: Logger;
 }
@@ -149,7 +155,16 @@ export class ForcedCloseHandler {
   }): Promise<ForceCloseShiftResponse> {
     const delivery = await this.deliver();
     this.logOutcome(input.outcome, delivery);
+    this.notifyDelivered();
     return { kind: 'forced_closed', audit_event_id: input.req.event_id, delivery };
+  }
+
+  private notifyDelivered(): void {
+    try {
+      this.deps.onCloseDelivered?.();
+    } catch {
+      // The close is already committed; the hook logs its own failures.
+    }
   }
 
   /** `sent` only when the drain says Backend-Core has it; a failing drain is `queued`. */

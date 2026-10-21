@@ -1,0 +1,47 @@
+# RT-772 slice 1 — LAB-ONLY per-user NSIS installer, signed with a self-signed TEST certificate.
+#
+# Used only as `electron-builder --win nsis --config electron-builder.lab.yml` by
+# scripts/lab/build-lab-installer.ps1. It extends the shipped config, so the frozen
+# update identity (appId / productName) and the RT-164 Electron fuses are inherited,
+# not restated. The shipped `electron-builder.yml` and its `dir` target are untouched.
+#
+# What this file deliberately does NOT do (guarded by scripts/__tests__/lab-nsis-config.test.ts):
+#   - no uploading publish provider: the only `publish` entry is a `generic` provider on a
+#     reserved `.test` host. It exists so electron-builder bakes an app-update.yml with the
+#     pinned publisher (electron-updater skips signature verification when none is baked),
+#     and builds run with `--publish never`, so nothing is uploaded or promoted from here;
+#   - no key material or certificate path: the lab hook signs from the CurrentUser\My store;
+#   - no switch that turns off the updater's signature verification or code-signing
+#     enforcement: the production updater's verification is never weakened (UpdateService
+#     requires this pinned publisher and verifies fail-closed; see docs/architecture/current.md).
+extends: ./electron-builder.yml
+win:
+  target:
+    - target: nsis
+      arch: x64
+  signtoolOptions:
+    # Test-only publisher. The marker makes it impossible for this pin to match a
+    # production certificate subject, and vice versa.
+    publisherName: Kemetra POS LAB TEST - NOT FOR PRODUCTION
+    signingHashAlgorithms:
+      - sha256
+    # Custom hook: signs with signtool from the CurrentUser\My store, refuses any
+    # certificate without the lab marker, and makes no timestamp call by default.
+    sign: ./scripts/lab/lab-sign.cjs
+# RT-772 slice 2 — the lab update feed (design §10, channel `lab`). `.test` is reserved
+# (RFC 6761) and never resolves publicly, so this URL can only ever be reached through a
+# hosts entry on a disposable lab device. The running app takes its origin from
+# ELECTRON_UPDATE_FEED_URL; the URL here is only the baked default.
+publish:
+  - provider: generic
+    url: https://rt772-lab.test:8443/lab
+    channel: lab
+nsis:
+  # Per-user install, no UAC (ADR-0006 P-6). Keeps userData, the DB and DPAPI
+  # secrets under the installing Windows user.
+  oneClick: true
+  perMachine: false
+  allowElevation: false
+  # An uninstall must never delete the SQLite DB, outbox or DPAPI secrets.
+  deleteAppDataOnUninstall: false
+  artifactName: POS-Pulse-LAB-Setup-${version}.${ext}

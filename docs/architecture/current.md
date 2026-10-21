@@ -114,6 +114,7 @@ Background workers **must** all stop before the DB handle closes, or a mid-fligh
 against a closed handle. `closeDbHandle()` preserves that sequencing:
 
 ```
+updateServiceHandle?.stop() // the updater's scheduled check (RT-772)
 workerRegistry.stopAll()   // finalize listener → read-down driver → sale-sync interval
 dbHolder.close()           // only then
 ```
@@ -136,6 +137,52 @@ a no-op. These are the two most likely silent regressions in this area and both 
   - **Database ahead of the build:** if `schema_migrations` names a migration this build does not ship, startup is refused with an operator dialog (`SchemaAheadError`, `src/main/app/startup-migrations.ts`). A newer build has migrated the DB.
   - **Pre-migration snapshot:** before the first pending migration on an already-migrated DB, a `VACUUM INTO` snapshot is written to `<userData>/backups/` (newest 3 kept). It is never restored automatically. If the snapshot fails, startup halts.
   - **Shipped migrations are immutable:** a migration file that has shipped in any signed release is never edited, renamed, renumbered or deleted. Corrections go in a new migration.
+- **Updater (RT-772 slice 2, ADR-0006; `src/main/update/`):** `UpdateService` is main-process only,
+  constructed in the composition root and started after the last IPC registration. It has no renderer
+  surface and no UI install trigger.
+  - **Guards, in order:** it does nothing unless this is the shipped app, `ELECTRON_UPDATE_FEED_URL`
+    is set to an **https** origin, `POS_PULSE_UPDATE_CHANNEL` is a known channel (`lab`, `canary`,
+    `stable`; unset means `stable`), and the build's `app-update.yml` pins a publisher. With no
+    pinned publisher it reports `verify_unavailable` and never checks: electron-updater skips
+    signature verification entirely when none is pinned, so the service never lets it start without one.
+  - **Signature verification is ours, and fail-closed.** electron-updater 6.8.10's own Windows
+    verifier resolves "valid" whenever its PowerShell check cannot run (old Windows, `ConvertTo-Json`
+    unusable, a `Path` missing from the output), so the service installs its own
+    (`signature-verifier.ts`) through `verifyUpdateCodeSignature` and reads it back; if the updater did
+    not keep it, the service reports `verify_unavailable` and never checks. The verifier returns `null`
+    only on positive proof: PowerShell exited cleanly with empty stderr, the output parsed, `Status` is
+    exactly 0, the reported `Path` is the downloaded file, and the signer matches a pin (a bare pin
+    equals the CN exactly; a full-DN pin needs every key). Anything else is a non-null result.
+  - **PowerShell is launched defensively** (`powershell-signature-probe.ts`): the absolute Windows
+    PowerShell path (no PATH lookup, no shell), fixed arguments, `PSModulePath` removed, a timeout, and
+    the downloaded file passed only through the `POS_PULSE_VERIFY_FILE` environment variable (its name
+    comes from the feed, so it never appears in the script text). The script is cmdlet-only. Known
+    limits, both fail-closed: Constrained Language Mode or a locked-down policy may refuse the script,
+    and a publisher name with non-ASCII characters may not round-trip through the console code page; in
+    both cases the terminal shows `verify_unavailable` or `verify_failed` rather than installing.
+  - **Roll-forward only:** `allowDowngrade` is forced false after the channel is set (the channel
+    setter can flip it) and install-on-quit is off.
+  - **Install only at a safe point:** one predicate (`SafePointGate`), true only with no open shift, no
+    open cart, no unfinished payment (including a tender line still
+    awaiting an external apply or reversal) or return, and no print in flight (counted at the print pipeline, so
+    receipts, the cash return slip and sale-history reprints are all covered). An input that cannot be read
+    blocks. It is evaluated at two triggers: the update finishing downloading before sign-in (app
+    start), and a committed shift close.
+  - **A shift close notifies the updater only when its own work is done.** The cashier's close
+    notifies (`onShiftClosed`) once it is committed. A manager's forced close drains the shift outbox
+    (bounded by `SHIFT_SYNC_DRAIN_TIMEOUT_MS`) and then answers its caller, so `ForcedCloseHandler`
+    notifies (`onCloseDelivered`) only after that delivery attempt has finished (sent or queued), never
+    during it and never for a refused close. Even then the evaluation is deferred by a short margin
+    (`SHIFT_CLOSE_REPLY_MARGIN_MS`) so the answer reaches the renderer before an install quits the app;
+    it is coalesced into one timer, cancelled on shutdown, and re-reads the gate when it fires (a
+    shift opened meanwhile keeps the update pending).
+  - **Failures are visible:** a signature or checksum failure is `verify_failed`, an inability to
+    verify (our marker, or a PowerShell failure) is `verify_unavailable`, anything else is `error`. The
+    marker is classified first, because electron-updater wraps any non-null verifier result as "not
+    signed by the application owner". None installs. All state changes are logged as `update:state`.
+  - **Provisioning note:** the origin and channel are read from the process environment. The
+    installer's relaunch after an update does **not** inherit them (observed in the lab drill), so a
+    real terminal needs them set persistently (user or machine environment), not per launch.
 - **Append-only tables** are enforced by SQLite triggers, not by convention.
 - **Money is integer minor units everywhere.** No floats, guarded by `Number.isSafeInteger`.
 
