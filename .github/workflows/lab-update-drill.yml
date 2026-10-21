@@ -1,4 +1,7 @@
-# RT-803 (RT-322 S-E) — manual LAB update drill, P0 spike only.
+# RT-803 (RT-322 S-E) — manual LAB update drill. `stage` picks one stage per run: `p0` (default, the
+# spike below) or `p1` (automatic update N -> N+1, see the second job).
+#
+# P0 spike (job p0-spike):
 #
 # LAB ONLY. Builds one per-user NSIS installer signed with an EPHEMERAL self-signed test
 # certificate (subject marker `LAB TEST - NOT FOR PRODUCTION`, created on the runner, never
@@ -12,6 +15,15 @@
 # listed in the `ci` aggregate. No secrets, read-only token, nothing is published or released;
 # the evidence bundle (logs, manifest, public root certificate, one screenshot) is kept 14 days
 # and never contains the installer.
+#
+# P1 update drill (job p1-update): builds two lab installers from the SAME commit that differ only in
+# version (0.1.0 = N, 0.1.1 = N+1), installs N, serves N+1 from an isolated HTTPS lab feed
+# (rt772-lab.test, hosts entry to 127.0.0.1, ephemeral TLS certificate, all removed afterwards) and
+# lets the real UpdateService take the installed N to N+1 at its app-start safe point. Signature,
+# publisher pin and TLS validation stay on. Proves case 1 only (reboot, shift close, GUI, negative
+# cases and production signing are other slices). The driver refuses to run off a GitHub-hosted runner.
+# GitHub runs the workflow file found at the dispatched ref, and `ref` below is what gets built, so
+# before this is merged dispatch both: `gh workflow run lab-update-drill.yml --ref <branch> -f stage=p1 -f ref=<branch>`.
 name: lab-update-drill
 
 on:
@@ -22,6 +34,14 @@ on:
         required: false
         default: main
         type: string
+      stage:
+        description: 'Drill stage: p0 (spike) or p1 (automatic update N to N+1)'
+        required: false
+        default: p0
+        type: choice
+        options:
+          - p0
+          - p1
 
 permissions:
   contents: read
@@ -32,6 +52,7 @@ concurrency:
 
 jobs:
   p0-spike:
+    if: ${{ inputs.stage == 'p0' }}
     runs-on: windows-latest
     timeout-minutes: 45
     steps:
@@ -68,6 +89,47 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: lab-update-drill-p0-${{ github.run_id }}
+          path: ${{ runner.temp }}/evidence
+          retention-days: 14
+          if-no-files-found: warn
+
+  p1-update:
+    if: ${{ inputs.stage == 'p1' }}
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
+          persist-credentials: false
+
+      - name: Setup Node 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Rebuild argon2 for Electron ABI (packaging)
+        run: npx electron-rebuild -f -w argon2
+
+      - name: Lab update drill (certs, two builds, feed, install N, update to N+1)
+        shell: pwsh
+        run: ./scripts/lab/ci/run-lab-p1.ps1 -Evidence "$env:RUNNER_TEMP/evidence"
+
+      - name: Remove the ephemeral lab feed, hosts entry and trust
+        if: always()
+        shell: pwsh
+        run: ./scripts/lab/ci/run-lab-p1.ps1 -Cleanup
+
+      - name: Upload evidence bundle
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: lab-update-drill-p1-${{ github.run_id }}
           path: ${{ runner.temp }}/evidence
           retention-days: 14
           if-no-files-found: warn
