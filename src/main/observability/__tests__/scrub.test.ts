@@ -105,6 +105,26 @@ describe('scrubSentryEvent — allowlist rebuild (contract §3.1)', () => {
     expect(keys).toEqual(['environment', 'event_id', 'exception', 'release', 'tags']);
   });
 
+  it('RT-792: Descope sessionJwt/refreshJwt never leave, as keys or inside a message', () => {
+    const sessionJwt = 'eyJhbGciOiJSUzI1NiJ9.eyJzdWIiOiJVMSJ9.c2Vzc2lvbi1zZWNyZXQ';
+    const refreshJwt = 'eyJhbGciOiJSUzI1NiJ9.eyJzdWIiOiJVMSJ9.cmVmcmVzaC1zZWNyZXQ';
+    const body = JSON.stringify({ sessionJwt, refreshJwt });
+    const out = scrubSentryEvent(
+      exceptionEvent(`descope said ${body} and refreshJwt=${refreshJwt}`, {
+        extra: { sessionJwt, refreshJwt },
+        contexts: { descope: { sessionJwt, refreshJwt } },
+        request: { data: body },
+      }),
+      STAMP,
+    );
+    const serialized = JSON.stringify(out);
+    expect(serialized).not.toContain(sessionJwt);
+    expect(serialized).not.toContain(refreshJwt);
+    // The not.toContain checks are the guard; the exact masked text is the
+    // scrubber's (shared OBS-1) business, so only assert a mask happened.
+    expect(out?.exception?.values?.[0]?.value).toContain('[jwt]');
+  });
+
   it('keeps only the allowed top-level fields', () => {
     const out = scrubSentryEvent(
       exceptionEvent('boom', { timestamp: 1, platform: 'node', level: 'fatal' }),

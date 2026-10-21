@@ -121,6 +121,11 @@ const OPERATOR_REDACTED_KEYS = [
   // who logs a sign-in / takeover success object directly would otherwise emit
   // it cleartext. Scrub it at the logger layer for defence-in-depth (P7).
   'pos_operator_envelope',
+  // RT-792 — the Descope password sign-in response carries both session and
+  // refresh JWTs under these exact (case-sensitive) keys. The exchanger keeps
+  // only the session JWT and logs neither; this guards a raw response log.
+  'sessionJwt',
+  'refreshJwt',
 ] as const;
 
 /**
