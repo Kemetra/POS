@@ -32,6 +32,8 @@ describe('resolveUpdateConfig', () => {
   it('treats an empty channel like an unset one (stable), but whitespace is refused', () => {
     expect(resolveUpdateConfig({ POS_PULSE_UPDATE_CHANNEL: '' }).channel).toBe('stable');
     expect(resolveUpdateConfig({ POS_PULSE_UPDATE_CHANNEL: ' lab' }).channel).toBeNull();
+    expect(resolveUpdateConfig({ POS_PULSE_UPDATE_CHANNEL: 'lab ' }).channel).toBeNull();
+    expect(resolveUpdateConfig({ POS_PULSE_UPDATE_CHANNEL: 'Lab' }).channel).toBeNull();
   });
 
   it('trims the origin', () => {

@@ -186,8 +186,9 @@ a no-op. These are the two most likely silent regressions in this area and both 
     (`ELECTRON_UPDATE_FEED_URL` https, `POS_PULSE_UPDATE_CHANNEL` `lab|canary|stable`) and a reboot,
     per [`pilot-terminal-provisioning.md`](../runbook/pilot-terminal-provisioning.md); User scope is
     a readiness-check failure. The RT-772 drill set them for one launch only, so the relaunch logged
-    `update:disabled reason=no_origin`. The installer is spawned from the POS process, so Machine
-    scope is expected to survive its `--force-run` relaunch; a lab drill (RT-322 S-D) is what proves it.
+    `update:disabled reason=no_origin`. The relaunch did not inherit per-launch values, so it
+    evidently starts from a fresh environment; Machine scope is expected to survive it because a fresh
+    environment includes Machine values. The RT-322 S-D lab drill is what proves it.
     Unset or empty origin disables the service quietly; a non-https origin or an unknown channel
     refuses it, and nothing is contacted.
 - **Append-only tables** are enforced by SQLite triggers, not by convention.

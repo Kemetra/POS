@@ -100,7 +100,7 @@ start the POS.
 | `POS_PULSE_FEATURE_SALE_TENDERS_SINCE` | Set **only** as the RT-79 tender rollout instructs: a future ISO instant with an explicit zone. Unparseable means tenders are off, with a warning. | Not a secret. |
 | `POS_PULSE_FEATURE_SALE_RECEIPT_SINCE` | Set **only** as the RT-540 receipt-snapshot rollout instructs: a future ISO instant with an explicit zone, later than both the Backend-Core RT-539 deploy and the restart that loads it. Sales finalized at or after it send the optional `receipt` (sale number, terminal label, operator name, branch header, change given). A sale with a missing or oversized fact, or an operator name containing `@`, still syncs, without it. Once set, never move, unset or clear it while sales are queued (a retry would then send a different body under the same key, a 409): drain the outbox first. Do not set it earlier than `POS_PULSE_FEATURE_SALE_TENDERS_SINCE`, so the change given always pairs with a cash tender. Unparseable means off, with a warning. | Not a secret. |
 | `ELECTRON_UPDATE_FEED_URL` | The update origin: an **`https://`** URL, supplied by the deployment owner. Unset or empty means updates are disabled (`update:disabled reason=no_origin`), which is the normal state for a terminal that does not self-update. A non-https or malformed value is refused (`origin_not_https`), never contacted. The origin confers no trust: authenticity is the publisher signature pinned in the build. Machine scope only (§4). | Not a secret, but environment endpoints are **not** published in the repo, Jira or screenshots. |
-| `POS_PULSE_UPDATE_CHANNEL` | Exactly `lab`, `canary` or `stable`, set **once at provisioning** by the admin. Never cashier-editable (no UI, no renderer setter). Any other value, including a different case or stray whitespace, is refused (the update service does not start); unset or empty means `stable`, so always set it explicitly on a terminal that has an origin. Machine scope only (§4). | Not a secret. |
+| `POS_PULSE_UPDATE_CHANNEL` | Exactly `lab`, `canary` or `stable`, set **once at provisioning** by the admin. Never cashier-editable (no UI, no renderer setter). Any other value, including a different case or stray whitespace, is refused (when an origin is set; with no origin the service reports `no_origin`); unset or empty means `stable`, so always set it explicitly on a terminal that has an origin. Machine scope only (§4). | Not a secret. |
 | `POS_PULSE_RECEIPT_WEBSITE` | Optional receipt footer text. | Not a secret. |
 | `POS_PULSE_SUPPORT_RESET_CASHIER_CLAIM_REFUSED` | **Support only, normally unset.** `1` re-queues, once per start, this terminal's sales dead-lettered as `cashier_claim_refused` (RT-225). See §7. Any other value does nothing. | Not a secret. |
 
@@ -269,6 +269,8 @@ $dev = @(Get-ChildItem Env: | Where-Object { $_.Name -like 'POS_PULSE_DEV_*' -an
 Check ($dev.Count -eq 0) 'no POS_PULSE_DEV_* variable set'
 if ($fail -eq 0) { '[READY] environment check passed' } else { "[NOT READY] $fail check(s) failed - do not take payments" }
 ```
+
+The HKCU (User scope) check reads the account that runs the check, so it must be run as, or also against, the account that runs the POS, not only the admin's own HKCU.
 
 Any `[FAIL]` line means **not ready**. Fix the Machine values (§5), reboot, and run
 the check again. A `[FAIL]` on "effective value comes from Machine scope" usually
