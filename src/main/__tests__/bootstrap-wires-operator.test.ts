@@ -24,6 +24,10 @@ const INDEX_PATH = resolve(__dirname, '../index.ts');
 
 describe('main/index.ts wires the operator namespace (004 S1)', () => {
   const source = readFileSync(INDEX_PATH, 'utf-8');
+  const resolverSource = readFileSync(
+    resolve(__dirname, '../operator/resolve-exchanger.ts'),
+    'utf-8',
+  );
 
   it('imports registerOperatorHandlers from ./ipc/operator', () => {
     expect(source).toMatch(
@@ -31,9 +35,11 @@ describe('main/index.ts wires the operator namespace (004 S1)', () => {
     );
   });
 
-  it('imports the production ClerkExchanger factory', () => {
-    expect(source).toContain('createClerkExchanger');
-    expect(source).toContain("from './operator/clerk-client.js'");
+  it('builds the production ClerkExchanger through the RT-792 provider resolver', () => {
+    expect(source).toContain('resolveOperatorExchanger({');
+    expect(source).toContain("from './operator/resolve-exchanger.js'");
+    expect(resolverSource).toContain('createClerkExchanger');
+    expect(resolverSource).toContain("from './clerk-client.js'");
   });
 
   it('imports the production BackendClient factory', () => {
@@ -70,7 +76,8 @@ describe('main/index.ts wires the operator namespace (004 S1)', () => {
   });
 
   it('reads CLERK_PUBLISHABLE_KEY from process.env (publishable, not secret)', () => {
-    expect(source).toContain("process.env['CLERK_PUBLISHABLE_KEY']");
+    expect(source).toContain('env: process.env,');
+    expect(resolverSource).toContain("env['CLERK_PUBLISHABLE_KEY']");
   });
 
   it('does NOT import @clerk/clerk-js (browser-only SDK; main uses Frontend API REST)', () => {

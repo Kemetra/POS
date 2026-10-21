@@ -326,6 +326,35 @@ describe('createLogger — pairing-secret redaction (T009)', () => {
 });
 
 /**
+ * RT-792 — Descope password sign-in returns `sessionJwt` and `refreshJwt`.
+ * Neither is ever logged on purpose; the logger scrubs both keys at the top level and up to three levels deep
+ * in case a future contributor logs a Descope response object directly.
+ */
+describe('createLogger — Descope token redaction (RT-792)', () => {
+  const SESSION_JWT = 'session-jwt-secret-value';
+  const REFRESH_JWT = 'refresh-jwt-secret-value';
+
+  it.each([
+    ['top level', { sessionJwt: SESSION_JWT, refreshJwt: REFRESH_JWT }],
+    ['nested', { response: { body: { sessionJwt: SESSION_JWT, refreshJwt: REFRESH_JWT } } }],
+  ])('redacts sessionJwt and refreshJwt (%s)', async (_label, payload) => {
+    const { factory, read } = makeCapturingFactory();
+    const logger = await createLogger({
+      process: 'main',
+      appVersion: APP_VERSION,
+      logsDir: '/tmp/x',
+      pinoRollFactory: factory,
+    });
+    logger.info(payload, 'sample');
+    await flush();
+
+    const raw = read().join('\n');
+    expect(raw).not.toContain(SESSION_JWT);
+    expect(raw).not.toContain(REFRESH_JWT);
+  });
+});
+
+/**
  * pino writes asynchronously through SonicBoom; tests need a microtask
  * tick before reading. We use a small queue-microtask-sized await rather
  * than setImmediate so vitest can run with a fake timer if needed later.

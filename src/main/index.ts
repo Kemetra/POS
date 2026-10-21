@@ -232,11 +232,8 @@ import { bindAuditEventsStoreDb } from './audit/audit-events-store.js';
 import { createNetwork } from './pairing/network.js';
 import { createPairingService } from './pairing/service.js';
 import { createPairingLog } from './pairing/log.js';
-import {
-  createClerkExchanger,
-  decodeFrontendApiBaseUrl,
-  type ClerkExchanger,
-} from './operator/clerk-client.js';
+import type { ClerkExchanger } from './operator/clerk-client.js';
+import { resolveOperatorExchanger } from './operator/resolve-exchanger.js';
 import { createBackendClient } from './operator/backend-client.js';
 import { SessionManager } from './operator/session-manager.js';
 import { CashierSignInHandler, SignInHandler } from './operator/sign-in-handler.js';
@@ -338,39 +335,24 @@ function resolveApiBaseUrl(): string {
 const DEVICE_TOKEN_KEY = makeSecretKey('terminal.device-token');
 
 /**
- * 004-operator-session — resolve the production `ClerkExchanger`.
+ * 004-operator-session / RT-792 — resolve the production `ClerkExchanger`.
  *
- * Decodes the Clerk Frontend API host from `CLERK_PUBLISHABLE_KEY`.
- * When unset or malformed, returns a stub that always refuses so the
- * app still launches in dev without a Clerk tenant configured (the
- * `/sign-in` route renders; submit fails with the generic
- * `invalid_input` refusal). CI / production builds set the key.
+ * `OPERATOR_IDENTITY_PROVIDER` picks Clerk (default) or Descope; see
+ * `operator/resolve-exchanger.ts`. When the provider's setting is unset or
+ * malformed, returns a stub that always refuses so the app still launches
+ * (the `/sign-in` route renders; submit fails with the generic
+ * `invalid_input` refusal).
  *
- * The publishable key itself is NOT a secret — it identifies the
- * Clerk instance for client-side use.
+ * The fetch is the raw global, not `withRequestId`: the identity provider is
+ * a third party, not Backend-Core.
  */
 function resolveClerkExchanger(logger: {
   warn(payload: object, msg: string): void;
 }): ClerkExchanger {
-  const pk = process.env['CLERK_PUBLISHABLE_KEY'];
-  if (typeof pk !== 'string' || pk.length === 0) {
-    logger.warn(
-      { event: 'operator.clerk.missing_publishable_key' },
-      'CLERK_PUBLISHABLE_KEY unset; sign-in will refuse generically until configured.',
-    );
-    return { exchange: () => Promise.resolve({ kind: 'refused' as const }) };
-  }
-  const fapi = decodeFrontendApiBaseUrl(pk);
-  if (fapi === null) {
-    logger.warn(
-      { event: 'operator.clerk.malformed_publishable_key' },
-      'CLERK_PUBLISHABLE_KEY malformed; sign-in will refuse generically until corrected.',
-    );
-    return { exchange: () => Promise.resolve({ kind: 'refused' as const }) };
-  }
-  return createClerkExchanger({
-    frontendApiBaseUrl: fapi,
+  return resolveOperatorExchanger({
+    env: process.env,
     fetch: globalThis.fetch.bind(globalThis),
+    logger,
   });
 }
 
@@ -739,7 +721,8 @@ singleInstanceReady
     // RT-634 (OBS-5) — every Backend-Core call carries a fresh UUID
     // `X-Request-Id` (OBS-1 contract §2), logged locally with method, path
     // and status. ONE wrapper on the base fetch; all Backend-Core clients
-    // below are built on it. Clerk (resolveClerkExchanger) is not wrapped.
+    // below are built on it. The identity provider exchanger (Clerk or
+    // Descope, resolveClerkExchanger) is not wrapped.
     const backendBaseFetch = withRequestId(globalThis.fetch.bind(globalThis), {
       logger: mainLogger,
     });

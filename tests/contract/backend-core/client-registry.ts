@@ -271,6 +271,12 @@ export const NON_BACKEND_CORE_TRANSPORTS: ReadonlyArray<{
     reason:
       'Clerk Frontend API (the identity provider) — mints the operator-identity JWT; not a Backend-Core route.',
   },
+  {
+    module: 'src/main/operator/descope-client.ts',
+    fetchCallSites: 1,
+    reason:
+      'RT-792 Descope password sign-in (the alternative identity provider) — mints the operator-identity JWT; not a Backend-Core route.',
+  },
 ];
 
 /**
