@@ -61,6 +61,16 @@
 #        build/scripts, .github/**, ...) needs the Windows job. Pushes to main
 #        always package. The `ci` aggregate FAILS if `package` was needed but
 #        did not succeed (skipped, failed or cancelled).
+#        RT-775 exception: `tests/e2e/` is carved out of the `tests/**` skip, so
+#        a PR touching it still runs the Windows job (it is the only job that
+#        runs that suite). The rest of `tests/**` and `src/renderer/**` still skip.
+#        Observation period: the RT-773 Playwright Electron smoke runs in
+#        `package` between `npm run build` and `package:dir` with
+#        `continue-on-error: true`, so it can never fail `package` or `ci`.
+#        A preceding non-blocking step raises the runner display (1024x768 by
+#        default) so the renderer's 1024px width floor does not hide the screen.
+#        Log output only (no artifact/trace upload). Making it blocking is a
+#        separate change after the observation period (RT-775 exit criterion).
 
 name: ci
 
@@ -138,6 +148,11 @@ jobs:
           skip_re='^(src/renderer|tests|docs|specs|\.impeccable|\.specify|\.claude)/|^[^/]*\.md$'
           changed="$(git diff --no-renames --name-only HEAD^1 HEAD)"
           needs="$(printf '%s\n' "$changed" | grep -v '^$' | grep -Ev "$skip_re" || true)"
+          # RT-775 — tests/e2e/ is on the skip allowlist via `tests/`, but the
+          # Playwright Electron smoke only runs in this Windows job. ERE has no
+          # lookahead, so add it back with a second match rather than editing skip_re.
+          e2e="$(printf '%s\n' "$changed" | grep -E '^tests/e2e/' || true)"
+          if [ -n "$e2e" ]; then needs="$(printf '%s\n%s\n' "$needs" "$e2e" | grep -v '^$')"; fi
           if [ -z "$changed" ] || [ -n "$needs" ]; then needs_package=true; else needs_package=false; fi
           echo "Paths that require the package job:"
           printf '  %s\n' "${needs:-<none>}"
@@ -347,6 +362,66 @@ jobs:
 
       - name: Build (renderer + main + preload)
         run: npm run build
+
+      # RT-775 — the windows-latest display is 1024x768 (work area 1024x720), so
+      # Electron clamps the 1280x800 window to a 1008x681 page and the renderer's
+      # 1024px width floor shows only the "screen too small" guard. Raise the
+      # display with the Win32 API (no third-party action or module) before the
+      # smoke. Non-blocking, like the smoke itself; logs the modes it saw.
+      - name: Raise runner display resolution (RT-775, non-blocking)
+        continue-on-error: true
+        run: |
+          Add-Type -TypeDefinition @"
+          using System;
+          using System.Runtime.InteropServices;
+          public static class Disp {
+            [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Ansi)]
+            public struct DEVMODE {
+              [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 32)] public string dmDeviceName;
+              public short dmSpecVersion; public short dmDriverVersion; public short dmSize; public short dmDriverExtra;
+              public int dmFields; public int dmPositionX; public int dmPositionY;
+              public int dmDisplayOrientation; public int dmDisplayFixedOutput;
+              public short dmColor; public short dmDuplex; public short dmYResolution; public short dmTTOption; public short dmCollate;
+              [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 32)] public string dmFormName;
+              public short dmLogPixels; public int dmBitsPerPel; public int dmPelsWidth; public int dmPelsHeight;
+              public int dmDisplayFlags; public int dmDisplayFrequency; public int dmICMMethod; public int dmICMIntent;
+              public int dmMediaType; public int dmDitherType; public int dmReserved1; public int dmReserved2;
+              public int dmPanningWidth; public int dmPanningHeight;
+            }
+            [DllImport("user32.dll", CharSet = CharSet.Ansi)] public static extern bool EnumDisplaySettings(string dev, int mode, ref DEVMODE dm);
+            [DllImport("user32.dll", CharSet = CharSet.Ansi)] public static extern int ChangeDisplaySettings(ref DEVMODE dm, int flags);
+            public static DEVMODE Blank() { var d = new DEVMODE(); d.dmSize = (short)Marshal.SizeOf(typeof(DEVMODE)); return d; }
+          }
+          "@
+          $cur = [Disp]::Blank()
+          [void][Disp]::EnumDisplaySettings([NullString]::Value, -1, [ref]$cur)
+          "current: $($cur.dmPelsWidth)x$($cur.dmPelsHeight) @ $($cur.dmBitsPerPel)bpp"
+          $modes = @{}
+          for ($i = 0; ; $i++) {
+            $m = [Disp]::Blank()
+            if (-not [Disp]::EnumDisplaySettings([NullString]::Value, $i, [ref]$m)) { break }
+            $modes["$($m.dmPelsWidth)x$($m.dmPelsHeight)"] = $m
+          }
+          "supported: " + (($modes.Keys | Sort-Object) -join ' ')
+          foreach ($want in '1920x1080', '1600x1200', '1600x900', '1280x1024') {
+            if (-not $modes.ContainsKey($want)) { continue }
+            $m = $modes[$want]
+            $m.dmFields = 0x180000
+            $rc = [Disp]::ChangeDisplaySettings([ref]$m, 0)
+            "try ${want}: ChangeDisplaySettings=$rc"
+            if ($rc -eq 0) { break }
+          }
+          $now = [Disp]::Blank()
+          [void][Disp]::EnumDisplaySettings([NullString]::Value, -1, [ref]$now)
+          "now: $($now.dmPelsWidth)x$($now.dmPelsHeight)"
+          if ($now.dmPelsWidth -lt 1280 -or $now.dmPelsHeight -lt 800) { throw "display still below 1280x800" }
+
+      # RT-775 (RT-773 smoke, RT-774 D-1..D-4) — observation period: launches the
+      # real built app via Playwright's Electron driver (no `playwright install`:
+      # no bundled browser is used). Non-blocking; log output only.
+      - name: Playwright Electron smoke (RT-773, non-blocking)
+        continue-on-error: true
+        run: npx playwright test -c tests/e2e/playwright.config.ts
 
       - name: Package (Windows --dir, unsigned)
         run: npm run package:dir
