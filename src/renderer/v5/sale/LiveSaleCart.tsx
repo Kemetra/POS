@@ -100,6 +100,7 @@ function CartRegion(props: Readonly<Props>): JSX.Element {
             <span>خصم قيد المعالجة</span>
             <button
               type="button"
+              className="v5-btn"
               onClick={() => {
                 props.onRemoveDiscount(discount.placeholderId);
               }}
@@ -255,7 +256,11 @@ function PrimaryAction(props: Readonly<Props>): JSX.Element {
     return (
       <>
         <output className="v5-live-notice v5-live-notice--success">تم الدفع لهذه السلة.</output>
-        <button type="button" className="v5-sale-checkout" onClick={props.onNewSale}>
+        <button
+          type="button"
+          className="v5-sale-checkout v5-btn v5-btn--primary v5-btn--commit"
+          onClick={props.onNewSale}
+        >
           بيع جديد
         </button>
       </>
@@ -264,7 +269,7 @@ function PrimaryAction(props: Readonly<Props>): JSX.Element {
     return (
       <button
         type="button"
-        className="v5-sale-checkout"
+        className="v5-sale-checkout v5-btn v5-btn--primary v5-btn--commit"
         disabled={!props.canContinue}
         onClick={props.onContinue}
       >
@@ -276,7 +281,7 @@ function PrimaryAction(props: Readonly<Props>): JSX.Element {
   return (
     <button
       type="button"
-      className="v5-sale-checkout"
+      className="v5-sale-checkout v5-btn v5-btn--primary v5-btn--commit"
       disabled={!props.canHandoff || props.handingOff}
       onClick={props.onHandoff}
     >

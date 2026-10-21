@@ -127,7 +127,7 @@ function StatusUnavailable(
       <Notice
         tone="warning"
         action={
-          <button type="button" className="v5-shift-btn" onClick={props.onRetry}>
+          <button type="button" className="v5-shift-btn v5-btn" onClick={props.onRetry}>
             <Icon name="retry" />
             {SHIFT_COPY.retry}
           </button>
@@ -145,7 +145,7 @@ function ShiftOutcome({ outcome }: Readonly<{ outcome: Outcome }>): JSX.Element 
       <Notice
         tone="success"
         action={
-          <Link className="v5-shift-btn" to="/app/cart">
+          <Link className="v5-shift-btn v5-btn" to="/app/cart">
             {SHIFT_COPY.goToSale}
           </Link>
         }
@@ -222,7 +222,7 @@ function OpenShiftPanel(
       <div className="v5-shift-commit">
         <button
           type="button"
-          className="v5-shift-btn v5-shift-btn--primary"
+          className="v5-shift-btn v5-shift-btn--primary v5-btn v5-btn--primary"
           disabled={busy}
           onClick={submit}
         >
@@ -274,7 +274,7 @@ function OpenShift(
         <div className="v5-shift-commit" data-testid="shift-actions">
           <button
             type="button"
-            className="v5-shift-btn"
+            className="v5-shift-btn v5-btn"
             onClick={() => {
               setMovement('payIn');
             }}
@@ -283,7 +283,7 @@ function OpenShift(
           </button>
           <button
             type="button"
-            className="v5-shift-btn"
+            className="v5-shift-btn v5-btn"
             onClick={() => {
               setMovement('payOut');
             }}

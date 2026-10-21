@@ -284,58 +284,16 @@
   color: var(--color-danger);
 }
 
-/* ── buttons ────────────────────────────────────────────────────── */
-.v5-void-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: var(--space-2);
-  min-block-size: var(--v5-target, 44px);
-  min-inline-size: 44px;
-  padding-inline: var(--void-btn-pad, var(--space-4));
-  border: 1px solid var(--color-border-strong);
-  border-radius: var(--radius-control);
-  background: var(--color-surface);
-  color: var(--color-text);
-  font: inherit;
-  font-weight: var(--font-weight-semibold);
-  white-space: nowrap;
-  cursor: pointer;
-}
-
-.v5-void-btn:focus-visible,
+/* ── buttons: the shared .v5-btn system (foundation/buttons.css) ─── */
 .v5-void-input:focus-visible,
 .v5-void-choice input:focus-visible {
   outline: 3px solid var(--color-focus-ring);
   outline-offset: 2px;
 }
 
-.v5-void-btn:disabled {
-  cursor: not-allowed;
-}
-
-.v5-void-btn:not(.v5-void-btn--primary, .v5-void-btn--danger):disabled {
-  opacity: 0.55;
-}
-
-.v5-void-btn--primary {
-  border-color: var(--color-primary);
-  background: var(--color-primary);
-  color: var(--color-primary-on);
-}
-
-.v5-void-btn--danger {
-  border-color: var(--color-danger);
-  background: var(--color-danger);
-  color: var(--color-danger-on);
-}
-
-/* An unavailable commit is sunken with muted ink and must not look actionable (DESIGN.md). */
-.v5-void-btn--primary:disabled,
-.v5-void-btn--danger:disabled {
-  border-color: var(--color-border);
-  background: var(--color-surface-sunken);
-  color: var(--color-text-muted);
+/* The compact density keeps its tighter button padding (two classes outrank .v5-btn). */
+.v5-void .v5-void-btn.v5-btn {
+  padding-inline: var(--void-btn-pad, var(--space-4));
 }
 
 /* ── the confirm dialog (inside the one v5 Dialog panel) ────────── */
@@ -440,16 +398,10 @@
   margin: 0;
 }
 
-/* RT-670 — the banner's «عرض» link: v5-live-btn has no size of its own, so it reaches the
-   44×44 target here (DESIGN.md), centred like the v5 buttons. */
-.v5-void-banner .v5-live-btn {
-  display: inline-flex;
+/* RT-670 — the banner's «عرض» link is a v5-btn: it keeps the 44×44 target and the
+   centring from the shared system, and only declines to shrink here. */
+.v5-void-banner .v5-btn {
   flex: none;
-  align-items: center;
-  justify-content: center;
-  min-block-size: var(--v5-target, 44px);
-  min-inline-size: 44px;
-  text-decoration: none;
 }
 
 .v5-void-link {
@@ -460,23 +412,11 @@
 /* ── Windows contrast themes (DESIGN.md Forced-Colours Rule) ───── */
 @media (forced-colors: active) {
   .v5-void-panel,
-  .v5-void-btn,
   .v5-void-input,
   .v5-void-choice,
   .v5-void-state,
   .v5-void-summary {
     border: 1px solid CanvasText;
-  }
-
-  .v5-void-btn--primary,
-  .v5-void-btn--danger {
-    border: 2px solid ButtonText;
-  }
-
-  .v5-void-btn--primary:disabled,
-  .v5-void-btn--danger:disabled {
-    border: 1px solid GrayText;
-    color: GrayText;
   }
 
   .v5-void-state[data-tone='danger'] {

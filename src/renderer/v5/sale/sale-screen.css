@@ -456,21 +456,11 @@
   font-size: var(--font-size-2xs);
 }
 
-.v5-sale-checkout {
+/* The CTA is a shared .v5-btn commit (foundation/buttons.css); only its label-and-arrow layout is local. */
+.v5-sale-checkout.v5-btn {
   display: flex;
-  align-items: center;
   justify-content: space-between;
-  inline-size: 100%;
   min-block-size: 60px;
-  padding-inline: var(--space-4);
-  border: 1px solid var(--color-primary);
-  border-radius: var(--radius-control);
-  background: var(--color-primary);
-  color: var(--color-primary-on);
-  font: inherit;
-  font-size: var(--font-size-md);
-  font-weight: var(--font-weight-bold);
-  cursor: default;
 }
 
 .v5-sale-checkout span:last-child {

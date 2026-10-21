@@ -137,7 +137,11 @@ function ActionButton({
   return (
     <button
       type="button"
-      className={ghost ? 'v5-cashiers-btn v5-cashiers-btn--ghost' : 'v5-cashiers-btn'}
+      className={
+        ghost
+          ? 'v5-cashiers-btn v5-cashiers-btn--ghost v5-btn v5-btn--quiet'
+          : 'v5-cashiers-btn v5-btn'
+      }
       disabled={busy}
       data-action={action}
       aria-describedby={describedBy}

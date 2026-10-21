@@ -48,7 +48,7 @@ export function LocalSaleDetail({
     <section className="v5-history-detail" data-testid="history-local-detail">
       <div className="v5-sales-panel-head">
         <h3>{C.detailHeading}</h3>
-        <button type="button" className="v5-sales-btn" onClick={onClose}>
+        <button type="button" className="v5-sales-btn v5-btn" onClick={onClose}>
           {C.close}
         </button>
       </div>

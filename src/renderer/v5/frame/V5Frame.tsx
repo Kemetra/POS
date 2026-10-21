@@ -1,11 +1,9 @@
 import { useRef, type JSX, type ReactNode } from 'react';
-import { useLocation } from 'react-router-dom';
 import { ScreenTooSmall } from '../../ui/states/ScreenTooSmall';
 import { useFocusOnReturn } from '../../viewport/useFocusOnReturn';
 import { useViewportTier, viewportShortfall } from '../../viewport/useViewportTier';
 import { DialogHost } from '../foundation/Dialog';
 import { V5Navigation } from './V5Navigation';
-import { isActiveSaleRoute } from './nav-model';
 import '../foundation/foundation.css';
 import './frame.css';
 
@@ -36,9 +34,10 @@ interface V5FrameProps {
  * On return, a screen that focuses its own control keeps it; otherwise focus
  * lands on <main>, never on <body>.
  *
- * RT-242 (VN-S12): on an active-sale route the nav is the slim rail
- * (`data-nav="slim"`), elsewhere the labelled panel — decided by the route
- * alone, never by cart state.
+ * RT-242 (VN-S12) made the nav the slim rail on an active-sale route and the
+ * labelled panel elsewhere. Owner decision 2026-10-21: the nav is the slim rail
+ * (`data-nav="slim"`) on every screen, so it never changes shape when the
+ * cashier or manager moves between screens.
  *
  * RT-595 (RT-505 F1): the notices strip is a labelled complementary landmark
  * (`<aside>`): it mixes status banners with the shift / void links, so it is
@@ -50,8 +49,7 @@ interface V5FrameProps {
  */
 export function V5Frame({ notices, children }: Readonly<V5FrameProps>): JSX.Element {
   const shortfall = viewportShortfall(useViewportTier());
-  const { pathname } = useLocation();
-  const nav = isActiveSaleRoute(pathname) ? 'slim' : 'panel';
+  const nav = 'slim';
   const mainRef = useRef<HTMLElement>(null);
   useFocusOnReturn(shortfall !== null, () => mainRef.current);
 

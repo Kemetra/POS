@@ -151,7 +151,9 @@ function PrintButton({
   busy: boolean;
   onClick: () => void;
 }>): JSX.Element {
-  const className = primary ? 'v5-sales-btn v5-sales-btn--primary' : 'v5-sales-btn';
+  const className = primary
+    ? 'v5-sales-btn v5-sales-btn--primary v5-btn v5-btn--primary'
+    : 'v5-sales-btn v5-btn';
   return (
     <button type="button" className={className} disabled={busy} onClick={onClick}>
       {label}
@@ -294,7 +296,7 @@ export function HistoryDetail({
     <section className="v5-history-detail" aria-labelledby={headingId} data-testid="history-detail">
       <div className="v5-sales-panel-head">
         <h3 id={headingId}>{C.detailHeading}</h3>
-        <button type="button" className="v5-sales-btn" onClick={onClose}>
+        <button type="button" className="v5-sales-btn v5-btn" onClick={onClose}>
           {C.close}
         </button>
       </div>

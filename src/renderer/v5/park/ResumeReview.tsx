@@ -55,7 +55,7 @@ export function ResumeReview({ flow }: Readonly<{ flow: ResumeFlow }>): JSX.Elem
           {view.sale.label === null ? PARK_COPY.unnamed : <bdi>{view.sale.label}</bdi>}
         </p>
         <span className="v5-park-grow" />
-        <button type="button" className="v5-park-btn" onClick={flow.back}>
+        <button type="button" className="v5-park-btn v5-btn" onClick={flow.back}>
           {PARK_COPY.backToList}
         </button>
       </div>
@@ -116,7 +116,7 @@ function ReviewActions(
         <button
           ref={props.primaryRef}
           type="button"
-          className="v5-park-btn v5-park-btn--primary"
+          className="v5-park-btn v5-park-btn--primary v5-btn v5-btn--primary"
           disabled={review.busy}
           onClick={flow.accept}
         >
@@ -126,7 +126,7 @@ function ReviewActions(
       <button
         ref={props.backRef}
         type="button"
-        className="v5-park-btn"
+        className="v5-park-btn v5-btn"
         disabled={review?.busy === true}
         onClick={flow.back}
       >

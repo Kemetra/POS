@@ -100,7 +100,7 @@ function ReloadButton({
   onClick,
 }: Readonly<{ label: string; onClick: () => void }>): JSX.Element {
   return (
-    <button type="button" className="v5-shift-btn" onClick={onClick}>
+    <button type="button" className="v5-shift-btn v5-btn" onClick={onClick}>
       <Icon name="retry" />
       {label}
     </button>

@@ -249,7 +249,7 @@ export function LockScreen({
             <div>
               <button
                 type="submit"
-                className="v5-live-btn v5-live-btn--primary"
+                className="v5-live-btn v5-live-btn--primary v5-btn v5-btn--primary"
                 disabled={busy}
                 aria-busy={busy ? 'true' : undefined}
               >
@@ -258,7 +258,7 @@ export function LockScreen({
               {onSwitchOperator !== undefined && (
                 <button
                   type="button"
-                  className="v5-live-btn"
+                  className="v5-live-btn v5-btn"
                   disabled={busy}
                   onClick={onSwitchOperator}
                 >

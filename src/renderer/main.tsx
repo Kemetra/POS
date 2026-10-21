@@ -3,6 +3,9 @@ import ReactDOM from 'react-dom/client';
 import App from './App';
 import { installErrorReporter } from './observability/error-reporter';
 import './styles/tailwind.css';
+// The shared V5 button system. Global, not per-frame: the pairing and sign-in
+// entry routes render outside V5Frame, so foundation.css alone does not reach them.
+import './v5/foundation/buttons.css';
 import type { PreloadBridgeAPI } from '../shared/bridge-api';
 import { useFeatureFlagsStore } from './stores/feature-flags-store';
 import { installCartStoreSignOutHook } from './stores/cart-signout-hook';

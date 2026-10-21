@@ -67,17 +67,7 @@
     color: CanvasText;
   }
 
-  /* RT-241 (VN-S2): filled actions keep an edge; selection is the system pair. */
-  .v5-live-btn--primary,
-  .v5-live-btn--danger,
-  .v5-live-sale .v5-sale-checkout {
-    border: 3px solid ButtonText;
-  }
-
-  .v5-live-btn:disabled {
-    border-color: GrayText;
-    color: GrayText;
-  }
+  /* Filled and unavailable buttons keep their edge from foundation/buttons.css. */
 
   /* An edge, not a fill: forced-color-adjust is inherited and would un-force the row's «اختيار» cue. */
   .v5-sale-product-row[aria-selected='true'] {
@@ -122,11 +112,6 @@
 }
 
 .v5-live-line-actions button,
-.v5-live-freshness button,
-.v5-live-void,
-.v5-live-discount button,
-.v5-live-message button,
-.v5-live-state button,
 .v5-sale-product-pick {
   min-block-size: 44px;
   min-inline-size: 44px;
@@ -150,13 +135,6 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-}
-
-.v5-live-void {
-  border-color: var(--color-danger-soft);
-  color: var(--color-danger-emphasis);
-  background: var(--color-surface);
-  font-weight: var(--font-weight-semibold);
 }
 
 /* Line actions stay a 44px hit area but read as quiet text, not boxed chrome. */
@@ -282,40 +260,8 @@
   min-inline-size: 44px;
 }
 
-.v5-live-btn {
-  padding-inline: var(--space-4);
-  border: 1px solid var(--color-border-strong);
-  border-radius: var(--radius-control);
-  background: var(--color-surface);
-  color: var(--color-text);
-  font: inherit;
-  font-weight: var(--font-weight-semibold);
-  white-space: nowrap;
-  cursor: pointer;
-}
-
-.v5-live-btn--primary {
-  border-color: var(--color-primary);
-  background: var(--color-primary);
-  color: var(--color-primary-on);
-}
-
-.v5-live-btn--danger {
-  border-color: var(--color-danger);
-  background: var(--color-danger);
-  color: var(--color-danger-on);
-}
-
-.v5-live-btn:disabled {
-  opacity: 0.55;
-  cursor: not-allowed;
-}
-
-.v5-live-btn:focus-visible,
-.v5-live-void:focus-visible,
-.v5-live-message button:focus-visible,
-.v5-live-line-actions button:focus-visible,
-.v5-live-freshness button:focus-visible {
+/* Dialog, lock and sale buttons are shared .v5-btn (foundation/buttons.css). */
+.v5-live-line-actions button:focus-visible {
   outline: 2px solid var(--color-focus-ring);
   outline-offset: 2px;
 }
@@ -476,22 +422,6 @@
   font-weight: var(--font-weight-semibold);
 }
 
-.v5-live-freshness button {
-  border-color: transparent;
-  background: transparent;
-  color: var(--color-primary-emphasis);
-  font-weight: var(--font-weight-semibold);
-}
-
-.v5-live-freshness button:hover:not(:disabled) {
-  background: var(--color-primary-soft);
-}
-
-.v5-live-freshness button:disabled {
-  color: var(--color-text-muted);
-  cursor: not-allowed;
-}
-
 /* Cart: sticky column labels, compact rows, quiet unit price, obvious stepper. */
 .v5-live-sale .v5-sale-cart-columns {
   position: sticky;
@@ -533,10 +463,10 @@
   min-block-size: 56px;
 }
 
-.v5-live-sale .v5-sale-checkout {
+.v5-live-sale .v5-sale-checkout.v5-btn {
+  justify-content: space-between;
   gap: var(--space-3);
   min-block-size: 56px;
-  cursor: pointer;
 }
 
 /*
@@ -545,18 +475,6 @@
  */
 .v5-live-sale .v5-sale-checkout span:last-child {
   font-size: inherit;
-}
-
-.v5-live-sale .v5-sale-checkout:hover:not(:disabled) {
-  border-color: var(--color-primary-emphasis);
-  background: var(--color-primary-emphasis);
-}
-
-.v5-sale-checkout:disabled {
-  border-color: var(--color-border);
-  background: var(--color-surface-sunken);
-  color: var(--color-text-muted);
-  cursor: not-allowed;
 }
 
 /* State and failure notices are read, not squinted at. */

@@ -166,7 +166,7 @@ export function PinPad(props: Readonly<PinPadProps>): JSX.Element {
       <div className="v5-entry__auth-actions">
         <button
           type="button"
-          className="v5-entry__btn v5-entry__btn--primary v5-entry__commit"
+          className="v5-entry__btn v5-entry__btn--primary v5-entry__commit v5-btn v5-btn--primary v5-btn--commit"
           data-testid="pin-pad-enter"
           aria-disabled={!canSubmit || disabled}
           disabled={disabled}
@@ -291,7 +291,7 @@ export function PinPadPreview({
       <div className="v5-entry__auth-actions">
         <button
           type="button"
-          className="v5-entry__btn v5-entry__btn--primary v5-entry__commit"
+          className="v5-entry__btn v5-entry__btn--primary v5-entry__commit v5-btn v5-btn--primary v5-btn--commit"
           disabled
         >
           {submitLabel}

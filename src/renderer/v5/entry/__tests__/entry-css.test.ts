@@ -50,6 +50,11 @@ function pxVar(body: string, name: string): number {
 const comfortable = ruleBody(css, '.v5-entry');
 const compact = ruleBody(mediaBlocks(css, /\(max-width:\s*1279px\)/), '.v5-entry');
 const forced = mediaBlocks(css, /\(forced-colors:\s*active\)/);
+// The entry buttons are shared v5-btn buttons: their forced-colours edge lives in the system.
+const buttonsForced = mediaBlocks(
+  readFileSync(resolve(__dirname, '../../foundation/buttons.css'), 'utf-8'),
+  /\(forced-colors:\s*active\)/,
+);
 
 describe('RT-244 entry.css — tokens and target floors', () => {
   it('pins no raw colour literal: every colour is a token or a system colour', () => {
@@ -100,7 +105,10 @@ describe('RT-244 entry.css — Windows contrast themes', () => {
 
   it('every control keeps a visible boundary', () => {
     expect(forced).toMatch(/\.v5-entry__key[\s\S]*?border-color:\s*CanvasText/);
-    expect(forced).toMatch(/\.v5-entry__btn--primary\s*\{[^}]*border:\s*2px solid ButtonText/);
+    // The entry primary is a shared v5-btn--primary: its filled edge lives in foundation/buttons.css.
+    expect(buttonsForced).toMatch(
+      /\.v5-btn\.v5-btn--primary[^{]*\{[^}]*border:\s*3px solid ButtonText/,
+    );
   });
 });
 

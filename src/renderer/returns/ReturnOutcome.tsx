@@ -86,7 +86,7 @@ function CheckAgain({ flow, outcome }: Readonly<{ flow: ReturnFlow; outcome: Out
       <ReturnNotice notice={outcome.notice} />
       <button
         type="button"
-        className="v5-manager-btn v5-manager-btn--primary"
+        className="v5-manager-btn v5-manager-btn--primary v5-btn v5-btn--primary"
         disabled={busy}
         aria-busy={busy}
         onClick={() => void flow.checkAgain()}
@@ -176,8 +176,8 @@ export function ReturnOutcome({
             type="button"
             className={
               newReturnIsSecondary(outcome)
-                ? 'v5-manager-btn'
-                : 'v5-manager-btn v5-manager-btn--primary'
+                ? 'v5-manager-btn v5-btn'
+                : 'v5-manager-btn v5-manager-btn--primary v5-btn v5-btn--primary'
             }
             disabled={flow.busy === 'check'}
             onClick={flow.startOver}

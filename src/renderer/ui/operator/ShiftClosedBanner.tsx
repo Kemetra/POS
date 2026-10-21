@@ -34,7 +34,12 @@ export function ShiftClosedBanner({
       tone="info"
       testId="shift-closed-banner"
       actions={
-        <button type="button" data-testid="shift-closed-banner-dismiss" onClick={onDismiss}>
+        <button
+          type="button"
+          className="v5-btn"
+          data-testid="shift-closed-banner-dismiss"
+          onClick={onDismiss}
+        >
           {SHIFT_CLOSED_COPY.dismiss}
         </button>
       }

@@ -51,35 +51,8 @@
   line-height: var(--line-height-snug);
 }
 
-/* Back sits next to the title: the first control in reading order (§3.2). */
-.v5-checkout-back {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-2);
-  min-block-size: 44px;
-  padding-inline: var(--space-4);
-  border: 1px solid var(--color-border-strong);
-  border-radius: var(--radius-control);
-  background: var(--color-surface);
-  color: var(--color-text);
-  font: inherit;
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-semibold);
-  cursor: pointer;
-}
-
-.v5-checkout-back:hover:not(:disabled) {
-  background: var(--color-surface-muted);
-}
-
-/* Disabled-by-state: sunken with muted ink, the reason sits right below. */
-.v5-checkout-back:disabled {
-  border-style: dashed;
-  background: var(--color-surface-sunken);
-  color: var(--color-text-muted);
-  cursor: not-allowed;
-}
-
+/* Back sits next to the title: the first control in reading order (§3.2). It is a
+   shared .v5-btn (foundation/buttons.css); only the Esc hint inside it is local. */
 .v5-checkout-back kbd {
   padding-inline: var(--space-1);
   border-radius: var(--radius-pill);
@@ -906,13 +879,25 @@
   }
 }
 
-/* ── Reduced motion ────────────────────────────────────────────────────── */
+/* ── Settle-in and reduced motion ──────────────────────────────────────── */
+
+/* Signal settle-in (150ms): the entry panel arrives when a tender tile is chosen.
+   Only the panel, never the ledger or its amounts, and never a recovery state. */
+.v5-checkout__entry {
+  animation: v5-settle var(--motion-notice-in, var(--duration-2))
+    var(--motion-ease, var(--ease-out));
+}
 
 @media (prefers-reduced-motion: reduce) {
   .v5-tender-tile,
   .v5-quick-amount,
   .v5-cash-keypad__key {
     transition: none;
+  }
+
+  .v5-checkout__entry {
+    animation: none;
+    transform: none;
   }
 }
 
@@ -954,11 +939,6 @@
   }
 
   .v5-tender-tile:disabled {
-    border-color: GrayText;
-    color: GrayText;
-  }
-
-  .v5-checkout-back:disabled {
     border-color: GrayText;
     color: GrayText;
   }

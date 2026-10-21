@@ -38,7 +38,7 @@ export function SaleResult({ sale, receipts }: Readonly<SaleResultProps>): JSX.E
       <div className="v5-sales-buttons">
         <button
           type="button"
-          className="v5-sales-btn"
+          className="v5-sales-btn v5-btn"
           onClick={() => {
             setPreviewing(true);
           }}

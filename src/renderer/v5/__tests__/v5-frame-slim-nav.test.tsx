@@ -61,16 +61,16 @@ describe('isActiveSaleRoute', () => {
   });
 });
 
-describe('the frame nav on an active-sale route', () => {
-  it.each(['/app/cart', '/app/checkout'])('is the slim rail on %s', (path) => {
-    signIn('manager');
-    expect(renderAt(path)).toHaveAttribute('data-nav', 'slim');
-  });
-
-  it.each(['/app/dashboard', '/app/sales'])('is the labelled panel on %s', (path) => {
-    signIn('manager');
-    expect(renderAt(path)).toHaveAttribute('data-nav', 'panel');
-  });
+describe('the frame nav', () => {
+  // Owner decision 2026-10-21: one nav shape everywhere, so moving between
+  // screens never swaps the slim rail for the labelled panel.
+  it.each(['/app/cart', '/app/checkout', '/app/dashboard', '/app/sales', '/app/returns'])(
+    'is the slim rail on %s',
+    (path) => {
+      signIn('manager');
+      expect(renderAt(path)).toHaveAttribute('data-nav', 'slim');
+    },
+  );
 
   it('keeps every visible label as the accessible name in the slim rail', () => {
     signIn('manager');

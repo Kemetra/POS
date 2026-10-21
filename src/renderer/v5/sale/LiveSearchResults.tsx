@@ -60,7 +60,7 @@ function RecoverMessage(
   return (
     <output className="v5-live-message">
       {props.copy}{' '}
-      <button type="button" onClick={props.onRecover}>
+      <button type="button" className="v5-btn" onClick={props.onRecover}>
         {props.action}
       </button>
     </output>

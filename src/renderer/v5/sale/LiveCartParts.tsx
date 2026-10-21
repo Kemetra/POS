@@ -161,7 +161,7 @@ export function VoidControl({ onVoid }: Readonly<{ onVoid: () => Promise<boolean
     <>
       <button
         type="button"
-        className="v5-live-void"
+        className="v5-live-void v5-btn v5-btn--danger-quiet"
         onClick={() => {
           setOpen(true);
         }}
@@ -226,12 +226,12 @@ export function NoteDialog(
         </p>
       )}
       <div>
-        <button type="button" className="v5-live-btn" onClick={props.onClose}>
+        <button type="button" className="v5-live-btn v5-btn" onClick={props.onClose}>
           إلغاء
         </button>
         <button
           type="button"
-          className="v5-live-btn"
+          className="v5-live-btn v5-btn"
           disabled={line.note === null}
           onClick={() => {
             save(null);
@@ -241,7 +241,7 @@ export function NoteDialog(
         </button>
         <button
           type="button"
-          className="v5-live-btn v5-live-btn--primary"
+          className="v5-live-btn v5-live-btn--primary v5-btn v5-btn--primary"
           disabled={text.trim() === (line.note ?? '')}
           onClick={() => {
             save(text.trim() || null);

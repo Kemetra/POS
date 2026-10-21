@@ -18,6 +18,17 @@
   font-size: var(--font-size-md, 1rem);
   font-weight: var(--font-weight-semibold);
   box-shadow: 0 4px 16px rgb(0 0 0 / 18%);
+
+  /* Signal settle-in (150ms): the refusal arrives, it does not announce itself. */
+  animation: v5-settle var(--motion-notice-in, var(--duration-2))
+    var(--motion-ease, var(--ease-out));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .scan-notice {
+    animation: none;
+    transform: none;
+  }
 }
 
 .scan-notice__icon {

@@ -38,26 +38,30 @@ function v5Rule(path: string, selector: string): string {
 }
 
 describe('022 T029 — Button: primary / secondary / destructive treatment (V5, RT-652)', () => {
+  // The shared system (v5/foundation/buttons.css) owns every V5 button's colour. A variant
+  // routes its role colours through `--btn-*`, so the token assertions read those properties.
+  const BUTTONS = 'v5/foundation/buttons.css';
+
   it('primary is a token-driven FILL (FR-4: teal may fill large primary actions)', () => {
-    const body = v5Rule('v5/shift/shift.css', '.v5-shift-btn--primary');
-    expect(body).toMatch(/background(?:-color)?:\s*var\(--color-primary\)/);
-    expect(body).toMatch(/color:\s*var\(--color-primary-on\)/);
+    const body = v5Rule(BUTTONS, '.v5-btn--primary');
+    expect(body).toMatch(/--btn-bg:\s*var\(--color-primary\)/);
+    expect(body).toMatch(/--btn-fg:\s*var\(--color-primary-on\)/);
     // No literal may pin the fill — the retune must reach it.
     expect(body).not.toMatch(/#[0-9a-fA-F]{3,8}/);
   });
 
   it('destructive is visually separated and NEVER carries the primary treatment (FR-17)', () => {
-    const body = v5Rule('v5/sale/live-sale.css', '.v5-live-btn--danger');
-    expect(body).toMatch(/background(?:-color)?:\s*var\(--color-danger\)/);
+    const body = v5Rule(BUTTONS, '.v5-btn--danger');
+    expect(body).toMatch(/--btn-bg:\s*var\(--color-danger\)/);
     // The decisive check: destructive must not borrow the primary token.
     expect(body).not.toMatch(/var\(--color-primary/);
     expect(body).not.toMatch(/#[0-9a-fA-F]{3,8}/);
   });
 
   it('secondary is a quiet surface treatment, not a second filled primary (FR-14/FR-38)', () => {
-    const body = v5Rule('v5/shift/shift.css', '.v5-shift-btn');
-    expect(body).toMatch(/background(?:-color)?:\s*var\(--color-surface\)/);
-    expect(body).not.toMatch(/background(?:-color)?:\s*var\(--color-primary\)/);
+    const body = v5Rule(BUTTONS, '.v5-btn');
+    expect(body).toMatch(/--btn-bg:\s*var\(--color-surface\)/);
+    expect(body).not.toMatch(/--btn-bg:\s*var\(--color-primary\)/);
   });
 
   it('the 007 .btn intents are gone from tailwind.css', () => {

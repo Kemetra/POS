@@ -46,41 +46,7 @@
   font-weight: var(--font-weight-semibold);
 }
 
-.v5-shift-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-block-size: 44px;
-  padding-inline: var(--space-4);
-  border: 1px solid var(--color-border-strong);
-  border-radius: var(--radius-control);
-  background: var(--color-surface);
-  color: var(--color-text);
-  font: inherit;
-  font-weight: var(--font-weight-semibold);
-  text-decoration: none;
-  cursor: pointer;
-}
-
-.v5-shift-btn:hover:not(:disabled) {
-  background: var(--color-surface-elevated);
-}
-
-.v5-shift-btn--primary {
-  border-color: var(--color-primary);
-  background: var(--color-primary);
-  color: var(--color-primary-on);
-}
-
-.v5-shift-btn--primary:hover:not(:disabled) {
-  border-color: var(--color-primary-emphasis);
-  background: var(--color-primary-emphasis);
-}
-
-.v5-shift-btn:disabled {
-  opacity: 0.55;
-  cursor: not-allowed;
-}
+/* Buttons: the shared .v5-btn system (foundation/buttons.css). */
 
 /* The "shift required" gate: persistent until a shift is open (warning). */
 .v5-shift-banner {
@@ -132,11 +98,6 @@
   .v5-shift-page {
     --shift-pin-col: 284px;
   }
-}
-
-.v5-shift-page .v5-shift-btn {
-  gap: var(--space-2);
-  white-space: nowrap;
 }
 
 .v5-shift-page .v5-notice__text p {

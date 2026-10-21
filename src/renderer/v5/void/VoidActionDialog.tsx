@@ -203,7 +203,7 @@ export function VoidActionDialog(props: Props): JSX.Element {
           <button
             ref={backRef}
             type="button"
-            className="v5-void-btn"
+            className="v5-void-btn v5-btn"
             disabled={busy}
             onClick={dismiss}
           >
@@ -211,7 +211,7 @@ export function VoidActionDialog(props: Props): JSX.Element {
           </button>
           <button
             type="button"
-            className="v5-void-btn v5-void-btn--danger"
+            className="v5-void-btn v5-void-btn--danger v5-btn v5-btn--danger"
             disabled={!ready || busy}
             onClick={press}
           >

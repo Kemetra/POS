@@ -242,7 +242,12 @@ function FreshnessBar(props: Readonly<Props>): JSX.Element {
     >
       <span>{FRESHNESS_COPY[props.freshness](stamp)}</span>
       {feedback !== null && <span>{feedback}</span>}
-      <button type="button" onClick={props.onRefresh} disabled={props.refreshing}>
+      <button
+        type="button"
+        className="v5-btn v5-btn--quiet"
+        onClick={props.onRefresh}
+        disabled={props.refreshing}
+      >
         تحديث الكتالوج
       </button>
     </div>

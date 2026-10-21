@@ -125,7 +125,7 @@ export function LinePicker({
         <div className="v5-returns-actions">
           <button
             type="button"
-            className="v5-manager-btn v5-manager-btn--ghost"
+            className="v5-manager-btn v5-manager-btn--ghost v5-btn v5-btn--quiet"
             disabled={busy}
             onClick={flow.startOver}
           >
@@ -133,7 +133,7 @@ export function LinePicker({
           </button>
           <button
             type="button"
-            className="v5-manager-btn v5-manager-btn--primary"
+            className="v5-manager-btn v5-manager-btn--primary v5-btn v5-btn--primary"
             disabled={nothingPicked || busy}
             aria-busy={busy}
             onClick={() => void flow.getQuote()}

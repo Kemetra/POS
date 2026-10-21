@@ -52,13 +52,14 @@ export function DrawerNoticeBanner({
         <>
           <button
             type="button"
+            className="v5-btn"
             onClick={() => {
               onManualOverride(notice.sale_id);
             }}
           >
             إيصال يدوي
           </button>
-          <button type="button" onClick={acknowledgeDrawerNotice}>
+          <button type="button" className="v5-btn" onClick={acknowledgeDrawerNotice}>
             تم
           </button>
         </>
@@ -83,7 +84,7 @@ export function DrawerNoticeInline(): JSX.Element | null {
       announce={false}
       testId="drawer-notice-inline"
       action={
-        <button type="button" onClick={acknowledgeDrawerNotice}>
+        <button type="button" className="v5-btn" onClick={acknowledgeDrawerNotice}>
           تم
         </button>
       }

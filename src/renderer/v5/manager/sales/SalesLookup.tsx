@@ -120,7 +120,11 @@ export function SalesLookup({
               }}
             />
           </div>
-          <button type="submit" className="v5-sales-btn v5-sales-btn--primary" disabled={searching}>
+          <button
+            type="submit"
+            className="v5-sales-btn v5-sales-btn--primary v5-btn v5-btn--primary"
+            disabled={searching}
+          >
             {searching ? SALES_COPY.searching : SALES_COPY.search}
           </button>
         </form>

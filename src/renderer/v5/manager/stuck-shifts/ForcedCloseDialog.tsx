@@ -181,7 +181,7 @@ export function ForcedCloseForm({
         <button
           ref={cancelRef}
           type="button"
-          className="v5-stuck-btn"
+          className="v5-stuck-btn v5-btn"
           onClick={onCancel}
           disabled={submitting}
         >
@@ -189,7 +189,7 @@ export function ForcedCloseForm({
         </button>
         <button
           type="submit"
-          className="v5-stuck-btn v5-stuck-btn--danger"
+          className="v5-stuck-btn v5-stuck-btn--danger v5-btn v5-btn--danger"
           disabled={reason == null || submitting}
         >
           {COPY.close}

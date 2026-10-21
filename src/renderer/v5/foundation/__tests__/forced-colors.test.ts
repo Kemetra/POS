@@ -51,6 +51,8 @@ function ruleFor(css: string, selector: string): string {
 const frame = forcedColorsCss(read('../../frame/frame.css'));
 const sale = forcedColorsCss(read('../../sale/live-sale.css'));
 const checkout = forcedColorsCss(read('../../checkout/checkout.css'));
+// The shared button system owns every button's forced-colours edge (foundation/buttons.css).
+const buttons = forcedColorsCss(read('../buttons.css'));
 
 describe('forced colors — V5 frame', () => {
   it('the current nav entry is a system selection, not a tint', () => {
@@ -67,17 +69,17 @@ describe('forced colors — V5 frame', () => {
   });
 
   it('the sign-out confirm (a filled danger button) gets the 3px ButtonText border', () => {
-    expect(ruleFor(frame, '.v5-frame__sign-out .v5-frame__sign-out-confirm')).toMatch(
-      /border:\s*3px solid ButtonText/,
-    );
+    // Now a shared v5-btn--danger: the system rule carries the edge for every filled danger button.
+    expect(ruleFor(buttons, '.v5-btn.v5-btn--danger')).toMatch(/border:\s*3px solid ButtonText/);
   });
 });
 
 describe('forced colors — Sale', () => {
-  it.each(['.v5-live-btn--primary', '.v5-live-btn--danger', '.v5-live-sale .v5-sale-checkout'])(
-    '%s (filled primary) gets the 3px ButtonText border',
+  // The dialog primary/danger and the Sale CTA are shared v5-btn buttons (foundation/buttons.css).
+  it.each(['.v5-btn.v5-btn--primary', '.v5-btn.v5-btn--danger'])(
+    '%s (filled action) gets the 3px ButtonText border',
     (selector) => {
-      expect(ruleFor(sale, selector)).toMatch(/border:\s*3px solid ButtonText/);
+      expect(ruleFor(buttons, selector)).toMatch(/border:\s*3px solid ButtonText/);
     },
   );
 
@@ -101,7 +103,9 @@ describe('forced colors — Sale', () => {
   });
 
   it('a disabled button reads as disabled without its opacity fade', () => {
-    const body = ruleFor(sale, '.v5-live-btn:disabled');
+    // The selector list holds a comma inside :is(), so match it directly rather than via ruleFor.
+    const body =
+      /\.v5-btn:is\(:disabled, \[aria-disabled='true'\]\)\s*\{([^}]*)\}/.exec(buttons)?.[1] ?? '';
     expect(body).toMatch(/color:\s*GrayText/);
     expect(body).toMatch(/border-color:\s*GrayText/);
   });

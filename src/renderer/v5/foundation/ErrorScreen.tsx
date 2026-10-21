@@ -68,7 +68,12 @@ export function ErrorScreen({
             {ref}
           </bdi>
         </p>
-        <button ref={actionRef} type="button" className="v5-route-state__action" onClick={onReload}>
+        <button
+          ref={actionRef}
+          type="button"
+          className="v5-route-state__action v5-btn v5-btn--primary"
+          onClick={onReload}
+        >
           إعادة تحميل
         </button>
       </section>

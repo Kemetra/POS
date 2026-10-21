@@ -318,7 +318,7 @@ export function RecoveryActionDialog(props: Readonly<Props>): JSX.Element {
         <button
           ref={backRef}
           type="button"
-          className="v5-recovery-btn"
+          className="v5-recovery-btn v5-btn"
           disabled={busy}
           onClick={dismiss}
         >
@@ -326,7 +326,9 @@ export function RecoveryActionDialog(props: Readonly<Props>): JSX.Element {
         </button>
         <button
           type="button"
-          className="v5-recovery-btn v5-recovery-btn--primary"
+          className={`v5-recovery-btn v5-recovery-btn--primary v5-btn ${
+            action.kind === 'complete' ? 'v5-btn--primary' : 'v5-btn--danger'
+          }`}
           disabled={!ready || busy}
           onClick={press}
         >

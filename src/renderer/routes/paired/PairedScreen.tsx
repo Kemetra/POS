@@ -106,7 +106,7 @@ export function PairedScreen(props: Readonly<PairedScreenProps>): JSX.Element {
             Boot router gate is NOT modified. No IPC / bridge call. */}
         <button
           type="button"
-          className="v5-entry__btn v5-entry__btn--primary v5-entry__commit"
+          className="v5-entry__btn v5-entry__btn--primary v5-entry__commit v5-btn v5-btn--primary v5-btn--commit"
           data-testid="paired-continue"
           autoFocus
           onClick={() => void navigate('/app/dashboard')}

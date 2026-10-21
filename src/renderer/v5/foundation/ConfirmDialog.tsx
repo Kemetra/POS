@@ -40,7 +40,10 @@ export function ConfirmDialog({
 }: Readonly<ConfirmDialogProps>): JSX.Element {
   const cancelRef = useRef<HTMLButtonElement>(null);
   const bodyId = useId();
-  const confirmClass = tone === 'danger' ? 'v5-live-btn--danger' : 'v5-live-btn--primary';
+  const confirmClass =
+    tone === 'danger'
+      ? 'v5-live-btn--danger v5-btn--danger'
+      : 'v5-live-btn--primary v5-btn--primary';
 
   return (
     <Dialog
@@ -61,7 +64,7 @@ export function ConfirmDialog({
         <button
           ref={cancelRef}
           type="button"
-          className="v5-live-btn"
+          className="v5-live-btn v5-btn"
           disabled={busy}
           onClick={onCancel}
         >
@@ -69,7 +72,7 @@ export function ConfirmDialog({
         </button>
         <button
           type="button"
-          className={`v5-live-btn ${confirmClass}`}
+          className={`v5-live-btn v5-btn ${confirmClass}`}
           disabled={busy}
           onClick={onConfirm}
         >

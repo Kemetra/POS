@@ -501,17 +501,6 @@ body {
     margin: 0;
   }
 
-  .session-lock-switch button {
-    min-block-size: 44px;
-    padding-inline: var(--space-4);
-    border: 1px solid var(--color-border);
-    border-radius: var(--radius-control);
-    background: var(--color-surface);
-    color: var(--color-text);
-    font: inherit;
-    cursor: pointer;
-  }
-
   /* ── Dialog (T033) ───────────────────────────────────────────────────── */
 
   .dialog-overlay {
@@ -572,25 +561,10 @@ body {
      a v5 Banner/Notice (v5/foundation/messages.css). */
 
   /*
-   * 022 US3 T072 — the primary confirm action. Padding 15x40, label 16/700.
-   * The cancel action turns red on hover per the mockup; it uses the measured
-   * `--color-danger` token, NOT the handoff's stock Tailwind red, because the
-   * repo value was chosen by contrast measurement (RECONCILIATION §C).
+   * The payment-surface confirm and cancel are shared .v5-btn buttons
+   * (v5/foundation/buttons.css): confirm is a primary commit, cancel a
+   * danger-quiet entry into the cancel flow. No local fill, border or hover.
    */
-  .payment-surface__confirm {
-    padding: var(--checkout-action-padding-block) var(--checkout-action-padding-inline);
-    font-size: var(--font-size-md);
-    font-weight: var(--font-weight-bold);
-    border-radius: var(--radius-control);
-    background-color: var(--color-primary);
-    border: 1px solid var(--color-primary);
-    color: var(--color-primary-on);
-  }
-
-  .payment-surface__cancel:hover:not(:disabled) {
-    border-color: var(--color-danger);
-    color: var(--color-danger);
-  }
 
   /* ── Entry surfaces ───────────────────────────────────────────────────
    * The entry component mounts beneath the tender grid. It is a peer card
@@ -659,95 +633,13 @@ body {
     display: none;
   }
 
-  .payment-surface__confirm,
-  .payment-surface__cancel {
-    min-block-size: 44px;
-    border-radius: var(--radius-control);
-    font-family: var(--font-family-sans);
-    font-weight: var(--font-weight-bold);
-    cursor: pointer;
-    transition:
-      background-color var(--duration-2) var(--ease-out),
-      border-color var(--duration-2) var(--ease-out),
-      color var(--duration-2) var(--ease-out);
-  }
-
-  .payment-surface__confirm:hover:not(:disabled):not([aria-disabled='true']) {
-    background-color: var(--color-primary-emphasis);
-    border-color: var(--color-primary-emphasis);
-  }
-
-  .payment-surface__cancel {
-    padding: var(--checkout-action-padding-block) var(--space-5);
-    border: 1px solid var(--color-border-strong);
-    background-color: var(--color-surface);
-    color: var(--color-text);
-    font-size: var(--font-size-md);
-  }
-
-  .payment-surface__confirm[aria-disabled='true'],
-  .payment-surface__cancel[aria-disabled='true'] {
-    opacity: 0.45;
-    cursor: not-allowed;
-  }
-
-  .payment-surface__confirm:focus-visible,
-  .payment-surface__cancel:focus-visible {
-    outline: 2px solid var(--color-focus-ring);
-    outline-offset: 2px;
-  }
-
   /*
-   * RT-238 — commit chrome (RT-159 F-09: the entry confirms rendered as plain
-   * text). One filled primary per region (Commit-Teal rule). A commit that
-   * cannot proceed is sunken and dashed, never just dimmed. Under forced colours
-   * the fill is dropped by the browser, so the boundary carries the meaning.
+   * RT-238 — commit chrome. The Checkout commits (`.checkout-commit`) are shared
+   * .v5-btn--primary .v5-btn--commit buttons (v5/foundation/buttons.css): one
+   * filled primary per region, and a commit that cannot proceed is sunken and
+   * dashed, never just dimmed. The 60px/56px density sits on the ledger slot
+   * (v5/checkout/checkout.css), keyed to the v5-screen container.
    */
-  .checkout-commit {
-    min-block-size: 56px;
-    padding: var(--space-3) var(--space-6);
-    border: 2px solid var(--color-primary);
-    border-radius: var(--radius-control);
-    background-color: var(--color-primary);
-    color: var(--color-primary-on);
-    font-family: var(--font-family-sans);
-    font-size: var(--font-size-lg);
-    font-weight: var(--font-weight-bold);
-    cursor: pointer;
-  }
-
-  .checkout-commit:hover:not(:disabled):not([aria-disabled='true']) {
-    background-color: var(--color-primary-emphasis);
-    border-color: var(--color-primary-emphasis);
-  }
-
-  .checkout-commit:disabled,
-  .checkout-commit[aria-disabled='true'] {
-    border: 2px dashed var(--color-border-strong);
-    background-color: var(--color-surface-sunken);
-    color: var(--color-text-muted);
-    cursor: not-allowed;
-    opacity: 1;
-  }
-
-  .checkout-commit:focus-visible {
-    outline: 2px solid var(--color-focus-ring);
-    outline-offset: 2px;
-  }
-
-  @media (forced-colors: active) {
-    .checkout-commit {
-      border: 3px solid ButtonText;
-      background-color: ButtonFace;
-      color: ButtonText;
-    }
-
-    .checkout-commit:disabled,
-    .checkout-commit[aria-disabled='true'] {
-      border: 2px dashed GrayText;
-      color: GrayText;
-    }
-  }
 
   /* ══════════════════════════════════════════════════════════════════════
    * 022 US0-R2 — RE-HOMED INTO `@layer components` (was unlayered).
@@ -1055,70 +947,7 @@ body {
     justify-content: flex-end;
   }
 
-  .takeover-prompt__cancel {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    padding-inline: var(--space-5);
-    block-size: 44px;
-    border-radius: var(--radius-control);
-    background-color: transparent;
-    border: 1px solid var(--color-border-strong);
-    color: var(--color-text);
-    font-size: var(--font-size-sm);
-    font-weight: var(--font-weight-medium);
-    cursor: pointer;
-    transition:
-      background-color var(--duration-2) var(--ease-out),
-      border-color var(--duration-2) var(--ease-out);
-  }
-
-  .takeover-prompt__cancel:hover:not(:disabled) {
-    background-color: var(--color-surface-muted);
-  }
-
-  .takeover-prompt__cancel:focus-visible {
-    outline: 2px solid var(--color-focus-ring);
-    outline-offset: 2px;
-  }
-
-  .takeover-prompt__cancel:disabled {
-    opacity: 0.45;
-    cursor: not-allowed;
-  }
-
-  .takeover-prompt__confirm {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    padding-inline: var(--space-5);
-    block-size: 44px;
-    border-radius: var(--radius-control);
-    background-color: var(--color-primary);
-    border: 1px solid var(--color-primary);
-    color: var(--color-primary-on);
-    font-size: var(--font-size-sm);
-    font-weight: var(--font-weight-semibold);
-    cursor: pointer;
-    transition:
-      background-color var(--duration-2) var(--ease-out),
-      border-color var(--duration-2) var(--ease-out);
-  }
-
-  .takeover-prompt__confirm:hover:not(:disabled) {
-    background-color: var(--color-primary-emphasis);
-    border-color: var(--color-primary-emphasis);
-  }
-
-  .takeover-prompt__confirm:focus-visible {
-    outline: 2px solid var(--color-focus-ring);
-    outline-offset: 2px;
-  }
-
-  .takeover-prompt__confirm:disabled {
-    opacity: 0.45;
-    cursor: not-allowed;
-  }
+  /* The takeover buttons are shared .v5-btn (v5/foundation/buttons.css). */
 
   /* ── OperatorBadge ───────────────────────────────────────────────────── */
 

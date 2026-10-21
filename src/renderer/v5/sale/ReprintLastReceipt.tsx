@@ -153,7 +153,7 @@ export function ReprintLastReceipt({
     <span className="v5-reprint-last">
       <button
         type="button"
-        className="v5-reprint-last__btn"
+        className="v5-reprint-last__btn v5-btn"
         disabled={busy}
         onClick={() => {
           void handleClick();

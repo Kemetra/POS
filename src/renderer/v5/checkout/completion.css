@@ -118,29 +118,28 @@
   display: flex;
 }
 
+/* «بيع جديد» is a shared .v5-btn commit (foundation/buttons.css); only its flex share is local. */
 .v5-completion-btn {
   flex: 1 1 auto;
-  min-block-size: 56px;
-  padding-inline: var(--space-5);
-  border: 1px solid var(--color-border-strong);
-  border-radius: var(--radius-control);
-  background: var(--color-surface);
-  color: var(--color-text);
-  font: inherit;
-  font-size: var(--font-size-lg);
-  font-weight: var(--font-weight-semibold);
-  cursor: pointer;
 }
 
-.v5-completion-btn--primary {
-  border-color: var(--color-primary);
-  background: var(--color-primary);
-  color: var(--color-primary-on);
+/*
+ * Signal settle-in (150ms): only the outcome line's glyph and sentence arrive
+ * with a small drop. The amount, the change and the panel stay still: truth
+ * does not perform. The proven (success) line is the only one that settles.
+ */
+.v5-proof-line[data-tone='success'] > .v5-tone-icon,
+.v5-proof-line[data-tone='success'] > .v5-proof-line__label {
+  animation: v5-settle var(--motion-notice-in, var(--duration-2))
+    var(--motion-ease, var(--ease-out));
 }
 
-.v5-completion-btn:focus-visible {
-  outline: 2px solid var(--color-focus-ring);
-  outline-offset: 2px;
+@media (prefers-reduced-motion: reduce) {
+  .v5-proof-line[data-tone='success'] > .v5-tone-icon,
+  .v5-proof-line[data-tone='success'] > .v5-proof-line__label {
+    animation: none;
+    transform: none;
+  }
 }
 
 @media (forced-colors: active) {
@@ -150,13 +149,5 @@
 
   .v5-proof-line .v5-tone-icon {
     color: CanvasText;
-  }
-
-  .v5-completion-btn--primary {
-    border: 3px solid ButtonText;
-  }
-
-  .v5-completion-btn:focus-visible {
-    outline-color: Highlight;
   }
 }
