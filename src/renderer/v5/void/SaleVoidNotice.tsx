@@ -90,10 +90,12 @@ function needsAttentionBanner(attention: number | null, pathname: string): boole
 }
 
 /** The persistent banner while a refused void is unacknowledged. */
-function AttentionBanner(props: {
-  bridge: SaleVoidBridgeAPI;
-  refreshMs: number;
-}): JSX.Element | null {
+function AttentionBanner(
+  props: Readonly<{
+    bridge: SaleVoidBridgeAPI;
+    refreshMs: number;
+  }>,
+): JSX.Element | null {
   const { pathname } = useLocation();
   const attention = useAttentionCount(props.bridge, pathname, props.refreshMs);
   if (!needsAttentionBanner(attention, pathname)) return null;
