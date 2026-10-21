@@ -45,9 +45,10 @@
   min-inline-size: 0;
 }
 
+/* Flush on the shared row: the row gap alone separates the two links. */
 .v5-frame__notices > :is(.v5-shift-notice, .v5-void-link) {
   flex: 0 1 auto;
-  margin: 0;
+  padding-inline: 0;
 }
 
 .v5-frame__notices:empty {

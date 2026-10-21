@@ -86,8 +86,11 @@ export function V5OperationalNotices(): JSX.Element {
       {status.offline && <OfflineBanner />}
       <PrinterFailureBanner printFailure={printFailure} onReprint={reprint} />
       <DrawerNoticeBanner now={new Date().toISOString()} onManualOverride={manualOverride} />
+      {/* Banners take a full row each; the quiet links («حالة الوردية», then
+          «إلغاء بيع») come last so they share one row (frame.css). */}
+      <SaleVoidNotice part="banner" />
       <ShiftNotice />
-      <SaleVoidNotice />
+      <SaleVoidNotice part="link" />
     </>
   );
 }
