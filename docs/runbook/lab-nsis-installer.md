@@ -192,7 +192,7 @@ disables differential download. This section is the runtime proof. Run it in the
 | Step | Expected |
 | :--- | :------- |
 | 0. `Normal`, real blockmaps, `happy` installer | the fallback line with cause `Server doesn't support Accept-Ranges` (the lab feed has no Range support), then a full download, `downloaded`, safe-point install. Proves the fallback on a failure that is not injected |
-| 1. `-BlockmapMode Corrupt`, `happy` installer | fallback line preceded by `Cannot parse blockmap` for the new `.blockmap` URL (not the Accept-Ranges cause), then a full installer GET in the feed log, `downloaded`, install at the safe point; relaunch as the new version |
+| 1. `-BlockmapMode Corrupt`, `happy` installer | fallback line preceded by `Cannot parse blockmap` for a `.blockmap` URL (the new one in 6.8.10, which fetches it first; either map is accepted, `Corrupt` serves junk for both) and not the Accept-Ranges cause, then a full installer GET in the feed log, `downloaded`, install at the safe point; relaunch as the new version |
 | 2. `-BlockmapMode Missing`, `happy` installer | fallback line preceded by a `404` HTTP error on the `.blockmap` URL, then full download and verified install |
 | 3. `-BlockmapMode Corrupt`, `tamper` installer | the fallback line, then `verify_failed` (`sha512 checksum mismatch`); version unchanged; the installer never runs |
 | 4. `-BlockmapMode Corrupt`, `wrongpub` installer | the fallback line, then `verify_failed` from the signature check (pin mismatch); version unchanged. Proves the publisher pin holds on the fallback path |
