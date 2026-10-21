@@ -79,11 +79,13 @@ function Send-CorruptBlockmap($req, $res) {
 # Answers one request. Returns the status code and the number of body bytes sent.
 function Send-Response($req, $res, [string]$rootFull) {
   if ($req.HttpMethod -notin @('GET', 'HEAD')) { return @{ Status = 405; Bytes = 0 } }
-  $file = Resolve-FeedFile $rootFull $req.Url.AbsolutePath
-  if ($null -eq $file) { return @{ Status = 404; Bytes = 0 } }
+  # Blockmap faults are decided before the file is looked up, so they hold even when the
+  # backing .blockmap is absent from the feed directory.
   $isBlockmap = $req.Url.AbsolutePath.EndsWith('.blockmap', [StringComparison]::OrdinalIgnoreCase)
   if ($isBlockmap -and $BlockmapMode -eq 'Missing') { return @{ Status = 404; Bytes = 0 } }
   if ($isBlockmap -and $BlockmapMode -eq 'Corrupt') { return Send-CorruptBlockmap $req $res }
+  $file = Resolve-FeedFile $rootFull $req.Url.AbsolutePath
+  if ($null -eq $file) { return @{ Status = 404; Bytes = 0 } }
   $length = (Get-Item -LiteralPath $file).Length
   $res.ContentType = 'application/octet-stream'
   $res.ContentLength64 = $length
