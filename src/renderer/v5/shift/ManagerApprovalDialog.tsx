@@ -119,7 +119,7 @@ export function ManagerApprovalDialog(props: Props): JSX.Element {
         <button
           ref={cancelRef}
           type="button"
-          className="v5-live-btn"
+          className="v5-live-btn v5-btn"
           disabled={busy}
           onClick={dismiss}
         >
@@ -127,7 +127,7 @@ export function ManagerApprovalDialog(props: Props): JSX.Element {
         </button>
         <button
           type="button"
-          className="v5-live-btn v5-live-btn--primary"
+          className="v5-live-btn v5-live-btn--primary v5-btn v5-btn--primary"
           disabled={!ready || busy}
           onClick={submit}
         >

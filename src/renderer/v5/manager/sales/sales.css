@@ -74,49 +74,11 @@
   font-family: var(--font-family-mono);
 }
 
-/* ── buttons ─────────────────────────────────────────────────────── */
-.v5-sales-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: var(--space-2);
-  min-block-size: var(--v5-target, 44px);
-  min-inline-size: 44px;
-  padding-inline: var(--space-4);
-  border: 1px solid var(--color-border-strong);
-  border-radius: var(--radius-control);
-  background: var(--color-surface);
-  color: var(--color-text);
-  font: inherit;
-  font-weight: var(--font-weight-semibold);
-  white-space: nowrap;
-  cursor: pointer;
-}
-
+/* ── buttons: the shared .v5-btn system (foundation/buttons.css) ─── */
 @media (max-width: 1279px) {
-  .v5-sales-btn {
+  .v5-sales-btn.v5-btn {
     padding-inline: var(--space-3);
   }
-}
-
-.v5-sales-btn--primary {
-  border-color: var(--color-primary);
-  background: var(--color-primary);
-  color: var(--color-primary-on);
-}
-
-.v5-sales-btn:disabled {
-  cursor: not-allowed;
-}
-
-.v5-sales-btn--primary:disabled {
-  border-color: var(--color-border);
-  background: var(--color-surface-sunken);
-  color: var(--color-text-muted);
-}
-
-.v5-sales-btn:not(.v5-sales-btn--primary):disabled {
-  opacity: 0.55;
 }
 
 /* ── the found sale ──────────────────────────────────────────────── */
@@ -169,18 +131,8 @@
 /* ── Windows contrast themes (DESIGN.md Forced-Colours Rule) ───── */
 @media (forced-colors: active) {
   .v5-sales-panel,
-  .v5-sales-btn,
   .v5-sales-input {
     border: 1px solid CanvasText;
-  }
-
-  .v5-sales-btn--primary {
-    border: 2px solid ButtonText;
-  }
-
-  .v5-sales-btn--primary:disabled {
-    border-color: GrayText;
-    color: GrayText;
   }
 }
 

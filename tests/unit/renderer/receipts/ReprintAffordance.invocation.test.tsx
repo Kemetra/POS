@@ -98,15 +98,15 @@ describe('T431 — ReprintAffordance invocation', () => {
       />,
     );
     const button = screen.getByRole('button', { name: 'إعادة طباعة الإيصال' });
-    // The v5 button class encodes the 44px floor (FR-068); jsdom cannot lay it
-    // out, so assert the class and that the stylesheet declares the floor on it.
-    expect(button).toHaveClass('v5-sales-btn');
+    // The shared v5 button class encodes the 44px floor (FR-068); jsdom cannot lay it
+    // out, so assert the class and that the button system declares the floor on it.
+    expect(button).toHaveClass('v5-sales-btn', 'v5-btn');
     const css = readFileSync(
-      resolve(__dirname, '../../../../src/renderer/v5/manager/sales/sales.css'),
+      resolve(__dirname, '../../../../src/renderer/v5/foundation/buttons.css'),
       'utf-8',
     );
-    const rule = /\.v5-sales-btn\s*\{[^}]*\}/.exec(css)?.[0] ?? '';
-    expect(rule).toMatch(/min-block-size:\s*var\(--v5-target,\s*44px\)/);
+    const rule = /\.v5-btn\s*\{[^}]*\}/.exec(css)?.[0] ?? '';
+    expect(rule).toMatch(/min-block-size:\s*44px/);
     expect(rule).toMatch(/min-inline-size:\s*44px/);
   });
 

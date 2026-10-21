@@ -248,7 +248,7 @@ export function VoucherEntry({
       <PinnedPrimary>
         <button
           type="button"
-          className="voucher-entry__confirm checkout-commit"
+          className="voucher-entry__confirm checkout-commit v5-btn v5-btn--primary v5-btn--commit"
           data-testid="voucher-entry-confirm"
           style={{ minHeight: touchTarget.commit }}
           disabled={!canSubmit}

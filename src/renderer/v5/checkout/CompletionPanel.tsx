@@ -150,7 +150,7 @@ export function CompletionPanel({
           <button
             ref={newSaleRef}
             type="button"
-            className="v5-completion-btn v5-completion-btn--primary"
+            className="v5-completion-btn v5-completion-btn--primary v5-btn v5-btn--primary v5-btn--commit"
             data-testid={testIds.newSale}
             onKeyDown={guardNewSaleKey}
             onClick={() => {

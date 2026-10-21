@@ -154,7 +154,7 @@ export function ParkDialog(props: Readonly<Props>): JSX.Element {
               <button
                 ref={showParkedRef}
                 type="button"
-                className="v5-park-btn"
+                className="v5-park-btn v5-btn"
                 onClick={props.onShowParked}
               >
                 {PARK_COPY.showParked}
@@ -162,12 +162,17 @@ export function ParkDialog(props: Readonly<Props>): JSX.Element {
             )}
           </div>
           <div className="v5-park-dialog__pair">
-            <button type="button" className="v5-park-btn" disabled={saving} onClick={props.onClose}>
+            <button
+              type="button"
+              className="v5-park-btn v5-btn"
+              disabled={saving}
+              onClick={props.onClose}
+            >
               {PARK_COPY.back}
             </button>
             <button
               type="submit"
-              className="v5-park-btn v5-park-btn--primary"
+              className="v5-park-btn v5-park-btn--primary v5-btn v5-btn--primary"
               disabled={saving || limit}
             >
               {PARK_COPY.parkAction}

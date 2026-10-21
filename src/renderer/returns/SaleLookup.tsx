@@ -49,7 +49,7 @@ export function SaleLookup({ flow, notice }: SaleLookupProps): JSX.Element {
           </div>
           <button
             type="submit"
-            className="v5-manager-btn v5-manager-btn--primary"
+            className="v5-manager-btn v5-manager-btn--primary v5-btn v5-btn--primary"
             disabled={busy}
             aria-busy={busy}
           >

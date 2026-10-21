@@ -131,7 +131,7 @@ function PreviewDialog({
         <button
           ref={closeRef}
           type="button"
-          className="v5-sales-btn v5-sales-btn--primary"
+          className="v5-sales-btn v5-sales-btn--primary v5-btn v5-btn--primary"
           onClick={onClose}
         >
           {SALES_COPY.previewClose}

@@ -80,7 +80,7 @@ function RowActionButton({
   return (
     <button
       type="button"
-      className="v5-manager-btn"
+      className="v5-manager-btn v5-btn"
       aria-label={`${ACTION_LABEL[action]} ${row.saleNumber}`}
       disabled={reprint.printing !== null && action === 'reprint'}
       aria-busy={printing}
@@ -165,7 +165,7 @@ function Reload({ history }: Readonly<{ history: ReturnHistory }>): JSX.Element 
   const { status } = history.state;
   if (status !== 'failed' && status !== 'refused') return null;
   return (
-    <button type="button" className="v5-manager-btn" onClick={() => void history.reload()}>
+    <button type="button" className="v5-manager-btn v5-btn" onClick={() => void history.reload()}>
       إعادة تحميل السجل
     </button>
   );
@@ -220,7 +220,7 @@ export function ReturnsHistory({
   const bar = hasUnresolved(state) ? (
     <button
       type="button"
-      className="v5-manager-btn"
+      className="v5-manager-btn v5-btn"
       disabled={history.checking}
       aria-busy={history.checking}
       onClick={() => void history.checkUnresolved()}

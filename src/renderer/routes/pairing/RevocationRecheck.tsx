@@ -75,7 +75,7 @@ export function RevocationRecheck(props: Readonly<{ pairing: PairingBridgeAPI }>
     <div className="v5-entry__recheck">
       <button
         type="button"
-        className="v5-entry__btn v5-entry__commit-secondary"
+        className="v5-entry__btn v5-entry__commit-secondary v5-btn"
         disabled={checking || coolingDown}
         onClick={() => {
           void check();

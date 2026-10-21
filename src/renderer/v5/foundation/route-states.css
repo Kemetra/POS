@@ -78,22 +78,9 @@
   font-size: var(--font-size-xs);
 }
 
+/* The action is a shared .v5-btn--primary (foundation/buttons.css); only its placement is local. */
 .v5-route-state__action {
   justify-self: start;
-  min-block-size: 44px;
-  padding-inline: var(--space-4);
-  border: 1px solid var(--color-primary);
-  border-radius: var(--radius-control);
-  background: var(--color-primary);
-  color: var(--color-primary-on);
-  font: inherit;
-  font-weight: var(--font-weight-semibold);
-  cursor: pointer;
-}
-
-.v5-route-state__action:focus-visible {
-  outline: 2px solid var(--color-focus-ring);
-  outline-offset: 2px;
 }
 
 /* The loading text still says what is happening; the spinner just stops. */
@@ -106,9 +93,5 @@
 @media (forced-colors: active) {
   .v5-route-state__spinner {
     border-color: CanvasText;
-  }
-
-  .v5-route-state__action {
-    border: 3px solid ButtonText;
   }
 }

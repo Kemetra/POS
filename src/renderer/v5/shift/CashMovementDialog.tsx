@@ -140,12 +140,12 @@ export function CashMovementDialog(props: Props): JSX.Element {
         <ShiftRefusal message={error?.invalid === false ? error.message : null} />
       </div>
       <div className="v5-shift-dialog-actions">
-        <button type="button" className="v5-live-btn" disabled={busy} onClick={dismiss}>
+        <button type="button" className="v5-live-btn v5-btn" disabled={busy} onClick={dismiss}>
           {SHIFT_COPY.cancel}
         </button>
         <button
           type="button"
-          className="v5-live-btn v5-live-btn--primary"
+          className="v5-live-btn v5-live-btn--primary v5-btn v5-btn--primary"
           disabled={busy}
           onClick={submit}
         >

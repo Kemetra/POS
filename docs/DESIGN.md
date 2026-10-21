@@ -126,7 +126,7 @@ components:
     height: "44px"
   button-ghost:
     backgroundColor: "transparent"
-    textColor: "{colors.text}"
+    textColor: "{colors.text-muted}"
     typography: "{typography.body-strong}"
     rounded: "{rounded.control}"
     height: "44px"
@@ -473,8 +473,7 @@ Icons reinforce; text decides (UX-03). Domain, destructive, financial and recove
 
 | Aspect | 1280×800 (comfortable) | 1024×768 (compact) |
 |---|---|---|
-| Nav on an active sale (Sale, Checkout, completion — first item until «بيع جديد») | slim rail, icon + short label, ≈76px | slim rail, ≈76px |
-| Nav elsewhere (sign-in boundary, manager/admin screens) | labelled panel, 208px | labelled panel, 140px |
+| Nav, every screen (owner decision 2026-10-21; RT-242 kept the labelled panel off-sale) | slim rail, icon + short label, ≈76px | slim rail, ≈76px |
 | Sale | command bar (scan target, search, suspended-sales entry *(VN-S11)*) above a full-width cart; money column ≈320px on the inline end: total at the top, «الدفع», suspend *(VN-S11)* and cancel at the bottom | same, money column ≈280px; at least 6 cart rows visible |
 | Search results | drop down over the cart, 3–5 results, close on Esc or selection | same |
 | Checkout | order summary ≈280px · tender panel fluid · payment ledger ≈320px (amount due and commit pinned) | tender panel fluid · payment ledger ≈296px; summary collapses to a one-line strip with «عرض الأصناف» |
@@ -521,15 +520,21 @@ Gently rounded, consistent by role. **Shipped:** controls (buttons, fields, tile
 One vocabulary, one implementation each, under `src/renderer/v5/**` (the clean-room wall stays). The full state matrix is [`06-component-state-inventory.md`](design/vnext/06-component-state-inventory.md). The legacy 007 `ui/primitives/*`, `.btn`, `.v4-*`, the v3.5 tender classes and the four hand-rolled dialog mechanisms are retired vocabularies, kept alive only until their screens migrate.
 
 ### Buttons
-- **Shape:** control radius (10px); sizes medium 44px and large 56px.
-- **Primary / commit:** Tower Teal fill, white text. The commit (Checkout CTA, confirm payment, new sale) is large and full panel width. Hover deepens to Deep Teal.
-- **Secondary:** white surface with a Control Edge boundary and ink text — supporting actions next to a primary.
-- **Ghost:** transparent, ink text — cancel, back, low-commitment navigation.
-- **Danger / danger-quiet:** Consequence Red fill (or red ink on white for the quiet form) — void, cancel sale, cancel after handoff. Hover deepens to the danger emphasis.
-- **Focus:** `outline: 2px solid` the focus ring (primary) with a 2px offset on every focusable element — never only a box-shadow, which disappears in contrast themes.
+One shared system, `.v5-btn` (`src/renderer/v5/foundation/buttons.css`, loaded once from `main.tsx`). Every V5 button, the Checkout commits and the dialog buttons carry it; a surface keeps its own class only for placement. *Shipped on `feat/pos-button-system-transitions` (no Jira id yet).* The variants set role colours through `--btn-*`, so a state never repeats a colour per variant.
+
+- **Shape:** control radius (10px; UX-04 migrates it in its own slice); sizes medium 44px and large 56px.
+- **Secondary (`.v5-btn`):** white surface, Control Edge boundary, ink text. The default, and what a bordered cancel, back or close stays.
+- **Primary (`--primary`):** Tower Teal fill, white text. **Commit (`--commit`, with `--primary`):** the one next action, large and full panel width (Checkout CTA, confirm payment, the Sale «الدفع» handoff, new sale).
+- **Quiet (`--quiet`):** borderless, muted ink. Only for a cancel, back or close that is borderless today.
+- **Danger-quiet / danger:** danger-quiet (red ink and edge) *starts* a destructive flow (cancel sale, void, cancel payment, force-close a stuck shift); danger (red fill) *executes* it inside its confirm dialog or step.
+- **Hover:** neutral or one step deeper, over the Signal role. **Press:** one step deeper and a 1px drop, over the Contact role (80ms); none under reduced motion.
+- **Focus:** `outline: 2px solid` the focus ring (teal) with a 2px offset on every focusable element, never only a box-shadow, which disappears in contrast themes.
+- **Unavailable (`:disabled` and `aria-disabled`):** recessed, not faded. A sunken fill, a Control Edge hairline and muted ink; no opacity. **Unavailable commit:** the same, with a 2px dashed edge, so it never looks payable. The reason sits in the same region.
 - **Disabled-by-policy:** visibly present, sunken, with a reason line (the RT-103 internal-voucher tender tile is the reference case).
-- **Unavailable commit:** a commit that cannot proceed (for example a cash shortfall) is sunken with muted ink, never full teal, and the reason sits in the same region. It must not look payable.
-- **Density:** the commit is 56px compact and 60px comfortable; tender tiles are 72px and 84px, following the `v5-screen` container (see Layout).
+- **Busy:** `aria-busy="true"` shows the progress cursor.
+- **Keypad keys and tender tiles** stay their own components and share the same press and the teal focus ring.
+- **Forced colours:** every button keeps a 1px `ButtonText` edge; a filled primary or danger keeps a 3px one; unavailable reads `GrayText`, and an unavailable commit stays dashed.
+- **Density:** the commit is 56px compact and 60px comfortable; tender tiles are 72px and 84px, following the `v5-screen` container (see Layout). The density rules sit on the Checkout ledger slot and the Sale money column, not in the button system.
 
 ### Keyboard hints
 A Recessed Well pill with an 11–12px mono key, on the control it accelerates (for example «الدفع ‹F8›», once that key is bound). Always shown at comfortable density and on focus/hover at compact density. A hint appears **only if the binding exists in code** — no key is bound today; the key map awaits RT-24 confirmation and conflict testing *(VN-S5)*.
@@ -547,7 +552,7 @@ Cart rows show name (wrapping to two lines), quantity stepper, unit price and li
 `OrderSummary` (frozen), `TenderPicker` (tiles, including disabled-by-policy), `CashEntry` with `QuickAmounts`, `CardTerminalEntry`, `PaymentLedger` (amount due pinned at hero size), `PaymentOutcome` and `RecoveryPanel` for UNKNOWN, cancelling and reversal states. Selected tender tile: Teal Wash fill, Tower Teal ink and boundary. Money values are never animated (UX-06); `MoneyRoll` was removed by RT-243 F1 (#583) and must not return.
 
 ### Navigation
-- **Labelled panel** (208 / 140px) off-sale, **slim rail** (≈76px, icon + short 12px label) during an active sale.
+- **Slim rail** (≈76px, icon + short 12px label) on every screen, so the nav never changes shape between screens (owner decision 2026-10-21; RT-242 had a labelled 208 / 140px panel off-sale, its CSS remains as the unscoped base under `data-nav='slim'`).
 - **Default:** muted ink on canvas, control radius, 44px entries.
 - **Active:** Teal Wash fill, Tower Teal ink, a 2px inline-start bar and `aria-current="page"`.
 - Cashiers do not see unavailable or unauthorised placeholder routes (OD-6); manager and admin roles keep them *(VN-S10)*.
@@ -578,6 +583,7 @@ Motion explains a change; it never owns the meaning (UX-06). POS is predominantl
 
 All three use `ease-out` `cubic-bezier(0.2, 0.7, 0.25, 1)`. New state transitions use only these roles: no ad-hoc durations, and the shipped `--duration-4` (320ms) is not a motion role. The roles time state changes, not continuous activity loops: a genuine-activity spinner keeps the shipped `800ms linear infinite` rotation (`v5/foundation/messages.css`, `route-states.css`). UX-06 names no spinner token; one may be added by a later motion slice, which must not speed the loop up to a transition role. No springs, overshoot, bounce, shake or parallax.
 
+- **Settle-ins:** one 150ms Signal settle (`v5-settle`, a 4px drop and a fade) on the foundation Notice, Banner and Toast, the inline scan notice, the Checkout tender entry panel, and the completion outcome line (its glyph and sentence only, never the amounts or the panel). Danger-toned messages, every recovery surface and an UNKNOWN payment stay static, and dialogs keep the 220ms entry with no exit. Each has a `prefers-reduced-motion: reduce` path of `animation: none`. *Shipped on `feat/pos-button-system-transitions` (no Jira id yet).*
 - **Truth doesn't perform:** money, totals, tax, refunds and stock never roll, count up or morph through intermediate values; the correct value appears at once. `MoneyRoll` was removed by RT-243 F1 (#583).
 - **Success settles, risk suppresses expression:** a proven result gets a restrained acknowledgement, never celebration. Payment UNKNOWN and other critical uncertainty are near-static.
 - **Live does not mean animated:** connected, scanner-ready and healthy states are static. Spinners and progress move only during genuine processing, syncing or loading, stop when it stops, and stay on the control or surface that owns the action. No ambient pulsing, breathing buttons or moving gradients.

@@ -27,54 +27,7 @@
   color: var(--color-text-muted);
 }
 
-.v5-manager-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: var(--space-2);
-  min-block-size: 44px;
-  min-inline-size: 44px;
-  padding-inline: var(--space-4);
-  border: 1px solid var(--color-border-strong);
-  border-radius: var(--radius-control);
-  background: var(--color-surface);
-  color: var(--color-text);
-  font: inherit;
-  font-weight: var(--font-weight-semibold);
-  text-decoration: none;
-  white-space: nowrap;
-  cursor: pointer;
-}
-
-/* RT-660 — the one filled commit per region, and the quiet text action (G-6 .btn-primary, .btn-ghost). */
-.v5-manager-btn--primary {
-  border-color: var(--color-primary);
-  background: var(--color-primary);
-  color: var(--color-primary-on);
-}
-
-.v5-manager-btn--ghost {
-  border-color: transparent;
-  background: transparent;
-  color: var(--color-primary-emphasis);
-}
-
-.v5-manager-btn:disabled {
-  cursor: not-allowed;
-}
-
-/* An unavailable commit is sunken with muted ink and must not look actionable (DESIGN.md). */
-.v5-manager-btn--primary:disabled {
-  border-color: var(--color-border);
-  background: var(--color-surface-sunken);
-  color: var(--color-text-muted);
-}
-
-.v5-manager-btn:not(.v5-manager-btn--primary):disabled {
-  opacity: 0.55;
-}
-
-.v5-manager-btn:focus-visible,
+/* Buttons: the shared .v5-btn system (foundation/buttons.css). A ghost action is --quiet. */
 .v5-manager-tile:focus-visible,
 .v5-manager-input:focus-visible {
   outline: 3px solid var(--color-focus-ring);
@@ -245,14 +198,13 @@
     padding: var(--space-3);
   }
 
-  .v5-manager-btn {
+  .v5-manager-btn.v5-btn {
     padding-inline: var(--space-3);
   }
 }
 
 @media (forced-colors: active) {
   .v5-honest-state .v5-notice,
-  .v5-manager-btn,
   .v5-manager-tile,
   .v5-manager-panel,
   .v5-manager-input {
@@ -264,33 +216,14 @@
     color: CanvasText;
   }
 
-  /* An anchor would take the system link colour; the action is a button. */
-  .v5-manager-btn {
-    color: ButtonText;
-  }
-
   .v5-manager-tile,
   .v5-manager-tile__title,
   .v5-manager-tile__hint {
     color: CanvasText;
   }
 
-  .v5-manager-btn:focus-visible,
   .v5-manager-tile:focus-visible,
   .v5-manager-input:focus-visible {
     outline-color: Highlight;
-  }
-
-  .v5-manager-btn--primary {
-    border: 2px solid ButtonText;
-  }
-
-  .v5-manager-btn--ghost {
-    border-color: ButtonText;
-  }
-
-  .v5-manager-btn:disabled {
-    border-color: GrayText;
-    color: GrayText;
   }
 }

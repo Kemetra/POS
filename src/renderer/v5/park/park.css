@@ -21,58 +21,8 @@
   font-size: var(--font-size-xs);
 }
 
-/* ── Buttons (44px floor, DESIGN.md touch targets) ─────────────────────── */
-
-.v5-park-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: var(--space-2);
-  min-block-size: 44px;
-  min-inline-size: 44px;
-  padding-inline: var(--space-4);
-  border: 1px solid var(--color-border-strong);
-  border-radius: var(--radius-control);
-  background: var(--color-surface);
-  color: var(--color-text);
-  font: inherit;
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-semibold);
-  white-space: nowrap;
-  cursor: pointer;
-}
-
-.v5-park-btn:focus-visible {
-  outline: 2px solid var(--color-focus-ring);
-  outline-offset: 2px;
-}
-
-.v5-park-btn:disabled {
-  opacity: 0.55;
-  cursor: not-allowed;
-}
-
-.v5-park-btn--primary {
-  border-color: var(--color-primary);
-  background: var(--color-primary);
-  color: var(--color-primary-on);
-}
-
-/* I-2: Park is neutral (outlined, primary-emphasis ink, a pause glyph); only Void carries danger. */
-.v5-park-btn--park {
-  border-color: var(--color-primary-emphasis);
-  color: var(--color-primary-emphasis);
-}
-
-.v5-park-btn--park:disabled {
-  border-color: var(--color-border);
-  color: var(--color-text-muted);
-  opacity: 1;
-}
-
-.v5-park-btn--quiet {
-  border-color: var(--color-border);
-}
+/* ── Buttons: the shared .v5-btn system (foundation/buttons.css). Park is the
+   neutral secondary; only Void carries danger (I-2). ─────────────────────── */
 
 .v5-park-badge {
   min-inline-size: 24px;
@@ -568,17 +518,6 @@
     border: 2px solid CanvasText;
   }
 
-  .v5-park-btn--primary {
-    border: 3px solid ButtonText;
-  }
-
-  .v5-park-btn:disabled,
-  .v5-park-btn--park:disabled {
-    border-color: GrayText;
-    color: GrayText;
-  }
-
-  .v5-park-btn:focus-visible,
   .v5-park-input:focus-visible {
     outline-color: Highlight;
   }

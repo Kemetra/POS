@@ -289,72 +289,20 @@
   }
 }
 
-/* buttons */
-.v5-entry__btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: var(--space-2);
-  min-block-size: 44px;
-  padding-inline: var(--space-4);
-  border: 1px solid var(--color-border-strong);
-  border-radius: var(--radius-control);
-  background: var(--color-surface);
-  font-weight: var(--font-weight-semibold);
-  white-space: nowrap;
-  cursor: pointer;
-}
-
-.v5-entry__btn:hover {
-  background: var(--color-surface-elevated);
-}
-
-.v5-entry__btn[aria-pressed='true'] {
+/* buttons: the shared .v5-btn system (foundation/buttons.css). The manager-entry
+   toggle keeps its selected state; two classes outrank the system's hover and press. */
+.v5-entry__btn.v5-btn[aria-pressed='true'],
+.v5-entry__btn.v5-btn[aria-pressed='true']:hover:not(:disabled),
+.v5-entry__btn.v5-btn[aria-pressed='true']:active:not(:disabled) {
   border-color: var(--color-primary);
   background: var(--color-primary-soft);
   color: var(--color-primary-emphasis);
 }
 
-.v5-entry__btn--ghost {
-  border-color: transparent;
-  background: transparent;
-  color: var(--color-text-muted);
-}
-
-.v5-entry__btn--ghost:hover {
-  background: var(--color-surface-sunken);
-  color: var(--color-text);
-}
-
-.v5-entry__btn--primary {
-  border-color: var(--color-primary);
-  background: var(--color-primary);
-  color: var(--color-primary-on);
-}
-
-.v5-entry__btn--primary:hover {
-  border-color: var(--color-primary-emphasis);
-  background: var(--color-primary-emphasis);
-}
-
-/* An unavailable commit is sunken with muted ink, never full teal (DESIGN.md Buttons). */
-.v5-entry__btn--primary:disabled,
-.v5-entry__btn--primary[aria-disabled='true'] {
-  border-color: var(--color-border);
-  background: var(--color-surface-sunken);
-  color: var(--color-text-muted);
-  cursor: not-allowed;
-}
-
-.v5-entry__btn:disabled {
-  cursor: not-allowed;
-}
-
-.v5-entry__commit {
+/* The commit takes the entry density: 60px comfortable, 56px compact (two classes outrank .v5-btn--commit). */
+.v5-entry__commit.v5-btn {
   inline-size: 100%;
   min-block-size: var(--entry-commit);
-  font-size: var(--font-size-md);
-  font-weight: var(--font-weight-bold);
 }
 
 /* auth column */
@@ -623,23 +571,16 @@
   gap: var(--space-2);
 }
 
-.v5-entry__commit-secondary {
+/* unavailable while a check runs and through its cooldown: the shared recessed state */
+.v5-entry__commit-secondary.v5-btn {
   inline-size: 100%;
   min-block-size: 48px;
-}
-
-/* unavailable while a check runs and through its cooldown: sunken, muted ink */
-.v5-entry__commit-secondary:disabled {
-  border-color: var(--color-border);
-  background: var(--color-surface-sunken);
-  color: var(--color-text-muted);
 }
 
 /* ── Windows contrast themes (DESIGN.md Forced-Colours Rule) ───── */
 @media (forced-colors: active) {
   .v5-entry__panel,
   .v5-entry__who,
-  .v5-entry__btn,
   .v5-entry__key,
   .v5-entry__dots,
   .v5-entry__input,
@@ -663,6 +604,16 @@
     forced-color-adjust: none;
   }
 
+  /* The light pressed rule is `.v5-entry__btn.v5-btn[aria-pressed='true']`
+     (0,3,0): tie it here so the system highlight wins on source order. */
+  .v5-entry__btn.v5-btn[aria-pressed='true'],
+  .v5-entry__btn.v5-btn[aria-pressed='true']:hover:not(:disabled),
+  .v5-entry__btn.v5-btn[aria-pressed='true']:active:not(:disabled) {
+    border-color: Highlight;
+    background: Highlight;
+    color: HighlightText;
+  }
+
   .v5-entry__who[aria-pressed='true'] .v5-entry__name,
   .v5-entry__btn[aria-pressed='true'] .rt-icon {
     color: HighlightText;
@@ -683,13 +634,6 @@
     display: none;
   }
 
-  .v5-entry__btn--primary {
-    border: 2px solid ButtonText;
-  }
-
-  .v5-entry__btn--primary:disabled,
-  .v5-entry__btn--primary[aria-disabled='true'],
-  .v5-entry__commit-secondary:disabled,
   .v5-entry__keypad[aria-disabled='true'] .v5-entry__key,
   .v5-entry__key:disabled {
     border-color: GrayText;

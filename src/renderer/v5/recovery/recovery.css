@@ -276,40 +276,11 @@
   font-weight: var(--font-weight-semibold);
 }
 
-/* ── buttons ────────────────────────────────────────────────────── */
-.v5-recovery-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: var(--space-2);
-  min-block-size: var(--v5-target, 44px);
-  min-inline-size: 44px;
+/* ── buttons: the shared .v5-btn system (foundation/buttons.css) ─── */
+.v5-recovery-btn.v5-btn {
   padding-inline: var(--recovery-btn-pad, var(--space-4));
-  border: 1px solid var(--color-border-strong);
-  border-radius: var(--radius-control);
-  background: var(--color-surface);
-  color: var(--color-text);
-  font: inherit;
-  font-weight: var(--font-weight-semibold);
-  white-space: nowrap;
-  cursor: pointer;
 }
 
-.v5-recovery-btn--primary {
-  border-color: var(--color-primary);
-  background: var(--color-primary);
-  color: var(--color-primary-on);
-}
-
-/* An unavailable commit is sunken with muted ink and must not look actionable (DESIGN.md). */
-.v5-recovery-btn:disabled {
-  border-color: var(--color-border);
-  background: var(--color-surface-sunken);
-  color: var(--color-text-muted);
-  cursor: not-allowed;
-}
-
-.v5-recovery-btn:focus-visible,
 .v5-recovery-input:focus-visible,
 .v5-recovery-choice input:focus-visible {
   outline: 3px solid var(--color-focus-ring);
@@ -418,7 +389,6 @@
 /* ── Windows contrast themes (DESIGN.md Forced-Colours Rule) ───── */
 @media (forced-colors: active) {
   .v5-recovery-panel,
-  .v5-recovery-btn,
   .v5-recovery-input,
   .v5-recovery-initial,
   .v5-recovery-tag,
@@ -428,14 +398,8 @@
     border: 1px solid CanvasText;
   }
 
-  .v5-recovery-btn--primary,
   .v5-recovery-fact--due {
     border: 2px solid ButtonText;
-  }
-
-  .v5-recovery-btn:disabled {
-    border: 1px solid GrayText;
-    color: GrayText;
   }
 
   .v5-recovery-choice:has(input:checked) {

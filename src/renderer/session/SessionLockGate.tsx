@@ -118,6 +118,7 @@ export function SessionLockGate({
           <p>الجهاز ما زال مقفلًا لموظف آخر. سجّل دخولك، أو ارجع لشاشة القفل ليفتحه صاحبه.</p>
           <button
             type="button"
+            className="v5-btn"
             onClick={() => {
               setSwitch(false);
             }}

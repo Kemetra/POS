@@ -284,7 +284,7 @@ function ReauthNotice({ onSignIn }: Readonly<{ onSignIn: () => void }>): JSX.Ele
       action={
         <button
           type="button"
-          className="v5-cashiers-btn v5-cashiers-btn--primary"
+          className="v5-cashiers-btn v5-cashiers-btn--primary v5-btn"
           onClick={onSignIn}
         >
           {REAUTH_COPY.action}
@@ -349,7 +349,12 @@ function ListBody({
           tone="warning"
           testId="cashier-management-error"
           action={
-            <button type="button" className="v5-cashiers-btn" disabled={busy} onClick={onRetry}>
+            <button
+              type="button"
+              className="v5-cashiers-btn v5-btn"
+              disabled={busy}
+              onClick={onRetry}
+            >
               <Icon name="retry" />
               {CASHIERS_COPY.retry}
             </button>

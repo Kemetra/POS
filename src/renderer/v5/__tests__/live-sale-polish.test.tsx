@@ -151,6 +151,7 @@ describe('v5 Sale polish — catalogue freshness tone', () => {
 
 describe('v5 Sale polish — CSS states', () => {
   const css = readFileSync(resolve(__dirname, '../sale/live-sale.css'), 'utf8');
+  const buttonsCss = readFileSync(resolve(__dirname, '../foundation/buttons.css'), 'utf8');
 
   it('shows which search result the keyboard has selected', () => {
     expect(css).toMatch(/\.v5-sale-product-row\[aria-selected='true'\]\s*\{/);
@@ -158,13 +159,22 @@ describe('v5 Sale polish — CSS states', () => {
   });
 
   it('sizes the search recovery buttons with the other live controls', () => {
-    const rule = /((?:[^{}]*,\s*)?\.v5-live-message button[^{]*)\{([^}]*)\}/.exec(css);
-    expect(rule, 'recovery button rule').not.toBeNull();
-    expect(rule?.[2]).toMatch(/min-block-size:\s*44px/);
+    // The recovery button is a shared v5-btn, which carries the 44px floor (foundation/buttons.css).
+    const results = readFileSync(resolve(__dirname, '../sale/LiveSearchResults.tsx'), 'utf8');
+    expect(results).toMatch(
+      /<button type="button" className="v5-btn" onClick=\{props\.onRecover\}>/,
+    );
+    const base = /\.v5-btn\s*\{([^}]*)\}/.exec(buttonsCss)?.[1] ?? '';
+    expect(base).toMatch(/min-block-size:\s*44px/);
   });
 
   it('makes a disabled primary action read as unavailable, not as a pale enabled button', () => {
-    const rule = /\.v5-sale-checkout:disabled\s*\{([^}]*)\}/.exec(css);
+    // The Sale CTA is a shared v5-btn--commit: its unavailable state is the system's recessed one.
+    const cartSource = readFileSync(resolve(__dirname, '../sale/LiveSaleCart.tsx'), 'utf8');
+    expect(cartSource).toMatch(/v5-sale-checkout v5-btn v5-btn--primary v5-btn--commit/);
+    const rule = /\.v5-btn:is\(:disabled,\s*\[aria-disabled='true'\]\)\s*\{([^}]*)\}/.exec(
+      buttonsCss,
+    );
     expect(rule?.[1]).toMatch(/background:\s*var\(--color-surface-sunken\)/);
     expect(rule?.[1]).not.toMatch(/opacity/);
   });

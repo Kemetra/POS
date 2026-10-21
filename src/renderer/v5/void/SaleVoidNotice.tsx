@@ -77,7 +77,7 @@ function RoutedNotice(props: { bridge: SaleVoidBridgeAPI; refreshMs: number }): 
       {attention !== null && attention > 0 && !onVoidScreen && (
         <div className="v5-void-banner" role="alert" data-testid="void-attention-banner">
           <p>{VOID_COPY.attentionBanner}</p>
-          <Link className="v5-live-btn v5-live-btn--primary" to={VOID_PATH}>
+          <Link className="v5-live-btn v5-live-btn--primary v5-btn v5-btn--primary" to={VOID_PATH}>
             {VOID_COPY.attentionAction}
           </Link>
         </div>

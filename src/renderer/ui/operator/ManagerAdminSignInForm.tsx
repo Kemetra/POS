@@ -151,7 +151,7 @@ export function ManagerAdminSignInForm(props: Readonly<ManagerAdminSignInFormPro
       {onBack !== undefined && (
         <button
           type="button"
-          className="v5-entry__btn v5-entry__btn--ghost"
+          className="v5-entry__btn v5-entry__btn--ghost v5-btn v5-btn--quiet"
           data-testid="sign-in-back"
           onClick={onBack}
         >
@@ -200,7 +200,7 @@ export function ManagerAdminSignInForm(props: Readonly<ManagerAdminSignInFormPro
           type="submit"
           disabled={isSubmitting}
           data-testid="sign-in-submit"
-          className="v5-entry__btn v5-entry__btn--primary v5-entry__commit"
+          className="v5-entry__btn v5-entry__btn--primary v5-entry__commit v5-btn v5-btn--primary v5-btn--commit"
         >
           {isSubmitting ? 'جارٍ تسجيل الدخول…' : 'تسجيل الدخول'}
         </button>

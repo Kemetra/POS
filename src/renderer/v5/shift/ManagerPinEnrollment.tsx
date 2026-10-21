@@ -111,7 +111,7 @@ export function ManagerPinEnrollment({
         <div className="v5-shift-commit">
           <button
             type="button"
-            className="v5-shift-btn v5-shift-btn--primary"
+            className="v5-shift-btn v5-shift-btn--primary v5-btn v5-btn--primary"
             disabled={busy}
             onClick={submit}
           >

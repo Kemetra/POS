@@ -12,7 +12,9 @@ import { V5SignOut } from './V5SignOut';
 /**
  * RT-242: the slim rail's glyph per entry (decorative; the label beside it
  * names the entry). RT-695: the current entry takes the Filled glyph
- * (D-263-8); the labelled panel shows no glyph at all (frame.css).
+ * (D-263-8). The frame is the slim rail on every screen (owner decision
+ * 2026-10-21); the labelled panel's no-glyph rule in frame.css is now only the
+ * unscoped base under `data-nav='slim'`.
  */
 const NAV_ICON = {
   dashboard: 'dashboard',
@@ -27,9 +29,10 @@ const NAV_ICON = {
 /**
  * Primary v5 navigation. Owns the only brand mark and the operator identity,
  * so no screen repeats either. Labels stay visible at every supported width:
- * operators are workflow experts, not icon readers. On an active-sale route
- * the frame narrows this to the slim rail (RT-242); the icon then sits above
- * the label, which is still the link's text and accessible name.
+ * operators are workflow experts, not icon readers. The frame shows it as the
+ * slim rail on every screen (RT-242, widened by the owner decision of
+ * 2026-10-21); the icon sits above the label, which is still the link's text
+ * and accessible name.
  *
  * RT-604 (VN-S6 S6-3): the footer holds the status indicator (connection,
  * sale sync, printer on failure) above the operator block.

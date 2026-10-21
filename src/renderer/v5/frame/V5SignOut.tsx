@@ -107,6 +107,7 @@ function SignOutButton({ flow }: Readonly<{ flow: SignOutFlow }>): JSX.Element {
       <button
         ref={flow.openerRef}
         type="button"
+        className="v5-btn"
         disabled={paymentOpen}
         aria-describedby={paymentOpen ? HINT_ID : undefined}
         onClick={flow.ask}
@@ -137,13 +138,13 @@ function SignOutConfirm({ flow }: Readonly<{ flow: SignOutFlow }>): JSX.Element 
       <button
         ref={flow.confirmRef}
         type="button"
-        className="v5-frame__sign-out-confirm"
+        className="v5-frame__sign-out-confirm v5-btn v5-btn--danger"
         disabled={flow.busy}
         onClick={() => void flow.confirm()}
       >
         تأكيد تسجيل الخروج
       </button>
-      <button type="button" disabled={flow.busy} onClick={flow.cancel}>
+      <button type="button" className="v5-btn" disabled={flow.busy} onClick={flow.cancel}>
         البقاء مسجّلاً
       </button>
       {flow.error !== null && (

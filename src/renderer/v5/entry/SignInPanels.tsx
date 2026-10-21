@@ -68,7 +68,7 @@ export function RosterPanel({
       <div className="v5-entry__panel-foot">
         <button
           type="button"
-          className="v5-entry__btn"
+          className="v5-entry__btn v5-btn"
           data-testid="sign-in-manager-entry"
           aria-pressed={managerMode}
           disabled={disabled}
@@ -122,7 +122,7 @@ export function BackButton({
   return (
     <button
       type="button"
-      className="v5-entry__btn v5-entry__btn--ghost"
+      className="v5-entry__btn v5-entry__btn--ghost v5-btn v5-btn--quiet"
       data-testid={testId}
       disabled={disabled}
       onClick={onClick}

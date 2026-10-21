@@ -10,41 +10,4 @@
   gap: var(--space-2);
 }
 
-.v5-reprint-last__btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-block-size: 44px;
-  min-inline-size: 44px;
-  padding-inline: var(--space-4);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-control);
-  background: var(--color-surface);
-  color: var(--color-text);
-  font: inherit;
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-semibold);
-  white-space: nowrap;
-  cursor: pointer;
-}
-
-.v5-reprint-last__btn:focus-visible {
-  outline: 2px solid var(--color-focus-ring);
-  outline-offset: 2px;
-}
-
-.v5-reprint-last__btn:disabled {
-  opacity: 0.55;
-  cursor: not-allowed;
-}
-
-@media (forced-colors: active) {
-  .v5-reprint-last__btn {
-    border-color: ButtonText;
-  }
-
-  .v5-reprint-last__btn:disabled {
-    border-color: GrayText;
-    color: GrayText;
-  }
-}
+/* The button itself is a shared .v5-btn (foundation/buttons.css); no local look. */

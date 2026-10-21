@@ -98,7 +98,7 @@ export function ReprintAffordance({
     <>
       <button
         type="button"
-        className="v5-sales-btn"
+        className="v5-sales-btn v5-btn"
         disabled={reprinting}
         onClick={() => {
           void handleReprint();

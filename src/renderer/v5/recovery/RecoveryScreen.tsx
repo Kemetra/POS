@@ -283,7 +283,7 @@ function StuckPanel(
           <div className="v5-recovery-actions">
             <button
               type="button"
-              className="v5-recovery-btn v5-recovery-btn--primary"
+              className="v5-recovery-btn v5-recovery-btn--primary v5-btn v5-btn--primary"
               onClick={() => {
                 props.onAction({ kind: 'complete', stuck });
               }}
@@ -292,7 +292,7 @@ function StuckPanel(
             </button>
             <button
               type="button"
-              className="v5-recovery-btn"
+              className="v5-recovery-btn v5-btn v5-btn--danger-quiet"
               onClick={() => {
                 props.onAction({ kind: 'cancel_attempt', stuck });
               }}
@@ -392,7 +392,7 @@ function HeldRow(
       </div>
       <button
         type="button"
-        className="v5-recovery-btn"
+        className="v5-recovery-btn v5-btn v5-btn--danger-quiet"
         onClick={() => {
           props.onAction({ kind: 'cancel_cart', cart });
         }}

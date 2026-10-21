@@ -54,7 +54,7 @@ export function ParkedSalesButton(
   props: Readonly<{ count: number | null; onOpen: () => void }>,
 ): JSX.Element {
   return (
-    <button type="button" className="v5-park-btn v5-park-btn--quiet" onClick={props.onOpen}>
+    <button type="button" className="v5-park-btn v5-park-btn--quiet v5-btn" onClick={props.onOpen}>
       {PARK_COPY.parkedSales}
       {props.count !== null && (
         <span className="v5-park-badge v5-park-num">{String(props.count)}</span>
@@ -86,7 +86,7 @@ export function ParkAction(props: Readonly<ParkActionProps>): JSX.Element {
     <>
       <button
         type="button"
-        className="v5-park-btn v5-park-btn--park"
+        className="v5-park-btn v5-park-btn--park v5-btn"
         disabled={!usable}
         onClick={() => {
           setOpen(true);

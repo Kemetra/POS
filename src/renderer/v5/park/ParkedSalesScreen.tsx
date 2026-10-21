@@ -116,7 +116,7 @@ function ListFrame(
         <button
           ref={backRef}
           type="button"
-          className="v5-park-btn"
+          className="v5-park-btn v5-btn"
           data-park-back
           onClick={props.onBack}
         >
@@ -261,7 +261,7 @@ function ParkedRow(
       </span>
       <button
         type="button"
-        className="v5-park-btn"
+        className="v5-park-btn v5-btn"
         disabled={props.disabled}
         aria-busy={props.busy || undefined}
         onClick={() => {

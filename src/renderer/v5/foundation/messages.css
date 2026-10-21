@@ -98,6 +98,41 @@
   outline-offset: 2px;
 }
 
+/*
+ * Signal settle-in (150ms): a notice, a banner or a toast arrives with a small
+ * drop and a fade. Risk suppresses expression: a danger-toned message, and any
+ * message inside a recovery surface (an UNKNOWN payment, a stuck sale), stays
+ * static. The recovery rule comes last so it wins the specificity tie.
+ */
+.v5-notice:not([data-tone='danger']),
+.v5-banner:not([data-tone='danger']),
+.v5-toast {
+  animation: v5-settle var(--motion-notice-in, var(--duration-2))
+    var(--motion-ease, var(--ease-out));
+}
+
+.v5-recovery .v5-notice,
+.v5-recovery .v5-banner {
+  animation: none;
+}
+
+/* Money never performs (UX-06): a notice in the payment ledger or the tender
+   entry can carry an amount («أقل من المستحق بـ …»), so it appears at once. */
+.v5-ledger .v5-notice,
+.v5-checkout__entry .v5-notice {
+  animation: none;
+}
+
+/* Same selectors as the rule above, so the reduced-motion path wins the tie. */
+@media (prefers-reduced-motion: reduce) {
+  .v5-notice:not([data-tone='danger']),
+  .v5-banner:not([data-tone='danger']),
+  .v5-toast {
+    animation: none;
+    transform: none;
+  }
+}
+
 @media (forced-colors: active) {
   .v5-banner,
   .v5-notice,
@@ -115,36 +150,12 @@
   font-size: var(--font-size-xs);
 }
 
-/* Actions inside a message: quiet, 44px, never louder than the screen's primary. */
+/* Actions inside a message are shared .v5-btn buttons (foundation/buttons.css): quiet, 44px,
+   never louder than the screen's primary. The target floor is pinned here as well. */
 .v5-banner__actions button,
 .v5-notice__action button {
   min-block-size: 44px;
   min-inline-size: 44px;
-  padding-inline: var(--space-3);
-  border: 1px solid var(--color-border-strong);
-  border-radius: var(--radius-control);
-  background: var(--color-surface);
-  color: var(--color-text);
-  font: inherit;
-  font-weight: var(--font-weight-semibold);
-  cursor: pointer;
-}
-
-.v5-banner__actions button:focus-visible,
-.v5-notice__action button:focus-visible {
-  outline: 2px solid var(--color-focus-ring);
-  outline-offset: 2px;
-}
-
-.v5-banner__actions button {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-2);
-}
-
-.v5-banner__actions button:disabled {
-  color: var(--color-text-muted);
-  cursor: not-allowed;
 }
 
 /* RT-605 — a running banner action's spinner; `aria-busy` is the SR signal. */
@@ -166,12 +177,5 @@
 @media (prefers-reduced-motion: reduce) {
   .v5-banner__spinner {
     animation: none;
-  }
-}
-
-@media (forced-colors: active) {
-  .v5-banner__actions button:disabled {
-    border-color: GrayText;
-    color: GrayText;
   }
 }

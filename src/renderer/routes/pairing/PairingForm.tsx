@@ -226,7 +226,7 @@ export function PairingForm(props: Readonly<PairingFormProps>): JSX.Element {
       </output>
       <button
         type="submit"
-        className="v5-entry__btn v5-entry__btn--primary v5-entry__commit"
+        className="v5-entry__btn v5-entry__btn--primary v5-entry__commit v5-btn v5-btn--primary v5-btn--commit"
         disabled={submitting || isRateLimited}
       >
         {submitting ? PAIRING_COPY.submitting : PAIRING_COPY.submit}

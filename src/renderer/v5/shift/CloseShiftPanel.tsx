@@ -106,7 +106,7 @@ export function CloseShiftPanel(props: Props): JSX.Element {
         <button
           ref={commitRef}
           type="button"
-          className="v5-shift-btn v5-shift-btn--primary"
+          className="v5-shift-btn v5-shift-btn--primary v5-btn v5-btn--primary"
           disabled={busy || approving !== null}
           onClick={submit}
         >
@@ -178,7 +178,7 @@ function ParkedSalesBlock({ count }: Readonly<{ count: number | null }>): JSX.El
         <p>
           <button
             type="button"
-            className="v5-shift-btn"
+            className="v5-shift-btn v5-btn"
             onClick={() => {
               void navigate(PARKED_SALES_PATH);
             }}

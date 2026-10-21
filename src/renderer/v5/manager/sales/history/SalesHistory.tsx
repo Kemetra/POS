@@ -167,7 +167,7 @@ function HistoryTable<T>({
             <td>
               <button
                 type="button"
-                className="v5-sales-btn"
+                className="v5-sales-btn v5-btn"
                 onClick={() => {
                   onOpen(row);
                 }}
@@ -196,7 +196,7 @@ function MoreControl({
         <Notice tone="warning" testId="history-more-failed">
           {refusalCopy(view.more.reason)}
         </Notice>
-        <button type="button" className="v5-sales-btn" onClick={onMore}>
+        <button type="button" className="v5-sales-btn v5-btn" onClick={onMore}>
           {C.retry}
         </button>
       </div>
@@ -205,7 +205,7 @@ function MoreControl({
   if (view.cursor === null) return null;
   const loading = view.more.kind === 'loading';
   return (
-    <button type="button" className="v5-sales-btn" disabled={loading} onClick={onMore}>
+    <button type="button" className="v5-sales-btn v5-btn" disabled={loading} onClick={onMore}>
       {loading ? C.loading : C.loadMore}
     </button>
   );
@@ -337,12 +337,16 @@ function RangeForm({
     <form className="v5-sales-lookup" onSubmit={onSubmit} noValidate>
       <DayField label={C.from} value={from} max={today} onChange={setFrom} />
       <DayField label={C.to} value={to} max={today} onChange={setTo} />
-      <button type="submit" className="v5-sales-btn v5-sales-btn--primary" disabled={busy}>
+      <button
+        type="submit"
+        className="v5-sales-btn v5-sales-btn--primary v5-btn v5-btn--primary"
+        disabled={busy}
+      >
         {C.show}
       </button>
       <button
         type="button"
-        className="v5-sales-btn"
+        className="v5-sales-btn v5-btn"
         disabled={busy}
         onClick={() => {
           const day = currentDay();
@@ -353,7 +357,7 @@ function RangeForm({
       </button>
       <button
         type="button"
-        className="v5-sales-btn"
+        className="v5-sales-btn v5-btn"
         disabled={busy}
         onClick={() => {
           const day = dayBefore(currentDay());

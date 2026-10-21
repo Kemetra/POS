@@ -33,7 +33,11 @@ export function ReauthRequiredNotice({
   return (
     <div data-testid="reauth-required" role="alert" dir="rtl" lang="ar">
       <p>{SIGN_IN_REFUSAL_COPY.reauth_required}</p>
-      <button type="button" className="v5-shift-btn v5-shift-btn--primary" onClick={onSignIn}>
+      <button
+        type="button"
+        className="v5-shift-btn v5-shift-btn--primary v5-btn v5-btn--primary"
+        onClick={onSignIn}
+      >
         {REAUTH_COPY.action}
       </button>
     </div>
@@ -152,10 +156,19 @@ export function ReauthDialog({
         </div>
         <ReauthFeedback submitting={submitting} feedback={feedback} />
         <div>
-          <button type="button" className="v5-live-btn" disabled={submitting} onClick={onCancel}>
+          <button
+            type="button"
+            className="v5-live-btn v5-btn"
+            disabled={submitting}
+            onClick={onCancel}
+          >
             {REAUTH_COPY.cancel}
           </button>
-          <button type="submit" className="v5-live-btn v5-live-btn--primary" disabled={submitting}>
+          <button
+            type="submit"
+            className="v5-live-btn v5-live-btn--primary v5-btn v5-btn--primary"
+            disabled={submitting}
+          >
             {REAUTH_COPY.submit}
           </button>
         </div>

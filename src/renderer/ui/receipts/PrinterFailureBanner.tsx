@@ -195,6 +195,7 @@ export function PrinterFailureBanner({
         <>
           <button
             type="button"
+            className="v5-btn"
             onClick={handleRetry}
             disabled={mutationPhase !== 'idle'}
             aria-busy={mutationPhase === 'retrying' ? 'true' : undefined}
@@ -204,6 +205,7 @@ export function PrinterFailureBanner({
           </button>
           <button
             type="button"
+            className="v5-btn"
             disabled={!reprintEnabled || mutationPhase !== 'idle'}
             onClick={() => {
               onReprint(printFailure.sale_id);
@@ -214,6 +216,7 @@ export function PrinterFailureBanner({
           </button>
           <button
             type="button"
+            className="v5-btn"
             onClick={handleManualOverride}
             disabled={mutationPhase !== 'idle'}
             aria-busy={mutationPhase === 'manual_override' ? 'true' : undefined}

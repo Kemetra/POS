@@ -190,26 +190,9 @@
   inline-size: 100%;
 }
 
-.v5-cashiers-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: var(--space-2);
-  min-block-size: var(--v5-target, 44px);
-  min-inline-size: 44px;
-  padding-inline: var(--space-4);
-  border: 1px solid var(--color-border-strong);
-  border-radius: var(--radius-control);
-  background: var(--color-surface);
-  color: var(--color-text);
-  font: inherit;
-  font-weight: var(--font-weight-semibold);
-  white-space: nowrap;
-  cursor: pointer;
-}
-
+/* Buttons: the shared .v5-btn system (foundation/buttons.css). A ghost action is --quiet. */
 @media (max-width: 1279px) {
-  .v5-cashiers-btn {
+  .v5-cashiers-btn.v5-btn {
     padding-inline: var(--space-3);
   }
 
@@ -221,33 +204,6 @@
   .v5-cashiers-name {
     font-size: 14px;
   }
-}
-
-.v5-cashiers-btn--ghost {
-  border-color: transparent;
-  background: transparent;
-  color: var(--color-primary-emphasis);
-}
-
-.v5-cashiers-btn--primary,
-.v5-cashiers .v5-notice__action .v5-cashiers-btn--primary {
-  border-color: var(--color-primary);
-  background: var(--color-primary);
-  color: var(--color-primary-on);
-}
-
-.v5-cashiers-btn:disabled {
-  cursor: not-allowed;
-}
-
-.v5-cashiers-btn--primary:disabled {
-  border-color: var(--color-border);
-  background: var(--color-surface-sunken);
-  color: var(--color-text-muted);
-}
-
-.v5-cashiers-btn:not(.v5-cashiers-btn--primary):disabled {
-  opacity: 0.55;
 }
 
 .v5-cashiers-panel-state {
@@ -336,24 +292,10 @@
 /* ── Windows contrast themes (DESIGN.md Forced-Colours Rule) ───── */
 @media (forced-colors: active) {
   .v5-cashiers-panel,
-  .v5-cashiers-btn,
   .v5-cashiers-input,
   .v5-cashiers-badge,
   .v5-cashiers-initial {
     border: 1px solid CanvasText;
-  }
-
-  .v5-cashiers-btn--primary {
-    border: 2px solid ButtonText;
-  }
-
-  .v5-cashiers-btn--primary:disabled {
-    border-color: GrayText;
-    color: GrayText;
-  }
-
-  .v5-cashiers-btn--ghost {
-    border-color: ButtonText;
   }
 
   .v5-cashiers-input[aria-invalid='true'],

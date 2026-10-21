@@ -60,12 +60,17 @@ export function RefundSummary({
         />
         <p className="v5-returns-meta">طريقة الاسترداد: نقدًا فقط.</p>
         <div className="v5-returns-actions">
-          <button type="button" className="v5-manager-btn" onClick={flow.edit} disabled={busy}>
+          <button
+            type="button"
+            className="v5-manager-btn v5-btn"
+            onClick={flow.edit}
+            disabled={busy}
+          >
             تعديل الكميات
           </button>
           <button
             type="button"
-            className="v5-manager-btn v5-manager-btn--primary"
+            className="v5-manager-btn v5-manager-btn--primary v5-btn v5-btn--primary"
             disabled={busy}
             aria-busy={busy}
             onClick={() => void flow.submit()}

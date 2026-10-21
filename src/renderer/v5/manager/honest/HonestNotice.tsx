@@ -23,7 +23,7 @@ export function HonestNotice({ notice, action, testId }: Readonly<HonestNoticePr
       {...(testId === undefined ? {} : { testId })}
       action={
         action === undefined ? undefined : (
-          <Link className="v5-manager-btn" to={action.to}>
+          <Link className="v5-manager-btn v5-btn" to={action.to}>
             {action.label}
           </Link>
         )

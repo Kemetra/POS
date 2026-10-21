@@ -144,7 +144,7 @@ function CartHydrationState(
   return (
     <div className="v5-live-state" role="alert">
       <p className="v5-live-message">تعذّر تحميل السلة الحالية.</p>
-      <button type="button" className="v5-live-btn" onClick={props.onRetry}>
+      <button type="button" className="v5-live-btn v5-btn" onClick={props.onRetry}>
         إعادة المحاولة
       </button>
     </div>

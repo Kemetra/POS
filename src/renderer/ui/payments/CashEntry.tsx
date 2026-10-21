@@ -310,7 +310,7 @@ export function CashEntry({
           )}
           <button
             type="button"
-            className="cash-entry__confirm checkout-commit"
+            className="cash-entry__confirm checkout-commit v5-btn v5-btn--primary v5-btn--commit"
             data-testid="cash-entry-confirm"
             style={{ minHeight: touchTarget.commit }}
             disabled={!canConfirm || isApplying}
@@ -325,7 +325,7 @@ export function CashEntry({
         {onBack !== undefined && (
           <button
             type="button"
-            className="cash-entry__back"
+            className="cash-entry__back v5-btn v5-btn--quiet"
             data-testid="cash-entry-back"
             style={{ minHeight: touchTarget.min }}
             onClick={onBack}

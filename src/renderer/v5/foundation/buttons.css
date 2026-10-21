@@ -1,0 +1,243 @@
+/*
+ * V5 button system (owner-approved). One base, `.v5-btn`; the variants set role
+ * colours through `--btn-*` custom properties, so a state rule never repeats a
+ * colour per variant. Hover is a colour change (Signal, 150ms); press is one
+ * step deeper plus a 1px drop (Contact, 80ms). Unavailable is recessed, never
+ * faded: no opacity anywhere in this file.
+ *
+ *   .v5-btn                   secondary: bordered, ink on surface
+ *   .v5-btn--primary          Tower Teal fill: the screen's one filled action
+ *   .v5-btn--quiet            borderless: cancel, back, low-commitment
+ *   .v5-btn--danger-quiet     red ink and edge: STARTS a destructive flow
+ *   .v5-btn--danger           red fill: EXECUTES a destructive action
+ *   .v5-btn--commit           the one next action: full width, 56px (the
+ *                             Checkout ledger slot and the Sale density rules
+ *                             lift it to 60px at comfortable)
+ *
+ * Radius stays the shipped `--radius-control` (10px); UX-04 migrates it in its
+ * own slice. Targets never drop below 44px (DESIGN.md Touch targets).
+ *
+ * Imported once, globally, from `main.tsx`: the sign-in and pairing entry
+ * routes render outside `V5Frame`, so `foundation.css` alone does not reach
+ * them. The rules are class-scoped and never style a bare element.
+ *
+ * The motion aliases (`--motion-press`, `--motion-flash`, ...) are only defined
+ * under `.v5-frame`, so every use carries a `--duration-*` fallback. Those
+ * fallbacks are not zeroed by the alias reset, which is why the reduced-motion
+ * block at the foot of this file switches transitions and animations off
+ * itself rather than relying on the aliases.
+ */
+
+.v5-btn {
+  --btn-bg: var(--color-surface);
+  --btn-fg: var(--color-text);
+  --btn-edge: var(--color-border-strong);
+  --btn-bg-hover: var(--color-surface-sunken);
+  --btn-edge-hover: var(--color-text);
+  --btn-fg-hover: var(--btn-fg);
+  --btn-bg-press: color-mix(in oklab, var(--color-surface-sunken), var(--color-text) 8%);
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  min-block-size: 44px;
+  min-inline-size: 44px;
+  padding-inline: var(--space-4);
+  border: 1px solid var(--btn-edge);
+  border-radius: var(--radius-control);
+  background: var(--btn-bg);
+  color: var(--btn-fg);
+  font: inherit;
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  text-decoration: none;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background-color var(--motion-flash, var(--duration-2)) var(--motion-ease, var(--ease-out)),
+    border-color var(--motion-flash, var(--duration-2)) var(--motion-ease, var(--ease-out)),
+    color var(--motion-flash, var(--duration-2)) var(--motion-ease, var(--ease-out)),
+    transform var(--motion-press, var(--duration-1)) var(--motion-ease, var(--ease-out));
+}
+
+.v5-btn--primary {
+  --btn-bg: var(--color-primary);
+  --btn-fg: var(--color-primary-on);
+  --btn-edge: var(--color-primary);
+  --btn-bg-hover: var(--color-primary-emphasis);
+  --btn-edge-hover: var(--color-primary-emphasis);
+  --btn-bg-press: color-mix(in oklab, var(--color-primary-emphasis), var(--color-text) 20%);
+
+  font-weight: var(--font-weight-bold);
+}
+
+.v5-btn--quiet {
+  --btn-bg: transparent;
+  --btn-edge: transparent;
+  --btn-fg: var(--color-text-muted);
+  --btn-fg-hover: var(--color-text);
+  --btn-edge-hover: transparent;
+}
+
+.v5-btn--danger-quiet {
+  --btn-fg: var(--color-danger);
+  --btn-edge: var(--color-danger);
+  --btn-edge-hover: var(--color-danger);
+  --btn-bg-hover: var(--color-danger-soft);
+  --btn-bg-press: color-mix(in oklab, var(--color-danger-soft), var(--color-danger) 12%);
+}
+
+.v5-btn--danger {
+  --btn-bg: var(--color-danger);
+  --btn-fg: var(--color-danger-on);
+  --btn-edge: var(--color-danger);
+  --btn-bg-hover: var(--color-danger-emphasis);
+  --btn-edge-hover: var(--color-danger-emphasis);
+  --btn-bg-press: color-mix(in oklab, var(--color-danger-emphasis), var(--color-text) 20%);
+
+  font-weight: var(--font-weight-bold);
+}
+
+/* The one next action: large and full width (56px compact, 60px comfortable). */
+.v5-btn--commit {
+  inline-size: 100%;
+  min-block-size: 56px;
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-bold);
+}
+
+.v5-btn:hover:not(:disabled, [aria-disabled='true']) {
+  border-color: var(--btn-edge-hover);
+  background: var(--btn-bg-hover);
+  color: var(--btn-fg-hover);
+}
+
+.v5-btn:active:not(:disabled, [aria-disabled='true']) {
+  background: var(--btn-bg-press);
+  transform: translateY(1px);
+}
+
+.v5-btn:focus-visible {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 2px;
+}
+
+/* Unavailable: recessed, edged, muted ink. Never opacity. */
+.v5-btn:is(:disabled, [aria-disabled='true']) {
+  border-color: var(--color-border);
+  background: var(--color-surface-sunken);
+  color: var(--color-text-muted);
+  cursor: not-allowed;
+}
+
+/* An unavailable commit must not look payable: sunken, dashed, muted ink. */
+.v5-btn--commit:is(:disabled, [aria-disabled='true']) {
+  border: 2px dashed var(--color-border-strong);
+}
+
+.v5-btn--quiet:is(:disabled, [aria-disabled='true']) {
+  border-color: transparent;
+  background: transparent;
+}
+
+.v5-btn[aria-busy='true'] {
+  cursor: progress;
+}
+
+/* Keypad keys and tender tiles are their own components; they share the press
+   and the teal focus ring. A selected tile keeps its selection fill. */
+.v5-cash-keypad__key:active:not(:disabled),
+.v5-tender-tile:active:not(:disabled, [aria-checked='true']) {
+  background: color-mix(in oklab, var(--color-surface-sunken), var(--color-text) 8%);
+  transform: translateY(1px);
+  transition:
+    transform var(--motion-press, var(--duration-1)) var(--motion-ease, var(--ease-out)),
+    background-color var(--motion-press, var(--duration-1)) var(--motion-ease, var(--ease-out));
+}
+
+.v5-cash-keypad__key:focus-visible,
+.v5-tender-tile:focus-visible {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 2px;
+}
+
+/*
+ * Signal settle-in (150ms): a proven or informative state arrives with a small
+ * drop and a fade. Applied to Notice, Banner, Toast, the inline scan notice,
+ * the Checkout tender entry panel and the completion outcome line. Never to a
+ * danger-toned message, a recovery surface or a payment of UNKNOWN outcome
+ * ("risk suppresses expression"), and never to money or a whole screen.
+ */
+@keyframes v5-settle {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* Forced colours: fills are dropped, so the edge carries every state. */
+@media (forced-colors: active) {
+  .v5-btn {
+    border: 1px solid ButtonText;
+  }
+
+  /* Filled actions keep the 3px edge the Sale, Checkout and entry primaries
+     already used, so primary stays distinct from secondary without a fill. */
+  .v5-btn.v5-btn--primary,
+  .v5-btn.v5-btn--danger {
+    border: 3px solid ButtonText;
+  }
+
+  .v5-btn:hover:not(:disabled, [aria-disabled='true']) {
+    border-color: Highlight;
+    color: ButtonText;
+  }
+
+  .v5-btn:active:not(:disabled, [aria-disabled='true']) {
+    border-color: Highlight;
+    color: ButtonText;
+  }
+
+  .v5-btn:focus-visible {
+    outline-color: Highlight;
+  }
+
+  .v5-btn:is(:disabled, [aria-disabled='true']) {
+    border-color: GrayText;
+    color: GrayText;
+  }
+
+  /* An unavailable commit keeps its dashed edge, as .checkout-commit did. */
+  .v5-btn.v5-btn--commit:is(:disabled, [aria-disabled='true']) {
+    border: 2px dashed GrayText;
+  }
+
+  .v5-cash-keypad__key:focus-visible,
+  .v5-tender-tile:focus-visible {
+    outline-color: Highlight;
+  }
+}
+
+/* Reduced motion: no press drop, no colour fade. A media query adds no
+   specificity, so these repeat the press selectors exactly: they tie, and win on
+   source order (a bare `:active` would lose to the `:active:not(…)` press rules).
+   Each settle-in switches itself off beside the rule that applies it. State
+   changes stay visible by colour, edge, text and layout. */
+@media (prefers-reduced-motion: reduce) {
+  .v5-btn {
+    transition: none;
+  }
+
+  .v5-btn:active:not(:disabled, [aria-disabled='true']),
+  .v5-cash-keypad__key:active:not(:disabled),
+  .v5-tender-tile:active:not(:disabled, [aria-checked='true']) {
+    transform: none;
+    transition: none;
+  }
+}

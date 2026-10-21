@@ -425,7 +425,7 @@ function BackToSaleButton(
   return (
     <button
       type="button"
-      className="v5-checkout-back"
+      className="v5-checkout-back v5-btn"
       data-testid="payment-surface-back"
       disabled={!props.back.enabled}
       aria-disabled={props.back.ariaDisabled}
@@ -1632,7 +1632,7 @@ function PaymentSurfaceBody({
       return (
         <button
           type="button"
-          className="checkout-commit"
+          className="checkout-commit v5-btn v5-btn--primary v5-btn--commit"
           data-testid="payment-surface-reread"
           onClick={retryFailedRead}
         >
@@ -1644,7 +1644,7 @@ function PaymentSurfaceBody({
     return (
       <button
         type="button"
-        className="payment-surface__confirm checkout-commit"
+        className="payment-surface__confirm checkout-commit v5-btn v5-btn--primary v5-btn--commit"
         data-testid="payment-surface-confirm"
         disabled={isConfirming}
         aria-disabled={isConfirming || !fullyTendered ? 'true' : undefined}
@@ -1694,7 +1694,7 @@ function PaymentSurfaceBody({
           phase === 'entry' ? (
             <button
               type="button"
-              className="payment-surface__cancel"
+              className="payment-surface__cancel v5-btn v5-btn--danger-quiet"
               data-testid="payment-surface-cancel"
               disabled={isCancelling}
               aria-disabled={isCancelling ? 'true' : undefined}
@@ -1819,7 +1819,10 @@ function PaymentSurfaceBody({
 
             {/* S3d mode: entry component for the selected tender. */}
             {entryOpen && (
-              <div className="payment-surface__entry" data-testid="payment-surface-entry">
+              <div
+                className="payment-surface__entry v5-checkout__entry"
+                data-testid="payment-surface-entry"
+              >
                 {selectedTender === 'cash' && (
                   <CashEntry
                     remainingBalanceMinor={remainingBalanceMinor}

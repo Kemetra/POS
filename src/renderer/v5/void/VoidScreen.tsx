@@ -213,7 +213,11 @@ function LookupPanel(props: {
               }}
             />
           </div>
-          <button type="submit" className="v5-void-btn v5-void-btn--primary" disabled={busy}>
+          <button
+            type="submit"
+            className="v5-void-btn v5-void-btn--primary v5-btn v5-btn--primary"
+            disabled={busy}
+          >
             {VOID_COPY.search}
           </button>
         </form>
@@ -256,7 +260,7 @@ function FoundSale(props: { found: Found; onVoid: (sale: SaleVoidSaleView) => vo
         <div className="v5-void-actions">
           <button
             type="button"
-            className="v5-void-btn v5-void-btn--danger"
+            className="v5-void-btn v5-void-btn--danger v5-btn v5-btn--danger-quiet"
             onClick={() => {
               props.onVoid(sale);
             }}
@@ -396,7 +400,12 @@ function HistoryRow(props: {
       )}
       {entry.needs_attention && (
         <div className="v5-void-row__full">
-          <button type="button" className="v5-void-btn" disabled={busy} onClick={acknowledge}>
+          <button
+            type="button"
+            className="v5-void-btn v5-btn"
+            disabled={busy}
+            onClick={acknowledge}
+          >
             {VOID_COPY.acknowledge}
           </button>
         </div>

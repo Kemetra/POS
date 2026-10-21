@@ -102,7 +102,7 @@ function CashierShiftNotice(
   return (
     <div className="v5-shift-banner" role="status" data-testid="shift-gate-banner">
       <p>{SHIFT_COPY.gateBanner}</p>
-      <Link className="v5-shift-btn v5-shift-btn--primary" to={SHIFT_PATH}>
+      <Link className="v5-shift-btn v5-shift-btn--primary v5-btn v5-btn--primary" to={SHIFT_PATH}>
         {SHIFT_COPY.gateAction}
       </Link>
     </div>

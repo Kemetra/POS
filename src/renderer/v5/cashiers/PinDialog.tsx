@@ -169,12 +169,17 @@ export function PinDialog({
           )}
         </div>
         <div className="v5-cashiers-dialog-actions">
-          <button type="button" className="v5-cashiers-btn" disabled={pending} onClick={onCancel}>
+          <button
+            type="button"
+            className="v5-cashiers-btn v5-btn"
+            disabled={pending}
+            onClick={onCancel}
+          >
             {CASHIERS_COPY.cancel}
           </button>
           <button
             type="submit"
-            className="v5-cashiers-btn v5-cashiers-btn--primary"
+            className="v5-cashiers-btn v5-cashiers-btn--primary v5-btn v5-btn--primary"
             disabled={pending || !canSavePin(first, second)}
           >
             {CASHIERS_COPY.save}

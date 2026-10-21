@@ -112,7 +112,7 @@ export function SyncPanel(props: Readonly<SyncPanelProps>): JSX.Element {
       <div>
         <button
           type="button"
-          className="v5-manager-btn"
+          className="v5-manager-btn v5-btn"
           data-testid="diagnostics-refresh"
           onClick={props.onRefresh}
         >

@@ -147,7 +147,7 @@ export function TakeoverPrompt({
           <button
             ref={cancelRef}
             type="button"
-            className="takeover-prompt__cancel"
+            className="takeover-prompt__cancel v5-btn"
             data-testid="takeover-prompt-cancel"
             disabled={confirming}
             onClick={() => {
@@ -158,7 +158,7 @@ export function TakeoverPrompt({
           </button>
           <button
             type="button"
-            className="takeover-prompt__confirm"
+            className="takeover-prompt__confirm v5-btn v5-btn--primary"
             data-testid="takeover-prompt-confirm"
             disabled={confirming}
             onClick={() => {

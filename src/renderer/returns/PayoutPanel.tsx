@@ -116,7 +116,9 @@ function Btn(props: {
       type="button"
       ref={props.autoFocusRef}
       className={
-        props.primary === true ? 'v5-manager-btn v5-manager-btn--primary' : 'v5-manager-btn'
+        props.primary === true
+          ? 'v5-manager-btn v5-manager-btn--primary v5-btn v5-btn--primary'
+          : 'v5-manager-btn v5-btn'
       }
       disabled={props.disabled}
       aria-busy={props.busy === true}

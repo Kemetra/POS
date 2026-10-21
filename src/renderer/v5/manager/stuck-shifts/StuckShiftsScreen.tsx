@@ -78,7 +78,7 @@ export function StuckShiftsUnreachable({
         tone="warning"
         testId="stuck-shift-surface-error"
         action={
-          <button type="button" className="v5-stuck-btn" onClick={onRetry}>
+          <button type="button" className="v5-stuck-btn v5-btn" onClick={onRetry}>
             <Icon name="retry" />
             {COPY.retry}
           </button>
@@ -151,7 +151,7 @@ function StuckShiftRow({
       </span>
       <button
         type="button"
-        className="v5-stuck-btn"
+        className="v5-stuck-btn v5-btn v5-btn--danger-quiet"
         aria-describedby={nameId}
         onClick={() => {
           onClose(shift);

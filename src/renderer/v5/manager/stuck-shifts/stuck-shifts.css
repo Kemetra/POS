@@ -159,44 +159,9 @@
   }
 }
 
-/* ── buttons ────────────────────────────────────────────────────── */
-.v5-stuck-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: var(--space-2);
-  min-block-size: var(--v5-target, 44px);
-  min-inline-size: 44px;
+/* ── buttons: the shared .v5-btn system (foundation/buttons.css) ─── */
+.v5-stuck-btn.v5-btn {
   padding-inline: var(--stuck-btn-pad, var(--space-4));
-  border: 1px solid var(--color-border-strong);
-  border-radius: var(--radius-control);
-  background: var(--color-surface);
-  color: var(--color-text);
-  font: inherit;
-  font-weight: var(--font-weight-semibold);
-  white-space: nowrap;
-  cursor: pointer;
-}
-
-.v5-stuck-btn:disabled {
-  cursor: not-allowed;
-}
-
-.v5-stuck-btn:not(.v5-stuck-btn--danger):disabled {
-  opacity: 0.55;
-}
-
-.v5-stuck-btn--danger {
-  border-color: var(--color-danger);
-  background: var(--color-danger);
-  color: var(--color-danger-on);
-}
-
-/* An unavailable commit is sunken with muted ink and must not look actionable (DESIGN.md). */
-.v5-stuck-btn--danger:disabled {
-  border-color: var(--color-border);
-  background: var(--color-surface-sunken);
-  color: var(--color-text-muted);
 }
 
 /* ── the forced-close dialog (inside the one v5 Dialog panel) ───── */
@@ -307,20 +272,10 @@
 /* ── Windows contrast themes (DESIGN.md Forced-Colours Rule) ───── */
 @media (forced-colors: active) {
   .v5-stuck-panel,
-  .v5-stuck-btn,
   .v5-stuck-initial,
   .v5-stuck-choice,
   .v5-stuck-textarea {
     border: 1px solid CanvasText;
-  }
-
-  .v5-stuck-btn--danger {
-    border: 2px solid ButtonText;
-  }
-
-  .v5-stuck-btn--danger:disabled {
-    border: 1px solid GrayText;
-    color: GrayText;
   }
 
   .v5-stuck-choice:has(input:checked) {

@@ -93,7 +93,11 @@ export function SaleCart({ lines, subtotal, total }: SaleCartProps): JSX.Element
         </div>
         <div className="v5-sale-actions">
           <p>هذه معاينة مرئية؛ متابعة الدفع غير مفعّلة.</p>
-          <button type="button" aria-disabled="true" className="v5-sale-checkout">
+          <button
+            type="button"
+            aria-disabled="true"
+            className="v5-sale-checkout v5-btn v5-btn--primary v5-btn--commit"
+          >
             <span>المتابعة إلى الدفع</span>
             <Icon name="forward" size="lg" />
           </button>

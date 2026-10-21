@@ -50,6 +50,11 @@ function pxVar(body: string, name: string): number {
 const comfortable = ruleBody(css, '.v5-entry');
 const compact = ruleBody(mediaBlocks(css, /\(max-width:\s*1279px\)/), '.v5-entry');
 const forced = mediaBlocks(css, /\(forced-colors:\s*active\)/);
+// The entry buttons are shared v5-btn buttons: their forced-colours edge lives in the system.
+const buttonsForced = mediaBlocks(
+  readFileSync(resolve(__dirname, '../../foundation/buttons.css'), 'utf-8'),
+  /\(forced-colors:\s*active\)/,
+);
 
 describe('RT-244 entry.css — tokens and target floors', () => {
   it('pins no raw colour literal: every colour is a token or a system colour', () => {
@@ -92,6 +97,18 @@ describe('RT-244 entry.css — Windows contrast themes', () => {
     expect(rule).toMatch(/forced-color-adjust:\s*none/);
   });
 
+  // The light rule is `.v5-entry__btn.v5-btn[aria-pressed='true']` (0,3,0); a forced
+  // rule at (0,2,0) would lose to it, leaving a white icon on the teal tint in a
+  // contrast theme. The forced selectors must tie it, and win on source order.
+  it('the pressed entry toggle keeps Highlight at the light rule specificity', () => {
+    const rule =
+      /\.v5-entry__btn\.v5-btn\[aria-pressed='true'\],\s*\.v5-entry__btn\.v5-btn\[aria-pressed='true'\]:hover:not\(:disabled\),\s*\.v5-entry__btn\.v5-btn\[aria-pressed='true'\]:active:not\(:disabled\)\s*\{([^}]*)\}/.exec(
+        forced,
+      )?.[1] ?? '';
+    expect(rule).toMatch(/background:\s*Highlight/);
+    expect(rule).toMatch(/color:\s*HighlightText/);
+  });
+
   it('a filled PIN dot is drawn by its border, so it never un-forces', () => {
     const rule = /\.v5-entry__dot\[data-state='filled'\]\s*\{([^}]*)\}/.exec(forced)?.[1] ?? '';
     expect(rule).toMatch(/border-width:\s*7px/);
@@ -100,7 +117,10 @@ describe('RT-244 entry.css — Windows contrast themes', () => {
 
   it('every control keeps a visible boundary', () => {
     expect(forced).toMatch(/\.v5-entry__key[\s\S]*?border-color:\s*CanvasText/);
-    expect(forced).toMatch(/\.v5-entry__btn--primary\s*\{[^}]*border:\s*2px solid ButtonText/);
+    // The entry primary is a shared v5-btn--primary: its filled edge lives in foundation/buttons.css.
+    expect(buttonsForced).toMatch(
+      /\.v5-btn\.v5-btn--primary[^{]*\{[^}]*border:\s*3px solid ButtonText/,
+    );
   });
 });
 

@@ -22,7 +22,7 @@ export function CashierRefusal(): JSX.Element {
         action={
           <button
             type="button"
-            className="v5-manager-btn v5-manager-btn--primary"
+            className="v5-manager-btn v5-manager-btn--primary v5-btn"
             onClick={() => {
               void navigate(SALE_PATH);
             }}
