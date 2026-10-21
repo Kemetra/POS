@@ -118,7 +118,8 @@ configuration, so there is no lab-only verification path.
   `unsigned` (signature removed with `signtool remove /s`; `lab.yml` rewritten to the new
   `sha512` and size), `wrongpub` (re-signed by a second leaf of the **same lab root** with a
   different subject; `lab.yml` rewritten) and `older` (the older build's `lab.yml` and installer).
-  No `.blockmap` is served, so a full download is used.
+  The five cases above serve no `.blockmap`, so a full download is used; the fallback drill below
+  covers a differential attempt that fails.
 - **Build with uncommitted changes.** `build-lab-installer.ps1 -AllowDirtyAppInputs` records the blob
   id of every differing app input in the manifest (`git hash-object <path>`), so the exact content
   can be checked against a later commit. Without the switch the build still refuses.
@@ -161,3 +162,32 @@ configuration, so there is no lab-only verification path.
 Beyond the lab: the production feed, signing service and promotion are RT-321 and RT-322, the
 fleet visibility and minimum-supported-version contract is RT-323, and the drill on the rt9 lab is
 RT-324. None of those is started here.
+
+## Slice 3: differential-to-full fallback drill (RT-322, lab only)
+
+Design §4/§12.9: a differential download that fails must fall back to a full download, and the full
+download is still checked (`sha512`, then the pinned-publisher signature). No updater logic is added
+for this; the pinned `electron-updater` 6.8.10 already does it (`AppUpdater.differentialDownloadInstaller`
+catches any error and returns `true`, which `NsisUpdater` reads as "download in full"; `verifySignature`
+runs after both paths). `scripts/__tests__/lab-nsis-config.test.ts` pins the configuration side: the
+lab builder emits a `.blockmap` next to the installer, and neither the config nor `UpdateService`
+disables differential download. This section is the runtime proof. Run it in the Sandbox only.
+
+- **Feed.** Add `-BlockmapMode Corrupt` (or `Missing`) to `serve-lab-feed.ps1`; default is `Normal`.
+  `Corrupt` answers every `*.blockmap` request with non-gzip bytes, `Missing` with 404. It never
+  touches the installer or `lab.yml`.
+- **Layout.** Copy the `happy` feed, plus the new build's `POS-Pulse-LAB-Setup-<new>.exe.blockmap`
+  (and, for the baseline row, the old build's blockmap) from the build output next to the installers.
+  The build writes them by default (`createBlockmap`); do not pass `--config.nsis.differentialPackage=false`.
+
+| Step                                                            | Expected                                                                                                                                                              |
+| :-------------------------------------------------------------- | :-------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 0. baseline: `Normal`, real blockmaps, installed older build    | feed log shows `.blockmap` and installer GETs; install as in the happy row (differential or full, both accepted; record which)                           |
+| 1. `-BlockmapMode Corrupt`, `happy` installer                   | `main-*.log` has `Cannot download differentially, fallback to full download`, then a full installer GET in the feed log, `downloaded`, and install at the safe point; relaunch as the new version |
+| 2. repeat step 1 with `-BlockmapMode Missing`                   | same log line (blockmap 404), full download, verified install                                                                                                         |
+| 3. `-BlockmapMode Corrupt`, `tamper` installer                  | the fallback line, then `verify_failed` (`sha512 checksum mismatch`); version unchanged; the installer never runs                                                      |
+
+Pass criteria: in steps 1 and 2 the update never ends in an error state and the install happens
+only after the safe-point gate; in step 3 nothing is installed. Reset the Sandbox between steps (the
+downloaded-update cache would otherwise short-circuit the download). Record the three log excerpts in Jira
+RT-322 and update the Confluence lab runbook page afterwards.
