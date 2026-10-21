@@ -9,7 +9,6 @@ import type { IpcMain, IpcMainInvokeEvent } from 'electron';
 
 import type { UpdateStatusBridgeAPI } from '../../src/shared/bridge-api.js';
 import {
-  UPDATE_STATUS_BLOCKERS,
   UPDATE_STATUS_IPC_CHANNELS,
   UPDATE_STATUS_STATES,
 } from '../../src/shared/update-status/types.js';
@@ -57,7 +56,6 @@ describe('updateStatus bridge contract', () => {
       const got = await endToEnd(() => ({ state })).get();
       expect(got).toEqual({ v: 1, state });
     }
-    expect(UPDATE_STATUS_BLOCKERS).toContain('open_shift');
   });
 
   it('never lets a path, url, origin, channel or stack reach the renderer', async () => {
@@ -71,7 +69,7 @@ describe('updateStatus bridge contract', () => {
       stack: 'Error: x\n at y',
     } as unknown as UpdateStatus;
     const got = await endToEnd(() => hostile).get();
-    expect(got).toEqual({ v: 1, state: 'error', blockers: ['open_shift'] });
+    expect(got).toEqual({ v: 1, state: 'error' });
     const text = JSON.stringify(got);
     expect(text).not.toMatch(/https?:|C:\\|updates\.example|lab|Error:/);
   });

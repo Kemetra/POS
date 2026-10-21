@@ -3,6 +3,7 @@ import { countedParts } from '../../terminal-status/counted-copy';
 import { mapUpdateNotice } from '../../terminal-status/update-status-mapping';
 import {
   connectUpdateStatus,
+  sessionStateEvents,
   updateStatusBridge,
   useUpdateStatusStore,
 } from '../../terminal-status/update-status-store';
@@ -49,13 +50,13 @@ export function SyncAttentionBanner({ count }: Readonly<{ count: number }>): JSX
 }
 
 /**
- * RT-322 (S-B, design §6) — the update notice: «update ready, installs after
- * shift close», or a calm note that an update was not installed. Fed by the
+ * RT-322 (S-B, design §6) — the one update notice: «update ready, installs after
+ * shift close». Failures never show here (they are for the operator). Fed by the
  * read-only `updateStatus` bridge (one subscription for the notices stack) and
  * never blocks anything: no action, no dismiss; it leaves when the state does.
  */
 export function UpdateStatusBanner(): JSX.Element | null {
-  useEffect(() => connectUpdateStatus(updateStatusBridge()), []);
+  useEffect(() => connectUpdateStatus(updateStatusBridge(), sessionStateEvents()), []);
   const notice = mapUpdateNotice(useUpdateStatusStore((s) => s.snapshot));
   if (notice === null) return null;
   return (

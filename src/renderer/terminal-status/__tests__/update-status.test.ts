@@ -27,33 +27,17 @@ describe('mapUpdateNotice', () => {
     },
   );
 
-  it.each([
-    ['verify_failed', UPDATE_COPY.verifyFailed],
-    ['verify_unavailable', UPDATE_COPY.verifyUnavailable],
-    ['error', UPDATE_COPY.error],
-  ] as const)('%s: a calm warning', (s, copy) => {
-    expect(mapUpdateNotice(snap(s))).toEqual({ tone: 'warning', copy });
-  });
-
-  it.each(['idle', 'checking', 'downloading', 'installing', 'compat_blocked'] as const)(
-    '%s: nothing to show',
+  it.each(UPDATE_STATUS_STATES.filter((s) => s !== 'downloaded' && s !== 'update_pending'))(
+    '%s: nothing on the cashier surface (failures are for the operator)',
     (s) => {
       expect(mapUpdateNotice(snap(s))).toBeNull();
     },
   );
 
-  it('covers every state, and never uses the danger tone', () => {
-    for (const s of UPDATE_STATUS_STATES) {
-      const notice = mapUpdateNotice(snap(s));
-      if (notice !== null) expect(['info', 'warning']).toContain(notice.tone);
-    }
-  });
-
   it('says what the design says, in Arabic, with no version or cause', () => {
     expect(UPDATE_COPY.ready).toBe('تحديث جاهز — سيُثبَّت بعد إغلاق الوردية.');
-    for (const copy of Object.values(UPDATE_COPY)) {
-      expect(copy).not.toMatch(/[0-9A-Za-z]/);
-    }
+    expect(Object.keys(UPDATE_COPY)).toEqual(['ready']);
+    expect(UPDATE_COPY.ready).not.toMatch(/[0-9A-Za-z]/);
   });
 });
 
@@ -118,6 +102,32 @@ describe('connectUpdateStatus', () => {
     connectUpdateStatus(bridge);
     await flush();
     expect(useUpdateStatusStore.getState().snapshot).toBeNull();
+  });
+
+  it('reads again when the session unlocks, and ignores other session events', async () => {
+    let answer = snap('idle');
+    const get = vi.fn(() => Promise.resolve(answer));
+    const bridge: UpdateStatusBridgeAPI = { get, onChanged: () => () => undefined };
+    let emit: (state: 'active' | 'locked' | 'ended') => void = () => undefined;
+    const unsubscribeSession = vi.fn();
+    connectUpdateStatus(bridge, {
+      onSessionStateChanged: (cb) => {
+        emit = (state) => {
+          cb({ state });
+        };
+        return unsubscribeSession;
+      },
+    });
+    await flush();
+    expect(get).toHaveBeenCalledTimes(1);
+    answer = snap('downloaded');
+    emit('locked');
+    emit('ended');
+    expect(get).toHaveBeenCalledTimes(1);
+    emit('active');
+    await flush();
+    expect(get).toHaveBeenCalledTimes(2);
+    expect(useUpdateStatusStore.getState().snapshot).toEqual(snap('downloaded'));
   });
 
   it('unsubscribes and forgets the snapshot on stop', async () => {

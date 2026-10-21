@@ -12,7 +12,6 @@ import {
   wireUpdateStatusPush,
 } from '../update-status.js';
 import {
-  UPDATE_STATUS_BLOCKERS,
   UPDATE_STATUS_INVALID,
   UPDATE_STATUS_IPC_CHANNELS,
   UPDATE_STATUS_STATES,
@@ -45,86 +44,53 @@ function fakeIpcMain(): {
 }
 
 describe('update-status vocabulary', () => {
-  it('mirrors the main-process state and blocker sets', () => {
+  it('mirrors the main-process state set', () => {
     expect([...UPDATE_STATUS_STATES]).toEqual([...UPDATE_STATES]);
-    expect([...UPDATE_STATUS_BLOCKERS]).toEqual([
-      'open_shift',
-      'open_cart',
-      'payment_in_flight',
-      'return_in_flight',
-      'print_in_progress',
-      'unreadable',
-    ]);
   });
 });
 
 describe('sanitizeUpdateStatus', () => {
-  it('passes the state, version and blockers through', () => {
-    expect(
-      sanitizeUpdateStatus({
-        state: 'update_pending',
-        availableVersion: '1.4.2',
-        blockers: ['open_shift', 'print_in_progress'],
-      }),
-    ).toEqual({
+  it('passes the state and a plain version through', () => {
+    expect(sanitizeUpdateStatus({ state: 'downloaded', availableVersion: '1.4.2' })).toEqual({
       v: 1,
-      state: 'update_pending',
+      state: 'downloaded',
       availableVersion: '1.4.2',
-      blockers: ['open_shift', 'print_in_progress'],
     });
   });
 
-  it('keeps a short machine-readable detail code', () => {
-    expect(
-      sanitizeUpdateStatus({ state: 'verify_unavailable', detail: 'publisher_not_pinned' }),
-    ).toEqual({ v: 1, state: 'verify_unavailable', detail: 'publisher_not_pinned' });
-  });
-
-  it.each([
-    ['a path', 'C:\\Users\\cashier\\AppData\\Local\\pos-updater\\pending\\x.exe'],
-    ['a url', 'https://updates.example.test/lab/latest.yml'],
-    ['an error sentence', 'Cannot download "https://updates.example.test/x": HTTP 404'],
-    ['an error code with upper case', 'ERR_INTERNET_DISCONNECTED'],
-    ['a stack', 'Error: boom\n    at Object.<anonymous> (C:\\app\\main.js:1:1)'],
-    ['an over-long code', 'a'.repeat(41)],
-    ['an empty string', ''],
-  ])('drops a detail that is %s', (_label, detail) => {
-    const out = sanitizeUpdateStatus({ state: 'error', detail });
-    expect(out).toEqual({ v: 1, state: 'error' });
-    expect(JSON.stringify(out)).not.toContain('http');
-  });
-
-  it.each(['file:///C:/x', '1.4.2 https://evil.test', '../../1.0.0', 'latest', '1.4'])(
-    'drops a version that is not plain: %s',
-    (availableVersion) => {
-      expect(sanitizeUpdateStatus({ state: 'downloaded', availableVersion })).toEqual({
-        v: 1,
-        state: 'downloaded',
-      });
-    },
-  );
-
-  it('drops blockers outside the closed set and an empty list', () => {
+  it('never sends detail or blockers', () => {
     expect(
       sanitizeUpdateStatus({
         state: 'update_pending',
-        blockers: ['open_shift', 'C:\\secret' as never],
+        detail: 'publisher_not_pinned',
+        blockers: ['open_shift'],
       }),
-    ).toEqual({ v: 1, state: 'update_pending', blockers: ['open_shift'] });
-    expect(sanitizeUpdateStatus({ state: 'update_pending', blockers: [] })).toEqual({
+    ).toEqual({ v: 1, state: 'update_pending' });
+  });
+
+  it.each([
+    'file:///C:/x',
+    '1.4.2 https://evil.test',
+    '../../1.0.0',
+    'latest',
+    '1.4',
+    String.raw`C:\Users\cashier\x.exe`,
+  ])('drops a version that is not plain: %s', (availableVersion) => {
+    expect(sanitizeUpdateStatus({ state: 'downloaded', availableVersion })).toEqual({
       v: 1,
-      state: 'update_pending',
+      state: 'downloaded',
     });
   });
 
   it('never forwards a field it does not know', () => {
     const raw = {
-      state: 'downloaded',
+      state: 'error',
+      detail: 'Cannot fetch https://updates.example.test/x at C:\\app\\x.js',
       origin: 'https://updates.example.test',
       channel: 'lab',
       stack: 'at x',
     } as unknown as UpdateStatus;
-    expect(sanitizeUpdateStatus(raw)).toEqual({ v: 1, state: 'downloaded' });
+    expect(sanitizeUpdateStatus(raw)).toEqual({ v: 1, state: 'error' });
   });
 
   it('answers an unknown state as error, never as a healthy one', () => {
@@ -190,10 +156,10 @@ describe('wireUpdateStatusPush', () => {
     };
     emit({ state: 'downloaded', availableVersion: '2.0.0' });
     emit({ state: 'downloaded', availableVersion: '2.0.0' });
-    emit({ state: 'update_pending', availableVersion: '2.0.0', blockers: ['open_shift'] });
+    emit({ state: 'update_pending', availableVersion: '2.0.0' });
     expect(sent).toEqual([
       { v: 1, state: 'downloaded', availableVersion: '2.0.0' },
-      { v: 1, state: 'update_pending', availableVersion: '2.0.0', blockers: ['open_shift'] },
+      { v: 1, state: 'update_pending', availableVersion: '2.0.0' },
     ]);
     stop();
     expect(unsubscribe).toHaveBeenCalledTimes(1);

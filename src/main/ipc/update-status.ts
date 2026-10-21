@@ -8,21 +8,17 @@
  * (sender guard); it answers `idle` while the updater is disabled (unpackaged,
  * no origin), which is true: nothing is happening.
  *
- * What leaves main is rebuilt from known fields only: the closed-set state, a
- * plain version, closed-set blockers and, only if it is a short machine code,
- * the detail. Free text (an error message can carry a path or the feed origin)
- * is dropped, never truncated.
+ * What leaves main is rebuilt from known fields only: the closed-set state and
+ * a plain version. The service's `detail` (an error message can carry a path or
+ * the feed origin) and its blockers are never sent.
  */
 import type { IpcMain } from 'electron';
 
 import {
   UPDATE_STATUS_INVALID,
   UPDATE_STATUS_IPC_CHANNELS,
-  isDetailCode,
-  isUpdateStatusBlocker,
   isUpdateStatusState,
   isVersionString,
-  type UpdateStatusBlocker,
   type UpdateStatusInvalid,
   type UpdateStatusSnapshot,
 } from '../../shared/update-status/types.js';
@@ -34,16 +30,11 @@ export interface UpdateStatusHandlerDeps {
 
 /** The status as the renderer may see it. Unknown states read as `error`. */
 export function sanitizeUpdateStatus(status: UpdateStatus): UpdateStatusSnapshot {
-  const { detail, availableVersion, blockers } = status;
-  const known: readonly UpdateStatusBlocker[] = Array.isArray(blockers)
-    ? blockers.filter(isUpdateStatusBlocker)
-    : [];
+  const { availableVersion } = status;
   return {
     v: 1,
     state: isUpdateStatusState(status.state) ? status.state : 'error',
-    ...(isDetailCode(detail) ? { detail } : {}),
     ...(isVersionString(availableVersion) ? { availableVersion } : {}),
-    ...(known.length > 0 ? { blockers: known } : {}),
   };
 }
 

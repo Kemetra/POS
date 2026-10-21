@@ -325,6 +325,18 @@ const singleInstanceReady = acquireSingleInstance(app, () => {
  */
 const DEFAULT_API_BASE_URL = 'https://example.invalid';
 
+/** Sends one payload to every open app window; a closing one never starves the others. */
+function broadcastToWindows(channel: string, payload: unknown): void {
+  for (const win of BrowserWindow.getAllWindows()) {
+    if (win.isDestroyed() || win.webContents.isDestroyed()) continue;
+    try {
+      win.webContents.send(channel, payload);
+    } catch {
+      // Skip it; the next change reaches the windows still open.
+    }
+  }
+}
+
 function resolveApiBaseUrl(): string {
   const fromEnv = process.env['VITE_API_BASE_URL'];
   if (typeof fromEnv === 'string' && fromEnv.trim().length > 0) return fromEnv;
@@ -922,14 +934,7 @@ singleInstanceReady
     wireUpdateStatusPush({
       subscribe: (listener) => updateService.onStatusChange(listener),
       send: (snapshot) => {
-        for (const win of BrowserWindow.getAllWindows()) {
-          if (win.isDestroyed() || win.webContents.isDestroyed()) continue;
-          try {
-            win.webContents.send(UPDATE_STATUS_IPC_CHANNELS.CHANGED, snapshot);
-          } catch {
-            // Skip it; the next change reaches the windows still open.
-          }
-        }
+        broadcastToWindows(UPDATE_STATUS_IPC_CHANNELS.CHANGED, snapshot);
       },
     });
     sessionLockProbe.isLocked = () => operatorSessionManager.isLocked();

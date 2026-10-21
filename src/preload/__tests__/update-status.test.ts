@@ -21,7 +21,6 @@ const VALID: UpdateStatusSnapshot = {
   v: 1,
   state: 'update_pending',
   availableVersion: '1.4.2',
-  blockers: ['open_shift'],
 };
 
 function fakeRenderer(invokeResult: unknown = VALID) {
@@ -51,7 +50,13 @@ function fakeRenderer(invokeResult: unknown = VALID) {
 describe('parseUpdateStatusSnapshot', () => {
   it('rebuilds a valid snapshot from known fields only', () => {
     expect(
-      parseUpdateStatusSnapshot({ ...VALID, origin: 'https://x.test', channel: 'lab' }),
+      parseUpdateStatusSnapshot({
+        ...VALID,
+        origin: 'https://x.test',
+        channel: 'lab',
+        detail: 'x',
+        blockers: ['open_shift'],
+      }),
     ).toEqual(VALID);
   });
 
@@ -60,10 +65,7 @@ describe('parseUpdateStatusSnapshot', () => {
     ['an array', []],
     ['a wrong version', { ...VALID, v: 2 }],
     ['an unknown state', { ...VALID, state: 'online' }],
-    ['a path detail', { v: 1, state: 'error', detail: 'C:\\x\\y' }],
     ['a url version', { v: 1, state: 'downloaded', availableVersion: 'https://x.test' }],
-    ['an unknown blocker', { v: 1, state: 'update_pending', blockers: ['open_shift', 'x'] }],
-    ['non-array blockers', { v: 1, state: 'update_pending', blockers: 'open_shift' }],
   ])('rejects %s', (_label, payload) => {
     expect(parseUpdateStatusSnapshot(payload)).toBeNull();
   });

@@ -1,11 +1,8 @@
 import type { UpdateStatusBridgeAPI } from '../shared/bridge-api.js';
 import {
   UPDATE_STATUS_IPC_CHANNELS,
-  isDetailCode,
-  isUpdateStatusBlocker,
   isUpdateStatusState,
   isVersionString,
-  type UpdateStatusBlocker,
   type UpdateStatusSnapshot,
 } from '../shared/update-status/types.js';
 
@@ -33,39 +30,13 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-function parseBlockers(value: unknown): readonly UpdateStatusBlocker[] | null | undefined {
-  if (value === undefined) return undefined;
-  if (!Array.isArray(value) || value.length > 16) return null;
-  return value.every(isUpdateStatusBlocker) ? value : null;
-}
-
-/** True when the field is absent or passes its guard. */
-function absentOr(value: unknown, guard: (v: unknown) => boolean): boolean {
-  return value === undefined || guard(value);
-}
-
-type OptionalFields = Pick<UpdateStatusSnapshot, 'detail' | 'availableVersion' | 'blockers'>;
-
-/** The optional fields, kept only when present; null if any present one is invalid. */
-function parseOptionalFields(payload: Record<string, unknown>): OptionalFields | null {
-  const { detail, availableVersion } = payload;
-  const blockers = parseBlockers(payload['blockers']);
-  if (!absentOr(detail, isDetailCode) || !absentOr(availableVersion, isVersionString)) return null;
-  if (blockers === null) return null;
-  return {
-    ...(detail === undefined ? {} : { detail: detail as string }),
-    ...(availableVersion === undefined ? {} : { availableVersion: availableVersion as string }),
-    ...(blockers === undefined ? {} : { blockers: [...blockers] }),
-  };
-}
-
 /** The validated snapshot, rebuilt from known fields only; null if anything fails. */
 export function parseUpdateStatusSnapshot(payload: unknown): UpdateStatusSnapshot | null {
   if (!isRecord(payload)) return null;
-  const { v, state } = payload;
+  const { v, state, availableVersion } = payload;
   if (v !== 1 || !isUpdateStatusState(state)) return null;
-  const optional = parseOptionalFields(payload);
-  return optional === null ? null : { v, state, ...optional };
+  if (availableVersion === undefined) return { v, state };
+  return isVersionString(availableVersion) ? { v, state, availableVersion } : null;
 }
 
 export function createUpdateStatusBridge(renderer: RendererLike): UpdateStatusBridgeAPI {

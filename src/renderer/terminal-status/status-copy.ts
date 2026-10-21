@@ -44,18 +44,11 @@ export const STATUS_COPY = {
 } as const;
 
 /**
- * RT-322 (S-B, design §6) — the update notice. Calm: the sale is never blocked,
- * and the failures say that nothing was installed. No version, no cause.
+ * RT-322 (S-B, design §6) — the update notice: the single cashier-facing update
+ * string, «update ready, installs after shift close». No version, no cause.
  */
 export const UPDATE_COPY = {
-  /** `downloaded` / `update_pending`: «update ready, installs after shift close». */
   ready: 'تحديث جاهز — سيُثبَّت بعد إغلاق الوردية.',
-  /** `verify_failed`: the download did not verify, so it was not installed. */
-  verifyFailed: 'تعذّر التحقق من التحديث فلم يُثبَّت. البيع يعمل كالمعتاد.',
-  /** `verify_unavailable`: the check could not run, so nothing was installed. */
-  verifyUnavailable: 'تعذّر فحص التحديث فلم يُثبَّت. البيع يعمل كالمعتاد.',
-  /** `error`: the update failed. */
-  error: 'تعذّر تحديث التطبيق حاليًا. البيع يعمل كالمعتاد.',
 } as const;
 
 /**
