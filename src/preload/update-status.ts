@@ -39,22 +39,33 @@ function parseBlockers(value: unknown): readonly UpdateStatusBlocker[] | null | 
   return value.every(isUpdateStatusBlocker) ? value : null;
 }
 
+/** True when the field is absent or passes its guard. */
+function absentOr(value: unknown, guard: (v: unknown) => boolean): boolean {
+  return value === undefined || guard(value);
+}
+
+type OptionalFields = Pick<UpdateStatusSnapshot, 'detail' | 'availableVersion' | 'blockers'>;
+
+/** The optional fields, kept only when present; null if any present one is invalid. */
+function parseOptionalFields(payload: Record<string, unknown>): OptionalFields | null {
+  const { detail, availableVersion } = payload;
+  const blockers = parseBlockers(payload['blockers']);
+  if (!absentOr(detail, isDetailCode) || !absentOr(availableVersion, isVersionString)) return null;
+  if (blockers === null) return null;
+  return {
+    ...(detail === undefined ? {} : { detail: detail as string }),
+    ...(availableVersion === undefined ? {} : { availableVersion: availableVersion as string }),
+    ...(blockers === undefined ? {} : { blockers: [...blockers] }),
+  };
+}
+
 /** The validated snapshot, rebuilt from known fields only; null if anything fails. */
 export function parseUpdateStatusSnapshot(payload: unknown): UpdateStatusSnapshot | null {
   if (!isRecord(payload)) return null;
-  const { v, state, detail, availableVersion } = payload;
+  const { v, state } = payload;
   if (v !== 1 || !isUpdateStatusState(state)) return null;
-  if (detail !== undefined && !isDetailCode(detail)) return null;
-  if (availableVersion !== undefined && !isVersionString(availableVersion)) return null;
-  const blockers = parseBlockers(payload['blockers']);
-  if (blockers === null) return null;
-  return {
-    v,
-    state,
-    ...(detail === undefined ? {} : { detail }),
-    ...(availableVersion === undefined ? {} : { availableVersion }),
-    ...(blockers === undefined ? {} : { blockers: [...blockers] }),
-  };
+  const optional = parseOptionalFields(payload);
+  return optional === null ? null : { v, state, ...optional };
 }
 
 export function createUpdateStatusBridge(renderer: RendererLike): UpdateStatusBridgeAPI {
