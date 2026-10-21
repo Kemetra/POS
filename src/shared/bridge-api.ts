@@ -19,6 +19,7 @@ import type { RecoveryBridgeAPI } from './operator/recovery.js';
 import type { SaleVoidBridgeAPI } from './sale-void/types.js';
 import type { SaleHistoryBridgeAPI } from './sale-history/types.js';
 import type { TerminalStatusSnapshot } from './terminal-status/types.js';
+import type { UpdateStatusSnapshot } from './update-status/types.js';
 
 export type {
   ReturnJournalView,
@@ -900,6 +901,25 @@ export interface PreloadBridgeAPI {
    * session-gated, refused while the session is locked (D-6-10).
    */
   terminalStatus?: TerminalStatusBridgeAPI;
+
+  /**
+   * RT-322 (S-B): the updater's status (`updateStatus:get` + the
+   * `updateStatus:changed` push). Read-only; a closed-set state, a plain
+   * version, closed-set blockers and a short machine code only. No install
+   * trigger and no channel or origin setter.
+   */
+  updateStatus?: UpdateStatusBridgeAPI;
+}
+
+/**
+ * RT-322 (S-B): typed read-only `updateStatus.*` namespace. No write channel
+ * exists. Both members deliver only a preload-validated snapshot.
+ */
+export interface UpdateStatusBridgeAPI {
+  /** Rejects (`update_status_unavailable`) on a refusal or malformed answer. */
+  get(): Promise<UpdateStatusSnapshot>;
+  /** Subscribe to the push; returns the unsubscribe. */
+  onChanged(cb: (snapshot: UpdateStatusSnapshot) => void): () => void;
 }
 
 /**

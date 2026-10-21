@@ -8,7 +8,12 @@ import { useBannerState } from '../../ui/receipts/useBannerState';
 import { DrawerNoticeBanner, useDrawerNoticeFeed } from '../../ui/receipts/DrawerNotice';
 import { ShiftNotice } from '../shift/ShiftNotice';
 import { SaleVoidNotice } from '../void/SaleVoidNotice';
-import { OfflineBanner, SyncAttentionBanner, useStatusBanners } from './StatusBanners';
+import {
+  OfflineBanner,
+  SyncAttentionBanner,
+  UpdateStatusBanner,
+  useStatusBanners,
+} from './StatusBanners';
 
 type RecoveryAction = 'reprint' | 'manualOverride';
 
@@ -88,6 +93,7 @@ export function V5OperationalNotices(): JSX.Element {
       <DrawerNoticeBanner now={new Date().toISOString()} onManualOverride={manualOverride} />
       <ShiftNotice />
       <SaleVoidNotice />
+      <UpdateStatusBanner />
     </>
   );
 }

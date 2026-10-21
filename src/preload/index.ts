@@ -12,6 +12,7 @@ import { recovery } from './recovery.js';
 import { saleVoid } from './sale-void.js';
 import { saleHistory } from './sale-history.js';
 import { createTerminalStatusBridge } from './terminal-status.js';
+import { createUpdateStatusBridge } from './update-status.js';
 import type {
   CancelTakeoverRequest,
   CancelTakeoverResponse,
@@ -225,6 +226,9 @@ const api: PreloadBridgeAPI = {
   // RT-603 (VN-S6 S6-2) — terminalStatus.* (get + the coalesced push). Read-only;
   // every payload is validated here and the IpcRendererEvent is never forwarded.
   terminalStatus: createTerminalStatusBridge(ipcRenderer),
+  // RT-322 (S-B) — updateStatus.* (get + the push). Read-only; every payload is
+  // validated here. No install trigger, no channel or origin setter.
+  updateStatus: createUpdateStatusBridge(ipcRenderer),
 };
 
 contextBridge.exposeInMainWorld('api', api);
