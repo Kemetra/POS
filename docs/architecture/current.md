@@ -180,9 +180,17 @@ a no-op. These are the two most likely silent regressions in this area and both 
     verify (our marker, or a PowerShell failure) is `verify_unavailable`, anything else is `error`. The
     marker is classified first, because electron-updater wraps any non-null verifier result as "not
     signed by the application owner". None installs. All state changes are logged as `update:state`.
-  - **Provisioning note:** the origin and channel are read from the process environment. The
-    installer's relaunch after an update does **not** inherit them (observed in the lab drill), so a
-    real terminal needs them set persistently (user or machine environment), not per launch.
+  - **Provisioning (RT-322, owner decision 2026-10-21):** the origin and channel are read from the
+    process environment only (`resolveUpdateConfig`): no file, registry reader or renderer setter. A
+    terminal gets them as **Machine-scope** Windows environment variables set by an administrator
+    (`ELECTRON_UPDATE_FEED_URL` https, `POS_PULSE_UPDATE_CHANNEL` `lab|canary|stable`) and a reboot,
+    per [`pilot-terminal-provisioning.md`](../runbook/pilot-terminal-provisioning.md); User scope is
+    a readiness-check failure. The RT-772 drill set them for one launch only, so the relaunch logged
+    `update:disabled reason=no_origin`. The relaunch did not inherit per-launch values, so it
+    evidently starts from a fresh environment; Machine scope is expected to survive it because a fresh
+    environment includes Machine values. The RT-322 S-D lab drill is what proves it.
+    Unset or empty origin disables the service quietly; a non-https origin or an unknown channel
+    refuses it, and nothing is contacted.
 - **Append-only tables** are enforced by SQLite triggers, not by convention.
 - **Money is integer minor units everywhere.** No floats, guarded by `Number.isSafeInteger`.
 
