@@ -126,7 +126,7 @@ components:
     height: "44px"
   button-ghost:
     backgroundColor: "transparent"
-    textColor: "{colors.text}"
+    textColor: "{colors.text-muted}"
     typography: "{typography.body-strong}"
     rounded: "{rounded.control}"
     height: "44px"

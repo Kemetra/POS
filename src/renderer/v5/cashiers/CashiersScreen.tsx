@@ -284,7 +284,7 @@ function ReauthNotice({ onSignIn }: Readonly<{ onSignIn: () => void }>): JSX.Ele
       action={
         <button
           type="button"
-          className="v5-cashiers-btn v5-cashiers-btn--primary v5-btn v5-btn--primary"
+          className="v5-cashiers-btn v5-cashiers-btn--primary v5-btn"
           onClick={onSignIn}
         >
           {REAUTH_COPY.action}

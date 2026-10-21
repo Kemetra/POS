@@ -97,6 +97,18 @@ describe('RT-244 entry.css — Windows contrast themes', () => {
     expect(rule).toMatch(/forced-color-adjust:\s*none/);
   });
 
+  // The light rule is `.v5-entry__btn.v5-btn[aria-pressed='true']` (0,3,0); a forced
+  // rule at (0,2,0) would lose to it, leaving a white icon on the teal tint in a
+  // contrast theme. The forced selectors must tie it, and win on source order.
+  it('the pressed entry toggle keeps Highlight at the light rule specificity', () => {
+    const rule =
+      /\.v5-entry__btn\.v5-btn\[aria-pressed='true'\],\s*\.v5-entry__btn\.v5-btn\[aria-pressed='true'\]:hover:not\(:disabled\),\s*\.v5-entry__btn\.v5-btn\[aria-pressed='true'\]:active:not\(:disabled\)\s*\{([^}]*)\}/.exec(
+        forced,
+      )?.[1] ?? '';
+    expect(rule).toMatch(/background:\s*Highlight/);
+    expect(rule).toMatch(/color:\s*HighlightText/);
+  });
+
   it('a filled PIN dot is drawn by its border, so it never un-forces', () => {
     const rule = /\.v5-entry__dot\[data-state='filled'\]\s*\{([^}]*)\}/.exec(forced)?.[1] ?? '';
     expect(rule).toMatch(/border-width:\s*7px/);

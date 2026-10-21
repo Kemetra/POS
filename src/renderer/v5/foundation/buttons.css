@@ -224,22 +224,20 @@
   }
 }
 
-/* Reduced motion: no press drop, no colour fade. Each settle-in switches itself
-   off beside the rule that applies it, so source order cannot undo it. State
+/* Reduced motion: no press drop, no colour fade. A media query adds no
+   specificity, so these repeat the press selectors exactly: they tie, and win on
+   source order (a bare `:active` would lose to the `:active:not(…)` press rules).
+   Each settle-in switches itself off beside the rule that applies it. State
    changes stay visible by colour, edge, text and layout. */
 @media (prefers-reduced-motion: reduce) {
   .v5-btn {
     transition: none;
   }
 
-  .v5-btn:active,
-  .v5-cash-keypad__key:active,
-  .v5-tender-tile:active {
+  .v5-btn:active:not(:disabled, [aria-disabled='true']),
+  .v5-cash-keypad__key:active:not(:disabled),
+  .v5-tender-tile:active:not(:disabled, [aria-checked='true']) {
     transform: none;
-  }
-
-  .v5-cash-keypad__key:active,
-  .v5-tender-tile:active {
     transition: none;
   }
 }

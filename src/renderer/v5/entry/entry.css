@@ -604,6 +604,16 @@
     forced-color-adjust: none;
   }
 
+  /* The light pressed rule is `.v5-entry__btn.v5-btn[aria-pressed='true']`
+     (0,3,0): tie it here so the system highlight wins on source order. */
+  .v5-entry__btn.v5-btn[aria-pressed='true'],
+  .v5-entry__btn.v5-btn[aria-pressed='true']:hover:not(:disabled),
+  .v5-entry__btn.v5-btn[aria-pressed='true']:active:not(:disabled) {
+    border-color: Highlight;
+    background: Highlight;
+    color: HighlightText;
+  }
+
   .v5-entry__who[aria-pressed='true'] .v5-entry__name,
   .v5-entry__btn[aria-pressed='true'] .rt-icon {
     color: HighlightText;

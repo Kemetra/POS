@@ -132,8 +132,26 @@ describe('buttons.css — tokens, motion roles and reduced motion', () => {
   it('has a reduced-motion block that removes the press drop and the colour fade', () => {
     const reduced = mediaBlocks(buttons, 'prefers-reduced-motion:\\s*reduce');
     expect(reduced).toMatch(/\.v5-btn\s*\{[^}]*transition:\s*none/);
-    expect(reduced).toMatch(/\.v5-btn:active[^{]*\{[^}]*transform:\s*none/);
-    expect(reduced).toMatch(/\.v5-tender-tile:active/);
+    // The override must repeat the press selectors exactly: a media query adds
+    // no specificity, so a bare `.v5-btn:active` (0,2,0) loses to the press rule
+    // `.v5-btn:active:not(…)` (0,3,0) and the drop survives reduced motion.
+    for (const press of [
+      ".v5-btn:active:not(:disabled, [aria-disabled='true'])",
+      '.v5-cash-keypad__key:active:not(:disabled)',
+      ".v5-tender-tile:active:not(:disabled, [aria-checked='true'])",
+    ]) {
+      expect(reduced, press).toContain(press);
+    }
+    expect(reduced).toMatch(
+      /\.v5-tender-tile:active:not\(:disabled, \[aria-checked='true'\]\)\s*\{[^}]*transform:\s*none;[^}]*transition:\s*none/,
+    );
+  });
+
+  it('never settles a notice that carries a money amount in the ledger or the entry', () => {
+    const messages = read(resolve(FOUNDATION, 'messages.css'));
+    expect(messages).toMatch(
+      /\.v5-ledger \.v5-notice,\s*\.v5-checkout__entry \.v5-notice[^{]*\{[^}]*animation:\s*none/,
+    );
   });
 
   it('keeps every state distinguishable in a contrast theme', () => {

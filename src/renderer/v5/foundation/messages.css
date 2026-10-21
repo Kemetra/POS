@@ -116,6 +116,13 @@
   animation: none;
 }
 
+/* Money never performs (UX-06): a notice in the payment ledger or the tender
+   entry can carry an amount («أقل من المستحق بـ …»), so it appears at once. */
+.v5-ledger .v5-notice,
+.v5-checkout__entry .v5-notice {
+  animation: none;
+}
+
 /* Same selectors as the rule above, so the reduced-motion path wins the tie. */
 @media (prefers-reduced-motion: reduce) {
   .v5-notice:not([data-tone='danger']),
