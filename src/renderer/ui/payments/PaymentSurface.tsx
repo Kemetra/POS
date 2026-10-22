@@ -487,8 +487,8 @@ const RECOVERY_TEST_IDS = {
 
 /**
  * Freeze 15 §3.2 (Checkout default focus): the first enabled method tile. Focus
- * lands there on arrival (RT-761, covered by `guardTileKey`) and again after a
- * partial apply (not covered by that guard).
+ * lands there on arrival (RT-761) and again after a partial apply (RT-763); both
+ * are covered by `guardTileKey`.
  */
 const FIRST_ENABLED_TENDER_TILE = '[data-testid="tender-selection"] [role="radio"]:not([disabled])';
 
@@ -598,7 +598,8 @@ function PaymentSurfaceBody({
   // RT-238 / I-9: when focus is moved onto the settle commit, a held or doubled
   // Enter from the apply that preceded it must not settle on its own.
   const commitFocusedAtRef = useRef(0);
-  // RT-761: when arrival focus landed on the first method tile (see `guardTileKey`).
+  // RT-761/RT-763: when focus last landed on the first method tile, on arrival or after a
+  // partial apply (see `guardTileKey`).
   const tileFocusedAtRef = useRef(0);
   // RT-298 — the cancel this surface sent and has not finished (its own outcome
   // code updates the screen; see the hold-sync effect below).
@@ -1903,9 +1904,13 @@ function PaymentSurfaceBody({
             commitFocusedAtRef.current = Date.now();
           }}
         />
+        {/* RT-763: the refocus after a partial apply arms the same tile guard as arrival. */}
         <FocusWhen
           active={phase === 'tender_selection' && hasAppliedLine && !fullyTendered}
           find={() => document.querySelector<HTMLElement>(FIRST_ENABLED_TENDER_TILE)}
+          onFocused={() => {
+            tileFocusedAtRef.current = Date.now();
+          }}
         />
         {/* RT-761 / freeze 15 §3.2: arriving at Checkout puts focus on the first method tile. */}
         <FocusWhen
