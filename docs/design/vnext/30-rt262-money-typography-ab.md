@@ -112,6 +112,12 @@ loads Plex from Google Fonts only to render the comparison; that fetch is not a 
 (an offline POS cannot rely on it). The `no-brand-font` guard and OD-2 currently forbid a bundled
 face.
 
+**Rules for any adoption.** The app must never load a font from a CDN: the POS is offline-first and
+Constitution egress rules forbid it. Any adopted font is vendored under its licence (Plex: OFL 1.1,
+with the notice kept beside the file) through a bounded Jira slice. The prototype page needs
+network access to render the Plex variants (Dubai comes from the local Windows install). This PR
+records the comparison only; it does not decide the font or the money style.
+
 ## 4. Per-variant reading
 
 - **A (current).** Strongest "ledger" look and a dotted zero. Widest; wraps the price column at
