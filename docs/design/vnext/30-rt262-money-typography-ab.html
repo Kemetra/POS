@@ -153,12 +153,30 @@ function frame(screen, w, v, scale) {
 }
 function el(h) { return h; }
 
+/* True only when a registered FontFace for Plex has really loaded (document.fonts.check is true for unknown families). */
+function plexLoaded() {
+  var ok = false;
+  document.fonts.forEach(function (f) { if (f.family.replace(/['"]/g, '') === 'IBM Plex Sans Arabic' && f.status === 'loaded') ok = true; });
+  return ok;
+}
+function loadPlex() {
+  return Promise.all([document.fonts.load("400 44px 'IBM Plex Sans Arabic'", '0123456789'), document.fonts.load("700 44px 'IBM Plex Sans Arabic'", '0123456789')]).catch(function () {});
+}
 var hash = {}; location.hash.replace(/^#/, '').split('&').forEach(function (p) { var kv = p.split('='); if (kv[0]) hash[kv[0]] = kv[1]; });
 var app = document.getElementById('app');
 
 if (hash.screen) {
   document.body.style.background = '#fff'; app.style.padding = '0'; app.style.maxWidth = 'none';
   app.innerHTML = '<div dir="rtl" lang="ar">' + frame(hash.screen, +hash.w || 1280, hash.v || 'a', 1) + '</div>';
+  if (hash.v === 'c' || hash.v === 'd') {
+    loadPlex().then(function () {
+      if (plexLoaded()) return;
+      var b = document.createElement('div');
+      b.textContent = 'IBM Plex Sans Arabic did NOT load (offline?). This frame shows the Segoe UI fallback, not Plex. Do not use it as evidence.';
+      b.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:9;padding:6px 12px;background:#b91c1c;color:#fff;font:600 13px Segoe UI,sans-serif';
+      document.body.appendChild(b);
+    });
+  }
 } else {
   var out = '<h1>RT-262 — money typography and font-challenger A/B (UX-03)</h1>' +
     '<p class="note">Planning prototype: same-screen structural mocks, only the font family changes. A is the shipped treatment (Dubai + monospace money). Open one frame at 1:1 with <code>#screen=sale&amp;w=1280&amp;v=b</code>. No recommendation is applied; the owner decides. Dubai comes from this machine, Plex from Google Fonts (status below).</p>' +
@@ -192,13 +210,13 @@ if (hash.screen) {
   out += '</tbody></table>';
   app.innerHTML = out;
 
-  var load = Promise.all([document.fonts.load("400 44px 'IBM Plex Sans Arabic'", '0123456789'), document.fonts.load("700 44px 'IBM Plex Sans Arabic'", '0123456789')]).then(function () {
-    var ok = document.fonts.check("700 44px 'IBM Plex Sans Arabic'");
-    document.getElementById('status').innerHTML = 'IBM Plex Sans Arabic loaded: <b>' + ok + '</b>. Dubai installed: <b>' + (document.fonts.check("700 44px Dubai") ? 'check passed' : 'not reported') + '</b> (system font; <code>document.fonts.check</code> is advisory for system fonts).';
+  var load = loadPlex().then(function () {
+    var ok = plexLoaded();
+    document.getElementById('status').innerHTML = ok ? 'IBM Plex Sans Arabic loaded: <b>true</b> (a registered font face reports loaded). Dubai is the Windows system font; this page cannot verify it, so check the A and B frames look like Dubai.' : '<b style="color:#b91c1c">IBM Plex Sans Arabic did NOT load (offline or blocked). Variants C and D and the Plex rows below show the Segoe UI fallback and are not valid evidence.</b>';
     var c = document.createElement('canvas').getContext('2d'), rows = '';
     [['Dubai 700', "700 100px Dubai"], ['Dubai 400', "400 100px Dubai"], ['Plex 700', "700 100px 'IBM Plex Sans Arabic'"], ['Plex 400', "400 100px 'IBM Plex Sans Arabic'"], ['Mono stack 700', "700 100px " + getComputedStyle(document.documentElement).getPropertyValue('--mono')]].forEach(function (f) {
       c.font = f[1]; var ws = '0123456789'.split('').map(function (d) { return c.measureText(d).width; });
-      rows += '<tr><td>' + f[0] + '</td><td>' + Math.min.apply(null, ws).toFixed(1) + '</td><td>' + Math.max.apply(null, ws).toFixed(1) + '</td><td>' + (Math.max.apply(null, ws) === Math.min.apply(null, ws) ? 'fixed (tabular by default)' : 'proportional') + '</td></tr>';
+      rows += '<tr><td>' + f[0] + (f[0].indexOf('Plex') === 0 && !ok ? ' (NOT LOADED, fallback metrics)' : '') + '</td><td>' + Math.min.apply(null, ws).toFixed(1) + '</td><td>' + Math.max.apply(null, ws).toFixed(1) + '</td><td>' + (Math.max.apply(null, ws) === Math.min.apply(null, ws) ? 'fixed (tabular by default)' : 'proportional') + '</td></tr>';
     });
     document.getElementById('measure').innerHTML = '<table class="t"><thead><tr><th>Face</th><th>Narrowest digit</th><th>Widest digit</th><th>Result</th></tr></thead><tbody>' + rows + '</tbody></table>';
   });
