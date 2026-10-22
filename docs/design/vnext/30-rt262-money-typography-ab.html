@@ -1,0 +1,226 @@
+<!doctype html>
+<!--
+  RT-262 money-typography and font-challenger A/B prototype.
+  Planning prototype only: structural mock of Sale, Checkout and Completion. It is NOT the
+  production renderer and changes no production token. See doc 30 for method and limits.
+  Fonts: Dubai is the Windows system font (resolved by name, nothing bundled). IBM Plex Sans
+  Arabic (SIL OFL 1.1) is loaded from Google Fonts at view time only, so no font file is
+  added to the repository. Offline, the Plex variants fall back to Segoe UI and say so.
+  Modes: no hash = overview page.  #screen=sale|checkout|done&w=1024|1280&v=a|b|c|d = one frame at 1:1.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>RT-262 money typography A/B</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&amp;display=block">
+<style>
+:root {
+  --primary: #0f766e; --wash: #e6f4f1; --ink: #0f1d2e; --muted: #5b6878; --line: #dbe3ea;
+  --canvas: #f7fafb; --card: #fff; --warn: #b45309;
+  --dubai: 'Dubai', 'Segoe UI', Tahoma, Arial, system-ui, sans-serif;
+  --plex: 'IBM Plex Sans Arabic', 'Segoe UI', Tahoma, Arial, system-ui, sans-serif;
+  --mono: ui-monospace, 'Cascadia Code', 'JetBrains Mono', 'Consolas', monospace;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--canvas); color: var(--ink); font: 14px/1.5 'Segoe UI', Tahoma, sans-serif; }
+.page { padding: 16px; max-width: 1400px; margin: 0 auto; }
+h1 { font-size: 20px; margin: 0 0 4px; } h2 { font-size: 16px; margin: 28px 0 8px; }
+p.note { margin: 0 0 12px; max-width: 80ch; color: var(--muted); }
+table.t { border-collapse: collapse; background: #fff; }
+.t th, .t td { border: 1px solid var(--line); padding: 4px 10px; text-align: start; vertical-align: middle; }
+.t thead th { font-size: 12px; color: var(--muted); background: var(--canvas); }
+.grid { display: grid; gap: 16px; }
+.grid.c4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.grid.c2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.tag { display: inline-block; font: 600 12px/1 'Segoe UI', sans-serif; padding: 3px 6px; border-radius: 4px; background: var(--wash); color: var(--primary); margin-inline-end: 6px; }
+.tag.cur { background: #fef3c7; color: var(--warn); }
+
+/* ---- the four variants: only font family changes ---- */
+.v-a { --ui: var(--dubai); --money: var(--mono); }   /* current: Dubai + mono money */
+.v-b { --ui: var(--dubai); --money: var(--dubai); }  /* Dubai + tabular sans money */
+.v-c { --ui: var(--plex);  --money: var(--mono); }   /* Plex + mono money */
+.v-d { --ui: var(--plex);  --money: var(--plex); }   /* Plex + tabular sans money */
+.money, .qty { font-family: var(--money); font-variant-numeric: tabular-nums lining-nums; }
+.id { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+
+/* ---- frame (structural mock, tokens copied from docs/DESIGN.md shipped values) ---- */
+.frame { background: var(--canvas); color: var(--ink); font-family: var(--ui); font-size: 14px; line-height: 1.4; overflow: hidden; border: 1px solid var(--line); display: flex; flex-direction: column; }
+.frame * { font-family: inherit; }
+.frame .money, .frame .qty { font-family: var(--money); }
+.frame .id { font-family: var(--mono); }
+.frame .top { height: 48px; background: #fff; border-bottom: 1px solid var(--line); display: flex; align-items: center; justify-content: space-between; padding: 0 16px; font-weight: 600; }
+.frame .body { flex: 1; display: grid; gap: 12px; padding: 12px; min-height: 0; }
+.sale .body { grid-template-columns: 1fr 340px; }
+.card { background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 12px; min-height: 0; }
+.cart { display: flex; flex-direction: column; gap: 0; }
+.row { display: grid; grid-template-columns: 1fr 64px 92px 104px; gap: 8px; align-items: center; padding: 8px 4px; border-bottom: 1px solid var(--line); }
+.row.h { font-size: 12px; color: var(--muted); font-weight: 500; padding-block: 4px; }
+.row .name { font-weight: 500; overflow-wrap: anywhere; }
+.row .name small { display: block; color: var(--muted); font-size: 12px; font-weight: 400; }
+.row .money { font-size: 14px; font-weight: 600; text-align: end; direction: ltr; unicode-bidi: isolate; }
+.row .qty { text-align: center; font-weight: 600; direction: ltr; unicode-bidi: isolate; }
+.totals { display: flex; flex-direction: column; gap: 8px; }
+.tl { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; color: var(--muted); }
+.tl .money { font-size: 14px; font-weight: 600; color: var(--ink); direction: ltr; unicode-bidi: isolate; }
+.total-big { font-size: 30px; line-height: 1.1; font-weight: 700; color: var(--ink); direction: ltr; unicode-bidi: isolate; text-align: end; }
+.hero { font-size: 44px; line-height: 1.1; font-weight: 700; color: var(--primary); direction: ltr; unicode-bidi: isolate; text-align: end; }
+.w1024 .hero { font-size: 36px; } .w1024 .total-big { font-size: 24px; }
+.btn { background: var(--primary); color: #fff; font-weight: 600; border-radius: 8px; padding: 12px; text-align: center; font-size: 16px; }
+.btn.sec { background: #fff; color: var(--ink); border: 1px solid var(--line); }
+.tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.tile { border: 1px solid var(--line); border-radius: 8px; padding: 12px 8px; text-align: center; font-weight: 600; font-size: 15px; }
+.tile.on { background: var(--wash); border-color: var(--primary); color: var(--primary); }
+.recv { font-size: 26px; font-weight: 700; direction: ltr; unicode-bidi: isolate; text-align: end; }
+.checkout .body { grid-template-columns: 1fr 1fr; align-content: start; }
+.done .body { grid-template-columns: 1fr; place-items: center; }
+.done .card { width: 520px; max-width: 100%; text-align: center; display: flex; flex-direction: column; gap: 10px; }
+.done .hero { text-align: center; }
+.ok { color: var(--primary); font-weight: 700; font-size: 20px; }
+.kv { display: flex; justify-content: space-between; gap: 8px; border-top: 1px solid var(--line); padding-top: 8px; color: var(--muted); }
+.kv .money, .kv .id { color: var(--ink); font-weight: 600; direction: ltr; unicode-bidi: isolate; }
+
+/* ---- overview specimens ---- */
+.spec { background: #fff; border: 1px solid var(--line); border-radius: 8px; padding: 12px; }
+.spec .lab { font-size: 12px; color: var(--muted); margin-bottom: 6px; }
+.big { font-size: 44px; font-weight: 700; line-height: 1.15; font-family: var(--money); font-variant-numeric: tabular-nums lining-nums; direction: ltr; text-align: end; }
+.glyphs { font-size: 28px; font-family: var(--money); letter-spacing: 0.04em; direction: ltr; text-align: start; font-variant-numeric: tabular-nums lining-nums; }
+.mixed { font-family: var(--ui); font-size: 16px; }
+.scaled { transform-origin: top left; }
+.fwrap { direction: ltr; overflow: hidden; border: 1px solid var(--line); background: #fff; }
+.cap { font-size: 12px; color: var(--muted); margin: 4px 0 8px; }
+@media (max-width: 900px) { .grid.c4 { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+</style>
+</head>
+<body>
+<div id="app" class="page"></div>
+<script>
+/* Representative data: Arabic names with Latin strengths, values chosen to exercise 1/7, 0/8, 6/9. */
+var LINES = [
+  { n: 'باراسيتامول 500 مجم 20 قرص', s: 'Paracetamol 500 mg', q: 1, u: 17.00 },
+  { n: 'بنادول إكسترا 24 قرص', s: 'Panadol Extra 24 tab', q: 2, u: 71.10 },
+  { n: 'فيتامين سي 1000 مجم فوار', s: 'Vitamin C 1000 mg eff.', q: 3, u: 108.80 },
+  { n: 'أوجمنتين 1 جم 14 قرص', s: 'Augmentin 1 g', q: 1, u: 187.70 },
+  { n: 'كريم مرطب للبشرة الجافة 250 مل', s: 'SKU 6221087004781', sku: 1, q: 1, u: 780.00 },
+  { n: 'جهاز قياس ضغط الدم الرقمي', s: 'BP monitor 17-81', q: 1, u: 1087.70 }
+];
+function fmt(x) { return x.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+function m(x) { return '<bdi dir="ltr" class="money">' + fmt(x) + ' EGP</bdi>'; }
+var SUB = LINES.reduce(function (a, l) { return a + l.q * l.u; }, 0);
+var DISC = 17.70, TOTAL = SUB - DISC, RECV = 3000, CHANGE = RECV - TOTAL;
+
+function topbar(t) { return '<div class="top"><span>' + t + '</span><span class="id">POS-01 · 000178</span></div>'; }
+function sale(w) {
+  var rows = LINES.map(function (l) {
+    return '<div class="row"><div class="name">' + l.n + '<small><bdi dir="ltr"' + (l.sku ? ' class="id"' : '') + '>' + l.s + '</bdi></small></div>' +
+      '<bdi dir="ltr" class="qty">' + l.q + '</bdi>' + m(l.u) + m(l.q * l.u) + '</div>';
+  }).join('');
+  return '<div class="frame sale w' + w + '">' + topbar('البيع') + '<div class="body">' +
+    '<div class="card cart"><div class="row h"><div>الصنف</div><div style="text-align:center">الكمية</div><div style="text-align:end">السعر</div><div style="text-align:end">الإجمالي</div></div>' + rows + '</div>' +
+    '<div class="card totals"><div class="tl"><span>المجموع الفرعي</span>' + m(SUB) + '</div><div class="tl"><span>الخصم</span>' + m(-DISC) + '</div>' +
+    '<div class="tl"><span>عدد البنود</span><bdi dir="ltr" class="qty">9</bdi></div><div style="flex:1"></div>' +
+    '<div class="tl"><span>الإجمالي المستحق</span></div><div class="total-big money">' + fmt(TOTAL) + ' EGP</div>' +
+    '<div class="btn">الدفع</div><div class="btn sec">إلغاء</div></div></div></div>';
+}
+function checkout(w) {
+  return '<div class="frame checkout w' + w + '">' + topbar('الدفع') + '<div class="body">' +
+    '<div class="card totals"><div class="tl"><span>المبلغ المستحق</span></div><div class="hero money">' + fmt(TOTAL) + ' EGP</div>' +
+    '<div class="tiles"><div class="tile on">نقدي</div><div class="tile">بطاقة</div><div class="tile">محفظة</div></div>' +
+    '<div class="tl"><span>المبلغ المستلم</span></div><div class="recv money">' + fmt(RECV) + ' EGP</div></div>' +
+    '<div class="card totals"><div class="tl"><span>المجموع الفرعي</span>' + m(SUB) + '</div><div class="tl"><span>الخصم</span>' + m(-DISC) + '</div>' +
+    '<div class="tl"><span>المستلم</span>' + m(RECV) + '</div><div class="tl"><span>الباقي للعميل</span>' + m(CHANGE) + '</div>' +
+    '<div style="flex:1"></div><div class="btn">إتمام البيع</div><div class="btn sec">رجوع</div></div></div></div>';
+}
+function done(w) {
+  return '<div class="frame done w' + w + '">' + topbar('تم البيع') + '<div class="body"><div class="card">' +
+    '<div class="ok">تمت العملية بنجاح</div><div class="tl" style="justify-content:center"><span>الباقي للعميل</span></div>' +
+    '<div class="hero money">' + fmt(CHANGE) + ' EGP</div>' +
+    '<div class="kv"><span>رقم الفاتورة</span><bdi dir="ltr" class="id">INV-2026-000178</bdi></div>' +
+    '<div class="kv"><span>الإجمالي</span>' + m(TOTAL) + '</div><div class="kv"><span>المستلم</span>' + m(RECV) + '</div>' +
+    '<div class="btn" style="margin-top:6px">بيع جديد</div></div></div></div>';
+}
+var SCREENS = { sale: sale, checkout: checkout, done: done };
+var HEIGHTS = { 1024: 680, 1280: 720 };
+var VNAME = { a: 'A · Dubai + mono money (current)', b: 'B · Dubai + tabular sans money', c: 'C · Plex + mono money', d: 'D · Plex + tabular sans money' };
+
+function frame(screen, w, v, scale) {
+  var h = HEIGHTS[w], html = SCREENS[screen](w);
+  var inner = '<div dir="rtl" lang="ar" class="v-' + v + ' scaled" style="width:' + w + 'px;height:' + h + 'px;transform:scale(' + scale + ')">' +
+    html.replace('class="frame ', 'style="height:' + h + 'px" class="frame ') + '</div>';
+  return '<div class="fwrap" style="width:' + (w * scale) + 'px;height:' + (h * scale) + 'px">' + inner + '</div>';
+}
+function el(h) { return h; }
+
+/* True only when a registered FontFace for Plex has really loaded (document.fonts.check is true for unknown families). */
+function plexLoaded() {
+  var ok = false;
+  document.fonts.forEach(function (f) { if (f.family.replace(/['"]/g, '') === 'IBM Plex Sans Arabic' && f.status === 'loaded') ok = true; });
+  return ok;
+}
+function loadPlex() {
+  return Promise.all([document.fonts.load("400 44px 'IBM Plex Sans Arabic'", '0123456789'), document.fonts.load("700 44px 'IBM Plex Sans Arabic'", '0123456789')]).catch(function () {});
+}
+var hash = {}; location.hash.replace(/^#/, '').split('&').forEach(function (p) { var kv = p.split('='); if (kv[0]) hash[kv[0]] = kv[1]; });
+var app = document.getElementById('app');
+
+if (hash.screen) {
+  document.body.style.background = '#fff'; app.style.padding = '0'; app.style.maxWidth = 'none';
+  app.innerHTML = '<div dir="rtl" lang="ar">' + frame(hash.screen, +hash.w || 1280, hash.v || 'a', 1) + '</div>';
+  if (hash.v === 'c' || hash.v === 'd') {
+    loadPlex().then(function () {
+      if (plexLoaded()) return;
+      var b = document.createElement('div');
+      b.textContent = 'IBM Plex Sans Arabic did NOT load (offline?). This frame shows the Segoe UI fallback, not Plex. Do not use it as evidence.';
+      b.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:9;padding:6px 12px;background:#b91c1c;color:#fff;font:600 13px Segoe UI,sans-serif';
+      document.body.appendChild(b);
+    });
+  }
+} else {
+  var out = '<h1>RT-262 — money typography and font-challenger A/B (UX-03)</h1>' +
+    '<p class="note">Planning prototype: same-screen structural mocks, only the font family changes. A is the shipped treatment (Dubai + monospace money). Open one frame at 1:1 with <code>#screen=sale&amp;w=1280&amp;v=b</code>. No recommendation is applied; the owner decides. Dubai comes from this machine, Plex from Google Fonts (status below).</p>' +
+    '<div id="status" class="note"></div>' +
+    '<h2>1. Digit and glyph specimens (44px bold, the checkout hero size)</h2><div class="grid c4" dir="ltr">';
+  ['a', 'b', 'c', 'd'].forEach(function (v) {
+    out += '<div class="spec v-' + v + '"><div class="lab"><span class="tag' + (v === 'a' ? ' cur' : '') + '">' + v.toUpperCase() + '</span>' + VNAME[v].slice(4) + '</div>' +
+      '<div class="glyphs">0123456789</div><div class="glyphs">1 7 · 0 8 · 6 9 · 3 5</div>' +
+      '<div class="big">1,780.70</div><div class="big">7,108.80</div><div class="big">1,087.70</div></div>';
+  });
+  out += '</div><h2>2. Column alignment (14px/600 money rows, right-aligned, decimal points must stack)</h2><div class="grid c4" dir="ltr">';
+  [1.00, 17.00, 71.10, 108.80, 780.00, 1087.70, 11111.11, 88888.88].forEach(function () {});
+  ['a', 'b', 'c', 'd'].forEach(function (v) {
+    var vals = [1.00, 17.00, 71.10, 108.80, 780.00, 1087.70, 11111.11, 88888.88];
+    out += '<div class="spec v-' + v + '"><div class="lab"><span class="tag' + (v === 'a' ? ' cur' : '') + '">' + v.toUpperCase() + '</span>' + VNAME[v].slice(4) + '</div>' +
+      vals.map(function (x) { return '<div class="money" style="font-size:14px;font-weight:600;text-align:end;border-bottom:1px solid var(--line);padding:2px 0;">' + fmt(x) + ' EGP</div>'; }).join('') + '</div>';
+  });
+  out += '</div><h2>3. Arabic / Latin mix in one line (name + strength + SKU + money)</h2><div class="grid c4" dir="rtl" lang="ar">';
+  ['a', 'b', 'c', 'd'].forEach(function (v) {
+    out += '<div class="spec v-' + v + '"><div class="lab" dir="ltr"><span class="tag' + (v === 'a' ? ' cur' : '') + '">' + v.toUpperCase() + '</span>' + VNAME[v].slice(4) + '</div>' +
+      '<div class="mixed">كريم مرطب للبشرة الجافة Cetaphil 250 مل — <bdi dir="ltr" class="id">SKU 6221087004781</bdi> — <bdi dir="ltr" class="money">1,087.70 EGP</bdi></div>' +
+      '<div class="mixed" style="margin-top:6px">باراسيتامول 500 mg · 20 قرص · الكمية <bdi dir="ltr" class="qty">12</bdi></div></div>';
+  });
+  out += '</div><h2>4. Measured digit advance at runtime (this browser, 100px)</h2><div id="measure"></div>';
+  out += '<h2>5. Full frames at 1:1 (open each in its own tab)</h2><table class="t"><thead><tr><th>Screen</th><th>Width</th><th>A</th><th>B</th><th>C</th><th>D</th></tr></thead><tbody>';
+  [['sale', 'Sale'], ['checkout', 'Checkout'], ['done', 'Completion']].forEach(function (s) {
+    [1280, 1024].forEach(function (w) {
+      out += '<tr><td>' + s[1] + '</td><td>' + w + '</td>' + ['a', 'b', 'c', 'd'].map(function (v) { return '<td><a href="#screen=' + s[0] + '&amp;w=' + w + '&amp;v=' + v + '" target="_blank">' + v.toUpperCase() + '</a></td>'; }).join('') + '</tr>';
+    });
+  });
+  out += '</tbody></table>';
+  app.innerHTML = out;
+
+  var load = loadPlex().then(function () {
+    var ok = plexLoaded();
+    document.getElementById('status').innerHTML = ok ? 'IBM Plex Sans Arabic loaded: <b>true</b> (a registered font face reports loaded). Dubai is the Windows system font; this page cannot verify it, so check the A and B frames look like Dubai.' : '<b style="color:#b91c1c">IBM Plex Sans Arabic did NOT load (offline or blocked). Variants C and D and the Plex rows below show the Segoe UI fallback and are not valid evidence.</b>';
+    var c = document.createElement('canvas').getContext('2d'), rows = '';
+    [['Dubai 700', "700 100px Dubai"], ['Dubai 400', "400 100px Dubai"], ['Plex 700', "700 100px 'IBM Plex Sans Arabic'"], ['Plex 400', "400 100px 'IBM Plex Sans Arabic'"], ['Mono stack 700', "700 100px " + getComputedStyle(document.documentElement).getPropertyValue('--mono')]].forEach(function (f) {
+      c.font = f[1]; var ws = '0123456789'.split('').map(function (d) { return c.measureText(d).width; });
+      rows += '<tr><td>' + f[0] + (f[0].indexOf('Plex') === 0 && !ok ? ' (NOT LOADED, fallback metrics)' : '') + '</td><td>' + Math.min.apply(null, ws).toFixed(1) + '</td><td>' + Math.max.apply(null, ws).toFixed(1) + '</td><td>' + (Math.max.apply(null, ws) === Math.min.apply(null, ws) ? 'fixed (tabular by default)' : 'proportional') + '</td></tr>';
+    });
+    document.getElementById('measure').innerHTML = '<table class="t"><thead><tr><th>Face</th><th>Narrowest digit</th><th>Widest digit</th><th>Result</th></tr></thead><tbody>' + rows + '</tbody></table>';
+  });
+}
+</script>
+</body>
+</html>
