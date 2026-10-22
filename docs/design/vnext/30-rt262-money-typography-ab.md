@@ -124,8 +124,8 @@ records the comparison only; it does not decide the font or the money style.
   1024. Looks different on a machine without Cascadia Code. Mixes two type voices in one row (a
   proportional Arabic label beside a mono value).
 - **B (Dubai + tabular sans).** Same face as the Arabic, so a row reads as one voice. Narrowest (161 px against 206 px for A).
-  Digits align as well as A in the specimens. **No font, licence or bundle change.** The only
-  change is the money family token.
+  Digits align as well as A in the specimens. **No new font file, licence or bundle.** The only
+  change is the money family token (it still needs a bounded token slice).
 - **C (Plex + mono).** Needs the Plex bundle and keeps the mono width cost. Gains nothing the
   other options do not already offer.
 - **D (Plex + tabular sans).** One voice and consistent across machines. 16% wider than Dubai

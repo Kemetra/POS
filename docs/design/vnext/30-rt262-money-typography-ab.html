@@ -103,7 +103,7 @@ var LINES = [
   { n: 'بنادول إكسترا 24 قرص', s: 'Panadol Extra 24 tab', q: 2, u: 71.10 },
   { n: 'فيتامين سي 1000 مجم فوار', s: 'Vitamin C 1000 mg eff.', q: 3, u: 108.80 },
   { n: 'أوجمنتين 1 جم 14 قرص', s: 'Augmentin 1 g', q: 1, u: 187.70 },
-  { n: 'كريم مرطب للبشرة الجافة 250 مل', s: 'SKU 6221087004781', q: 1, u: 780.00 },
+  { n: 'كريم مرطب للبشرة الجافة 250 مل', s: 'SKU 6221087004781', sku: 1, q: 1, u: 780.00 },
   { n: 'جهاز قياس ضغط الدم الرقمي', s: 'BP monitor 17-81', q: 1, u: 1087.70 }
 ];
 function fmt(x) { return x.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
@@ -114,7 +114,7 @@ var DISC = 17.70, TOTAL = SUB - DISC, RECV = 3000, CHANGE = RECV - TOTAL;
 function topbar(t) { return '<div class="top"><span>' + t + '</span><span class="id">POS-01 · 000178</span></div>'; }
 function sale(w) {
   var rows = LINES.map(function (l) {
-    return '<div class="row"><div class="name">' + l.n + '<small class="id">' + l.s + '</small></div>' +
+    return '<div class="row"><div class="name">' + l.n + '<small><bdi dir="ltr"' + (l.sku ? ' class="id"' : '') + '>' + l.s + '</bdi></small></div>' +
       '<bdi dir="ltr" class="qty">' + l.q + '</bdi>' + m(l.u) + m(l.q * l.u) + '</div>';
   }).join('');
   return '<div class="frame sale w' + w + '">' + topbar('البيع') + '<div class="body">' +
