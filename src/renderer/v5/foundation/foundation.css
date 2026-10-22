@@ -5,7 +5,8 @@
  * styles/tailwind.css, so contrast and the light/dark token values stay owned
  * there. Everything is scoped under .v5-frame; this file never styles :root or
  * a bare element, because in development the chunk stays loaded after leaving
- * the preview and must not restyle legacy screens.
+ * the preview and must not restyle legacy screens. The one reduced-motion block below also
+ * names `.v5-dialog-host` (RT-813): it only zeroes motion roles, never styles a screen.
  */
 
 .v5-frame {
@@ -70,9 +71,14 @@
   }
 }
 
-/* Reduced motion: every motion role is zero; the state change stays visible by colour and text. */
+/* Reduced motion: every motion role is zero; the state change stays visible by colour and text.
+   RT-813 (RT-260 F1): `.v5-dialog-host` is the portal node every Dialog renders into, in the frame
+   and standalone (the lock screen has no `.v5-frame` ancestor). The roles inherit down to the
+   panel, so a dialog outside the frame no longer falls back to its full-motion 220 ms. Only the
+   reduce path names the host: under normal motion the roles stay frame-scoped, unchanged. */
 @media (prefers-reduced-motion: reduce) {
-  .v5-frame {
+  .v5-frame,
+  .v5-dialog-host {
     --motion-press: 0ms;
     --motion-flash: 0ms;
     --motion-notice-in: 0ms;

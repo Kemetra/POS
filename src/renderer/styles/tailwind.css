@@ -674,6 +674,19 @@ body {
       transition: none;
       animation: none;
     }
+
+    /* RT-813 (RT-260 F2): the global control focus transition (Form Elements, above). Same
+       selector list as that rule, so it stays one root cause; it follows the rule in the same
+       layer, so it wins at equal specificity. The focus ring still appears, just without easing. */
+    input[type='text'],
+    input[type='number'],
+    input[type='email'],
+    input[type='password'],
+    input[type='search'],
+    select,
+    textarea {
+      transition: none;
+    }
   }
 
   /* ── 007 S5 — Operator session surfaces ─────────────────────────────── */
