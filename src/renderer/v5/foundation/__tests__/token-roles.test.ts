@@ -85,8 +85,11 @@ describe('VN-S2 role aliases', () => {
 
   it('reduced motion zeroes every motion duration role (DESIGN.md §Motion)', () => {
     const reduced =
-      /@media \(prefers-reduced-motion: reduce\)\s*\{\s*\.v5-frame\s*\{([^}]*)\}/.exec(foundation);
-    expect(reduced, 'a reduced-motion block for .v5-frame').not.toBeNull();
+      /@media \(prefers-reduced-motion: reduce\)\s*\{\s*\.v5-frame,\s*\.v5-dialog-host\s*\{([^}]*)\}/.exec(
+        foundation,
+      );
+    // RT-813: the host is named too, so a dialog outside the frame (the lock) is zeroed as well.
+    expect(reduced, 'a reduced-motion block for .v5-frame and .v5-dialog-host').not.toBeNull();
     const body = reduced?.[1] ?? '';
     for (const [role, value] of MOTION_ROLES) {
       if (!value.endsWith('ms')) continue;
