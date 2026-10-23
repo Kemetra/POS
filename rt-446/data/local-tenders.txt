@@ -1,0 +1,5 @@
+['tender_lines', 'on_parked_carts']
+(5, 1)
+['action_kind', 'count(*)']
+('cart.park', 5)
+('cart.resume', 2)

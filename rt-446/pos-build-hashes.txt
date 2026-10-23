@@ -1,0 +1,2 @@
+f31ce3d2f41c58e528ad3f16fa388e309e4382c3284220cb6e46a2d140f8851f */c/Users/Shaaban/Documents/GitHub/POS/.claude/worktrees/rt9lab-e33fca25/dist-electron/win-unpacked/POS Pulse.exe
+4a8ac6a5dddf4a44274ae91f57f78b4439a07b666fa46c48a23979bb63efc2dd */c/Users/Shaaban/Documents/GitHub/POS/.claude/worktrees/rt9lab-e33fca25/dist-electron/win-unpacked/resources/app.asar
