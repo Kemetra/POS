@@ -82,6 +82,20 @@ describe('FocusWhen', () => {
     expect(onFocused).toHaveBeenCalledTimes(1);
   });
 
+  it('asks for the visible ring (RT-840: a pointer confirm leaves plain focus() ringless)', () => {
+    const spy = vi.spyOn(HTMLElement.prototype, 'focus');
+    render(
+      <>
+        <button type="button">هدف</button>
+        <FocusWhen active find={() => screen.getByRole('button')} />
+      </>,
+    );
+    const target = screen.getByRole('button');
+    const call = spy.mock.contexts.findIndex((el) => el === target);
+    expect(spy.mock.calls[call]?.[0]).toEqual({ focusVisible: true });
+    spy.mockRestore();
+  });
+
   it('does nothing when there is no target, and does not report a move', () => {
     const onFocused = vi.fn();
     render(<FocusWhen active find={() => null} onFocused={onFocused} />);
