@@ -2,7 +2,7 @@
  * RT-828 — every dynamic value on the sale-history slips wraps to the 42-column
  * roll: the returns block of a returned-sale duplicate and the whole sale-record
  * slip. An unbroken 120-character value (ASCII, emoji, Arabic) in each dynamic
- * field: every printed line is ≤ 42 columns (code points) in BOTH the HTML and
+ * field: every printed line is ≤ 42 display columns in BOTH the HTML and
  * the ESC/POS output, and the whole value still prints.
  */
 import { describe, expect, it } from 'vitest';

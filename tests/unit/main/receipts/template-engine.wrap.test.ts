@@ -2,7 +2,7 @@
  * RT-204 — every dynamic value on the sale receipt wraps to the 42-column roll.
  *
  * An unbroken 120-character value (ASCII, emoji, Arabic) in each dynamic field:
- * every printed line is ≤ 42 columns, measured in code points, in BOTH the HTML
+ * every printed line is ≤ 42 columns, measured in display cells (RT-829), in BOTH the HTML
  * and the ESC/POS output, and the whole value still prints (nothing clipped).
  */
 
@@ -133,7 +133,7 @@ describe('RT-829 — internal spacing survives a wrap', () => {
     }
   });
 
-  it('prints a value that fits verbatim, a value that wraps keeps the same spacing', () => {
+  it('prints a value that fits verbatim, spacing included', () => {
     const fits = renderReceipt(payload({ terminal_label: 'a   b' }));
     expect(fits.html).toContain('>Terminal: a   b<');
   });
