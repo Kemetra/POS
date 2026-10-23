@@ -1,0 +1,6 @@
+['total', 'label_hits', 'park_label_key', 'park_cats']
+(61, 0, 0, 9)
+['action_category', 'count(*)']
+('cart.park_refused', 2)
+('cart.parked', 7)
+('cart.resumed', 2)
