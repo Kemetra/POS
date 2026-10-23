@@ -384,9 +384,7 @@ function HeldPanel(
         <>
           {props.canCancelSale === 'no_pin' && (
             <div className="v5-recovery-neutral">
-              <Notice tone="info" announce={false}>
-                {RECOVERY_COPY.cancelSaleNoPin}
-              </Notice>
+              <Notice tone="info">{RECOVERY_COPY.cancelSaleNoPin}</Notice>
             </div>
           )}
           <ul className="v5-recovery-rows">
@@ -396,7 +394,7 @@ function HeldPanel(
                 cart={cart}
                 owner={cart.own ? RECOVERY_COPY.you : props.nameOf(cart.owning_operator_id)}
                 onAction={props.onAction}
-                canCancel={props.canCancelSale === 'yes'}
+                canCancel={props.canCancelSale !== 'no_pin'}
               />
             ))}
           </ul>

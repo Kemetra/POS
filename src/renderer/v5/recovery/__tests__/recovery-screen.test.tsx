@@ -216,6 +216,21 @@ describe('RecoveryScreen — no manager PIN (RT-846, Addendum A3/A4)', () => {
     expect(await screen.findByRole('button', { name: RECOVERY_COPY.cancelSale })).toBeVisible();
   });
 
+  it('keeps the button while the approver lookup is pending, and announces the note when it lands', async () => {
+    const bridges = fakeBridges(heldView({ held: [heldCart()] }));
+    let settle: (v: { kind: 'approvers'; approvers: [] }) => void = () => undefined;
+    bridges.approval.listApprovers.mockReturnValue(
+      new Promise((r) => {
+        settle = r;
+      }),
+    );
+    show(bridges);
+    expect(await screen.findByRole('button', { name: RECOVERY_COPY.cancelSale })).toBeVisible();
+    settle({ kind: 'approvers', approvers: [] });
+    expect(await screen.findByRole('status')).toHaveTextContent(RECOVERY_COPY.cancelSaleNoPin);
+    expect(screen.queryByRole('button', { name: RECOVERY_COPY.cancelSale })).toBeNull();
+  });
+
   it('asks for the cancel-held-cart approvers', async () => {
     const bridges = show(fakeBridges(heldView({ held: [heldCart()] })));
     await screen.findByRole('button', { name: RECOVERY_COPY.cancelSale });
