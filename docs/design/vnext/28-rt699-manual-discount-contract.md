@@ -9,7 +9,7 @@
 > **Update 2026-10-24 (P1 close-out).** The owner answered OD-28-1…4, 9 and 11 on 2026-10-19
 > (RT-699 comment 12975). Backend-Core shipped the C-A capture shape (RT-740). The §2 table
 > records the outcomes. [§11](#11-p1-close-out-2026-10-24) adds the zero-total completion plan
-> (one owner decision, **OZ-1**), the Backend-Core verification and the slice → Jira map. Where
+> (**OZ-1 = Z-A**, owner decision 2026-10-24), the Backend-Core verification and the slice → Jira map. Where
 > §1–§9 say "Open" or "proposed", §2 and §11 give the current state.
 >
 > - **Jira:** **RT-699**, step 1 (Work Mode: **Planning**). Source: [26](26-rt536-cashier-feature-completeness.md)
@@ -56,7 +56,7 @@ Status key:
 | OD-28-1 | Discount kind | (A) percent only; (B) fixed amount only; (C) both, one per line | **Decided 2026-10-19: C**, percent or fixed amount, one manual discount per line (RT-699 comment 12975). |
 | OD-28-2 | Percent precision and range | (A) whole percent 1–100; (B) basis points 1–10000 | **Decided 2026-10-19: A**, whole percent 1–100. |
 | OD-28-3 | Rounding of a percent discount to minor units | (A) round half up; (B) floor (in the store's favour); (C) ceiling (in the customer's favour) | **Decided 2026-10-19: A**, round half up on the discount amount, computed once per line on the line gross (§3.2). |
-| OD-28-4 | Maximum discount | (A) up to 100% (a free line is allowed); (B) a cap below 100% set by policy; (C) a tenant cap that is configurable later | **Decided 2026-10-19: C.** Up to 100% now (a free line is allowed), with a per-tenant cap made configurable later. The net ≥ 0 floor is always enforced. **The owner did not take the "refuse a zero cart total" recommendation: a fully discounted sale must complete with no tender.** How it completes is planned in §11.3 (OZ-1). |
+| OD-28-4 | Maximum discount | (A) up to 100% (a free line is allowed); (B) a cap below 100% set by policy; (C) a tenant cap that is configurable later | **Decided 2026-10-19: C.** Up to 100% now (a free line is allowed), with a per-tenant cap made configurable later. The net ≥ 0 floor is always enforced. **The owner did not take the "refuse a zero cart total" recommendation: a fully discounted sale must complete with no tender.** It completes with no tender (OZ-1 = Z-A, owner decision 2026-10-24, §11.3). |
 | OD-28-5 | Scope | (A) per-line only for the pilot; (B) per-line and whole-sale | **Selected — recommended option (A), owner may revisit.** Storage, the approval binding and FR-023 Q2 are already per-line. Whole-sale scope needs an allocation rule across lines (money) and a new approval subject, so it is deferred (§3.4). |
 | OD-28-6 | Stacking | (A) at most one manual discount per line; (B) several | **Selected — recommended option (A), owner may revisit.** To change a discount, remove it (D4) and add again with approval. |
 | OD-28-7 | A quantity change on a discounted line | (A) refused until the discount is removed; (B) the discount is dropped automatically, with a notice; (C) a percent discount re-applies and an amount discount stays | **Selected — recommended option (A), owner may revisit.** The approved amount must stay equal to the applied amount (RT-114 binding). Option C would change a manager-approved amount with no new approval. |
@@ -426,12 +426,12 @@ so POS stores and sends the same strings:
 | Checkout renderer | whether «تأكيد الدفع» is reachable with no tender line | **Needs verification** (I1 / I2) |
 | Cash-up, drawer kick, receipt | how a settled sale with no tender line counts in cash-up, whether anything kicks the drawer, and how the receipt renders an empty tender list | **Needs verification** (I1 / I3). Not read for this item; the Z-A row below states the intended result, not observed behaviour |
 
-**OZ-1: how a zero-total sale completes. Open, owner decision** (payment-state semantics,
-RT-10 / RT-116; `CLAUDE.md` §9).
+**OZ-1: how a zero-total sale completes. Decided 2026-10-24: Z-A** (the owner, in chat;
+payment-state semantics, RT-10 / RT-116).
 
 | Option | What happens | Change needed | Assessment |
 |---|---|---|---|
-| **Z-A (recommended): complete with no tender** | At 0 due, Checkout shows no tender tiles, only one completion action. Main confirms with no tender line, the FSM settles on Σ = 0, and finalize writes an empty tender summary. The capture sends `tenders: [{ method: cash, amountMinor: 0 }]` when the sale total is 0, so Backend-Core records a zero-total sale, not a tender-unknown one. The receipt shows the total 0.00 and no tender row. Cash-up: the sale counts, and expected cash is unchanged. No drawer kick | I1: a zero-due settle test, and a check that no guard assumes at least one line. I2: the Checkout state at 0 due (drawn in D1). I4: the capture rule for a zero total (the sale is held until I4 anyway, because it is discounted) | Smallest change. It keeps RT-339's "cash at 0 due is refused" rule, and matches Backend-Core's documented shape |
+| **Z-A (decided 2026-10-24): complete with no tender** | At 0 due, Checkout shows no tender tiles, only one completion action. Main confirms with no tender line, the FSM settles on Σ = 0, and finalize writes an empty tender summary. The capture sends `tenders: [{ method: cash, amountMinor: 0 }]` when the sale total is 0, so Backend-Core records a zero-total sale, not a tender-unknown one. The receipt shows the total 0.00 and no tender row. Cash-up: the sale counts, and expected cash is unchanged. No drawer kick | I1: a zero-due settle test, and a check that no guard assumes at least one line. I2: the Checkout state at 0 due (drawn in D1). I4: the capture rule for a zero total (the sale is held until I4 anyway, because it is discounted) | Smallest change. It keeps RT-339's "cash at 0 due is refused" rule, and matches Backend-Core's documented shape |
 | Z-B: record a 0 cash tender line in POS | The cashier applies cash 0, and the sale settles on that line | Lift RT-339's refusal for the 0 case, and decide whether a 0 cash line kicks the drawer | Reopens a guard that exists to stop a stale screen booking change. Not recommended |
 | Z-C: refuse a zero cart total | A discount that would make the cart total 0 is refused, while a single free line stays allowed | I1 refusal and copy | The original recommendation. **The owner declined it on 2026-10-19.** It is listed only as the fallback if Z-A's verification fails |
 
@@ -457,7 +457,7 @@ no tender, and the capture carries one `cash` 0 tender.
 | Slice | Jira | Work Mode | Blocked by |
 |---|---|---|---|
 | P1 (this section) | RT-699 | Planning | — |
-| D1 | RT-853 | Docs | RT-699 P1 (OZ-1 decides the zero-total frames) |
+| D1 | RT-853 | Docs | RT-699 P1 |
 | I1 | RT-854 | Implementation | RT-699 P1 |
 | I2 | RT-855 | Implementation | RT-854, RT-853 |
 | I3 | RT-856 | Implementation | RT-854 |
@@ -467,7 +467,13 @@ no tender, and the capture carries one `cash` 0 tender.
 
 ### 11.6 Still open after P1
 
-- **OZ-1** (§11.3), owner decision. Recommended: Z-A.
+- **OZ-1** is decided (Z-A, 2026-10-24), but its "Needs verification" rows in §11.3 still need
+  checking: whether Checkout can be reached with no tender, cash-up, the drawer kick, and the
+  receipt. RT-854, RT-855 and RT-856 check them. If any of them refuses a no-tender settle, the
+  issue stops and reports it; it does not fall back to Z-C on its own.
+- **Spec 005 cart-layer scope:** FR-022, NFR-003, the DiscountPlaceholder entity, Out of Scope
+  and A2 are amended so the cart layer computes the manual line discount and the two envelope
+  totals. Every other discount kind, tax, tender, change and balance stay outside it.
 - **OD-28-10**, VAT order, deferred with VAT.
 - **OD-28-13**, ERPNext posting, RT-857. What the Connector gets today (read at Connector
   `main@f81c2b7` and Backend-Core `main@c1d6215f`, not exercised):
