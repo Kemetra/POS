@@ -150,6 +150,15 @@ in `editing` and no envelope is constructed (US3-AS5).
 
 ---
 
+> **RT-699 forward note (2026-10-24).** The manual-discount contract
+> (`docs/design/vnext/28-rt699-manual-discount-contract.md` §3.3 and §11) plans two fields
+> owned by the payment side: `discount_total_minor` (Σ line discounts) and `total_due_minor`
+> (`subtotal_minor − discount_total_minor`). The implementation slice RT-854 (I1) adds them.
+> `subtotal_minor` keeps its v1 meaning, Σ gross. Payment eligibility then compares the
+> requested amount with `total_due_minor`, and with no discount the two are equal. Adding
+> fields is allowed under FR-036. RT-854 records whether they are a v1 extension or an
+> `envelope_version` bump. Nothing in the v1 field list above changes until then.
+
 ## Ratification — §A4
 
 The envelope shape is **ratified jointly with the future payment /
