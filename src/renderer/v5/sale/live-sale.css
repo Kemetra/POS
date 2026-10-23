@@ -242,10 +242,10 @@
 
 .v5-live-dialog-price {
   color: var(--color-primary-emphasis);
-  font-family: var(--font-family-mono);
+  font-family: var(--font-family-money);
   font-size: var(--font-size-xl);
   font-weight: var(--font-weight-bold);
-  font-variant-numeric: tabular-nums;
+  font-variant-numeric: tabular-nums lining-nums;
 }
 
 .v5-live-dialog > div:last-child {

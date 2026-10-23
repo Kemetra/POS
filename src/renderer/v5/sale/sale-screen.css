@@ -284,10 +284,10 @@
 }
 
 .v5-sale-product-price {
-  font-family: var(--font-family-mono);
+  font-family: var(--font-family-money);
   font-size: var(--font-size-md);
   font-weight: var(--font-weight-bold);
-  font-variant-numeric: tabular-nums;
+  font-variant-numeric: tabular-nums lining-nums;
 }
 
 .v5-sale-currency {
@@ -349,9 +349,9 @@
 
 .v5-sale-line-unit,
 .v5-sale-line-total {
-  font-family: var(--font-family-mono);
+  font-family: var(--font-family-money);
   font-size: var(--font-size-sm);
-  font-variant-numeric: tabular-nums;
+  font-variant-numeric: tabular-nums lining-nums;
   text-align: center;
 }
 
@@ -368,8 +368,8 @@
   border: 1px solid var(--color-border);
   border-radius: var(--radius-control);
   background: var(--color-surface);
-  font-family: var(--font-family-mono);
-  font-variant-numeric: tabular-nums;
+  font-family: var(--font-family-money);
+  font-variant-numeric: tabular-nums lining-nums;
 }
 
 .v5-sale-quantity span {
@@ -416,8 +416,8 @@
 }
 
 .v5-sale-total-row > span:last-child {
-  font-family: var(--font-family-mono);
-  font-variant-numeric: tabular-nums;
+  font-family: var(--font-family-money);
+  font-variant-numeric: tabular-nums lining-nums;
 }
 
 .v5-sale-total-row small,
@@ -444,9 +444,9 @@
 }
 
 .v5-sale-grand-total strong {
-  font-family: var(--font-family-mono);
+  font-family: var(--font-family-money);
   font-size: var(--font-size-3xl);
-  font-variant-numeric: tabular-nums;
+  font-variant-numeric: tabular-nums lining-nums;
   white-space: nowrap;
 }
 

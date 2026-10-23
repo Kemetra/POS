@@ -35,17 +35,17 @@ colors:
   info-on: "#ffffff"
 typography:
   amount-hero:
-    fontFamily: "ui-monospace, 'Cascadia Code', 'JetBrains Mono', 'Consolas', monospace"
+    fontFamily: "'Dubai', 'Segoe UI', Tahoma, Arial, system-ui, sans-serif"
     fontSize: "2.75rem"
     fontWeight: 700
     lineHeight: 1.1
-    fontFeature: "'tnum'"
+    fontFeature: "'tnum', 'lnum'"
   amount-total:
-    fontFamily: "ui-monospace, 'Cascadia Code', 'JetBrains Mono', 'Consolas', monospace"
+    fontFamily: "'Dubai', 'Segoe UI', Tahoma, Arial, system-ui, sans-serif"
     fontSize: "1.875rem"
     fontWeight: 700
     lineHeight: 1.1
-    fontFeature: "'tnum'"
+    fontFeature: "'tnum', 'lnum'"
   screen-title:
     fontFamily: "'Dubai', 'Segoe UI', Tahoma, Arial, system-ui, sans-serif"
     fontSize: "1.25rem"
@@ -72,11 +72,11 @@ typography:
     fontWeight: 600
     lineHeight: 1.6
   money-row:
-    fontFamily: "ui-monospace, 'Cascadia Code', 'JetBrains Mono', 'Consolas', monospace"
+    fontFamily: "'Dubai', 'Segoe UI', Tahoma, Arial, system-ui, sans-serif"
     fontSize: "0.875rem"
     fontWeight: 600
     lineHeight: 1.4
-    fontFeature: "'tnum'"
+    fontFeature: "'tnum', 'lnum'"
   meta:
     fontFamily: "'Dubai', 'Segoe UI', Tahoma, Arial, system-ui, sans-serif"
     fontSize: "0.75rem"
@@ -262,7 +262,7 @@ lands.
 | Neutrals | The cool near-white values in the frontmatter | Low-chroma **mineral neutrals** ("Mineral Daylight") with a slight blue-green relation to Tower Teal. Exact values are not decided | UX-02 | A later token slice. It must pass UX-02's "Color Under Pressure" gate |
 | Accent | No accent role | No secondary brand accent | UX-02 | No change |
 | Theme | Light; the dark register is kept in CSS but not offered | Light-first; dark deferred; future themes remap semantic roles only | UX-02 | No change |
-| Money typeface | Monospace with tabular figures (`amount-hero`, `amount-total`, `money-row`) | The UI sans with **tabular lining numerals**; monospace only for IDs, codes and evidence | UX-03. Owner decision 2026-10-07: UX-03 wins over the Rebaseline's "superseded" wording | Mono money stays until the **RT-262** rendered same-screen A/B prototype proves the sans treatment better |
+| Money typeface | The UI sans (Dubai) with **tabular lining numerals** through `--font-family-money` (`amount-hero`, `amount-total`, `money-row`); monospace only for IDs, codes and evidence | The UI sans with **tabular lining numerals**; monospace only for IDs, codes and evidence | UX-03. Owner decision 2026-10-22 on RT-262: variant B | Done in the renderer by **RT-814**. Not covered: the printed receipt and the receipt-slip preview (RT-476); the `v5-void-num` and `v5-recovery-num` classes still mix IDs with amounts and stay mono until their markup is split |
 | UI font | Dubai | Dubai stays the incumbent. IBM Plex Sans Arabic is the challenger; Noto Sans Arabic UI is the readability control | UX-03 | Only after a same-screen A/B (RT-262) shows a clear gain |
 | Type role names | `--type-*` aliases (RT-241), values unchanged | UX-03's role vocabulary (`money-hero`, `money-total`, `numeric-row`, `machine`, …) | UX-03 | Mapping in [Typography](#typography). Renaming waits for a later slice |
 | Icons | The semantic registry with vendored Fluent Regular glyphs is shipped (`src/renderer/icons/`, IC-1 / RT-692, no npm dependency), and every POS consumer uses it (IC-2 / RT-695, #760; `V5Icon` deleted) | Every consumer on the registry: **Fluent System Icons** by semantic name (`icon.sale`, `icon.cart`, …) | UX-03; RT-263 plan [25](design/vnext/25-rt263-icon-registry-fluent-poc.md) | Done for POS. Visual fit owner-approved 2026-10-20 (D-263-1, D-263-5, D-263-8) |
@@ -285,8 +285,8 @@ follows for now. It is marked **Selected — recommended option, owner may revis
   two shipped profiles under their current names and does not assign them UX-04 mode names. The
   slice that implements UX-04 density decides the mapping.
 - **Q-2 Brand name and the sidecar.** RT-261 renames the primary to «Tower Teal» but does not scope
-  `.impeccable/design.json`, which still names it "Pharmacy Teal" and still describes money as
-  "mono tabular". **Selected — recommended option, owner may revisit:** rename in this file only,
+  `.impeccable/design.json`, which still names it "Pharmacy Teal" (RT-814 corrected its money
+  wording to the UI sans with tabular lining numerals). **Selected — recommended option, owner may revisit:** rename in this file only,
   and leave the sidecar unchanged. Regenerate the sidecar in a later docs pass, with the same
   "shipped vs target" split as this file.
 - **Q-3 Freeze package wording.** 15 §4 still lists `--type-money-row 14 mono tnum` as the target
@@ -397,11 +397,11 @@ Light is the only offered theme (UX-02: light-first; dark deferred). The dark re
 **Body Font:** Dubai (with Segoe UI, Tahoma, Arial, system-ui)
 **Mono Font:** ui-monospace (with Cascadia Code, JetBrains Mono, Consolas)
 
-**Character:** one quiet Arabic-first system face for every word (Dubai ships with Windows 10/11), and, as shipped today, a monospace with tabular figures for every amount, quantity and code, so digits align in dense cart rows and totals never jitter. No font is bundled (OD-2: Dubai is kept for the pilot; the bundled-font option is declined), so the `no-brand-font` guard stays green.
+**Character:** one quiet Arabic-first system face for every word (Dubai ships with Windows 10/11), and the same face with tabular lining numerals for every amount and quantity (`--font-family-money`, RT-814), so digits align in dense cart rows and totals never jitter. No font is bundled (OD-2: Dubai is kept for the pilot; the bundled-font option is declined), so the `no-brand-font` guard stays green.
 
 **Type jurisdiction (UX-03).** The UI sans owns language. Tabular numerals own prices, quantities and comparable values. Monospace owns machine-readable IDs, codes and evidence (SKU, barcodes, sale and receipt references, terminal and request IDs). Monospace is never used on ordinary UI to look technical.
 
-- **Money typeface — shipped vs target.** Shipped: amounts use the monospace stack with tabular figures. Target *(UX-03)*: amounts use the UI sans with **tabular lining numerals**, and monospace is kept for IDs and evidence. The owner decided on 2026-10-07 that UX-03 wins over the Rebaseline's "superseded" wording: the shipped mono money stays until the RT-262 rendered same-screen A/B prototype proves the sans treatment better. Do not move money off mono outside that path.
+- **Money typeface — shipped.** Amounts and quantities use the UI sans (Dubai) with **tabular lining numerals** through `--font-family-money` (an alias of the sans token). Monospace is kept for IDs, SKUs, codes, PIN and reference fields, key hints and evidence. The owner decided on 2026-10-22 (RT-262, variant B) after the rendered same-screen A/B; RT-814 applied it. Dubai digits are already fixed-width and lining, so no font file or feature is added. The printed receipt and the receipt-slip preview keep their own typography (RT-476).
 - **Font — incumbent and challenger.** Dubai stays the incumbent and a legitimate long-term choice. IBM Plex Sans Arabic is the challenger, and Noto Sans Arabic UI is the readability control. A font change needs a rendered same-screen A/B on Retail Tower screens (RT-262) that clearly beats Dubai on readability, mixed-script behaviour, density and character *(UX-03)*.
 - **Hierarchy before size.** Show importance with placement, spacing, weight, alignment and colour before raising the size. Money stays the strongest numeric hierarchy on cashier surfaces.
 
@@ -423,13 +423,13 @@ The frontmatter roles map onto the shipped size scale. RT-241 shipped them as `-
 
 UX-03's `display` role is for rare expressive Admin use and has no POS equivalent.
 
-- **Amount hero** (700, 44px, 1.1, tabular; mono as shipped): the Checkout amount due and the completion amount. 36px at 1024.
-- **Amount total** (700, 30px, 1.1, tabular; mono as shipped): the Sale grand total and ledger totals. 24px at 1024 compact.
+- **Amount hero** (700, 44px, 1.1, tabular lining; UI sans): the Checkout amount due and the completion amount. 36px at 1024.
+- **Amount total** (700, 30px, 1.1, tabular lining; UI sans): the Sale grand total and ledger totals. 24px at 1024 compact.
 - **Screen title** (700, 20px, 1.3): one per screen, in the titlebar.
 - **Section** (700, 16px, 1.4): panel headings.
 - **Control large** (700, 16px, 1.3): the primary commit button and tender tile labels.
 - **Body / body strong** (400 / 600, 14px, 1.6): default cashier text; product names and button text are strong.
-- **Money row** (600, 14px, 1.4, tabular; mono as shipped): line prices and ledger rows.
+- **Money row** (600, 14px, 1.4, tabular lining; UI sans): line prices and ledger rows.
 - **Meta** (400–600, 12px, 1.5): hints, secondary names, timestamps.
 - **Kbd** (600, 11px, mono): keyboard-hint chips only — the one place below 12px is allowed.
 
@@ -593,7 +593,7 @@ All three use `ease-out` `cubic-bezier(0.2, 0.7, 0.25, 1)`. New state transition
 ## Do's and Don'ts
 
 ### Do:
-- **Do** keep the total (Sale) and amount due (Checkout) as the largest numerals, with tabular figures (monospace as shipped until RT-262 decides), visible without scrolling at 1024×768 and 1280×800.
+- **Do** keep the total (Sale) and amount due (Checkout) as the largest numerals, with tabular lining figures in the UI sans, visible without scrolling at 1024×768 and 1280×800.
 - **Do** use exactly one filled-teal primary per region and reserve the large commit (56px, full width) for the one next action.
 - **Do** isolate every money value, quantity and code as an LTR run with Western digits and tabular figures, and format human money through the UX-12 formatter (`1,250.00 EGP`).
 - **Do** keep the money column in the same place from Sale through Checkout to completion (Direction B).

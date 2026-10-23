@@ -89,8 +89,8 @@
 
 .v5-proof-line__value {
   flex: none;
-  font-family: var(--font-family-mono);
-  font-variant-numeric: tabular-nums;
+  font-family: var(--font-family-money);
+  font-variant-numeric: tabular-nums lining-nums;
   font-weight: var(--font-weight-bold);
 }
 

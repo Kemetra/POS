@@ -276,7 +276,7 @@
       },
       "money-row": {
         "displayName": "Money row",
-        "purpose": "Line prices and ledger rows, mono tabular."
+        "purpose": "Line prices and ledger rows, UI sans (Dubai) with tabular lining numerals."
       },
       "meta": {
         "displayName": "Meta",
@@ -403,9 +403,9 @@
       "name": "Sale Total",
       "kind": "custom",
       "refersTo": null,
-      "description": "Sale grand total at the top of the money column (amount-total): 30px, 24px when the v5-screen workspace is compact (≤ 1120px). LTR-isolated Western digits, tabular mono.",
+      "description": "Sale grand total at the top of the money column (amount-total): 30px, 24px when the v5-screen workspace is compact (≤ 1120px). LTR-isolated Western digits, tabular lining numerals in the UI sans.",
       "html": "<div class=\"ds-total\" dir=\"rtl\"><span class=\"ds-total-label\">الإجمالي</span><bdi class=\"ds-total-amount\" dir=\"ltr\">1,250.00 EGP</bdi></div>",
-      "css": ".ds-total { display: grid; gap: 4px; padding: 16px; border-radius: 14px; border: 1px solid var(--color-border, #d8dfe7); background-color: var(--color-surface, #ffffff); font-family: 'Dubai', 'Segoe UI', Tahoma, Arial, system-ui, sans-serif; } .ds-total-label { font-size: 0.875rem; font-weight: 600; color: var(--color-text-muted, #53647a); } .ds-total-amount { font-family: ui-monospace, 'Cascadia Code', 'JetBrains Mono', 'Consolas', monospace; font-size: 1.875rem; font-weight: 700; line-height: 1.1; font-variant-numeric: tabular-nums; color: var(--color-text, #0f1d2e); unicode-bidi: isolate; } @container v5-screen (max-width: 1120px) { .ds-total-amount { font-size: 1.5rem; } }"
+      "css": ".ds-total { display: grid; gap: 4px; padding: 16px; border-radius: 14px; border: 1px solid var(--color-border, #d8dfe7); background-color: var(--color-surface, #ffffff); font-family: 'Dubai', 'Segoe UI', Tahoma, Arial, system-ui, sans-serif; } .ds-total-label { font-size: 0.875rem; font-weight: 600; color: var(--color-text-muted, #53647a); } .ds-total-amount { font-family: 'Dubai', 'Segoe UI', Tahoma, Arial, system-ui, sans-serif; font-size: 1.875rem; font-weight: 700; line-height: 1.1; font-variant-numeric: tabular-nums lining-nums; color: var(--color-text, #0f1d2e); unicode-bidi: isolate; } @container v5-screen (max-width: 1120px) { .ds-total-amount { font-size: 1.5rem; } }"
     },
     {
       "name": "Checkout Amount Due",
@@ -413,7 +413,7 @@
       "refersTo": null,
       "description": "Checkout amount due in the same place as the Sale total (amount-hero): 44px, 36px when the v5-screen workspace is compact (≤ 1120px). The largest numeral on screen; never scrolled out of view.",
       "html": "<div class=\"ds-due\" dir=\"rtl\"><span class=\"ds-due-label\">المبلغ المستحق</span><bdi class=\"ds-due-amount\" dir=\"ltr\">1,250.00 EGP</bdi></div>",
-      "css": ".ds-due { display: grid; gap: 4px; padding: 16px; border-radius: 14px; border: 1px solid var(--color-border, #d8dfe7); background-color: var(--color-surface, #ffffff); font-family: 'Dubai', 'Segoe UI', Tahoma, Arial, system-ui, sans-serif; } .ds-due-label { font-size: 0.875rem; font-weight: 600; color: var(--color-text-muted, #53647a); } .ds-due-amount { font-family: ui-monospace, 'Cascadia Code', 'JetBrains Mono', 'Consolas', monospace; font-size: 2.75rem; font-weight: 700; line-height: 1.1; font-variant-numeric: tabular-nums; color: var(--color-text, #0f1d2e); unicode-bidi: isolate; } @container v5-screen (max-width: 1120px) { .ds-due-amount { font-size: 2.25rem; } }"
+      "css": ".ds-due { display: grid; gap: 4px; padding: 16px; border-radius: 14px; border: 1px solid var(--color-border, #d8dfe7); background-color: var(--color-surface, #ffffff); font-family: 'Dubai', 'Segoe UI', Tahoma, Arial, system-ui, sans-serif; } .ds-due-label { font-size: 0.875rem; font-weight: 600; color: var(--color-text-muted, #53647a); } .ds-due-amount { font-family: 'Dubai', 'Segoe UI', Tahoma, Arial, system-ui, sans-serif; font-size: 2.75rem; font-weight: 700; line-height: 1.1; font-variant-numeric: tabular-nums lining-nums; color: var(--color-text, #0f1d2e); unicode-bidi: isolate; } @container v5-screen (max-width: 1120px) { .ds-due-amount { font-size: 2.25rem; } }"
     }
   ],
   "narrative": {
@@ -486,7 +486,7 @@
       }
     ],
     "dos": [
-      "Do keep the total (Sale) and amount due (Checkout) as the largest numerals, in tabular mono, visible without scrolling at 1024×768 and 1280×800.",
+      "Do keep the total (Sale) and amount due (Checkout) as the largest numerals, in the UI sans with tabular lining numerals, visible without scrolling at 1024×768 and 1280×800.",
       "Do use exactly one filled-teal primary per region and reserve the large commit (56px, full width) for the one next action.",
       "Do isolate every money value, quantity and code as an LTR run with Western digits and tabular figures.",
       "Do keep the money column in the same place from Sale through Checkout to completion (Direction B).",

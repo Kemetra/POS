@@ -203,8 +203,8 @@
 .v5-order-summary__amount {
   grid-area: amount;
   align-self: center;
-  font-family: var(--font-family-mono);
-  font-variant-numeric: tabular-nums;
+  font-family: var(--font-family-money);
+  font-variant-numeric: tabular-nums lining-nums;
   font-weight: var(--font-weight-semibold);
   white-space: nowrap;
 }
@@ -345,9 +345,9 @@
   border-radius: var(--radius-control);
   background: var(--color-surface);
   color: var(--color-text);
-  font-family: var(--font-family-mono);
+  font-family: var(--font-family-money);
   font-size: var(--font-size-3xl);
-  font-variant-numeric: tabular-nums;
+  font-variant-numeric: tabular-nums lining-nums;
   font-weight: var(--font-weight-bold);
   text-align: end;
 }
@@ -381,9 +381,9 @@
   flex: 1 0 auto;
   min-inline-size: 96px;
   padding-inline: var(--space-2);
-  font-family: var(--font-family-mono);
+  font-family: var(--font-family-money);
   font-size: var(--font-size-sm);
-  font-variant-numeric: tabular-nums;
+  font-variant-numeric: tabular-nums lining-nums;
   white-space: nowrap;
 }
 
@@ -415,9 +415,9 @@
 
 .v5-cash-keypad__key {
   min-block-size: 52px;
-  font-family: var(--font-family-mono);
+  font-family: var(--font-family-money);
   font-size: var(--font-size-xl);
-  font-variant-numeric: tabular-nums;
+  font-variant-numeric: tabular-nums lining-nums;
 }
 
 .v5-cash-keypad__key--delete {
@@ -457,9 +457,9 @@
 }
 
 .v5-card__amount-value {
-  font-family: var(--font-family-mono);
+  font-family: var(--font-family-money);
   font-size: var(--font-size-2xl);
-  font-variant-numeric: tabular-nums;
+  font-variant-numeric: tabular-nums lining-nums;
   font-weight: var(--font-weight-bold);
   white-space: nowrap;
 }
@@ -615,11 +615,11 @@
 .v5-ledger__due-value {
   align-self: flex-end;
   color: var(--color-text);
-  font-family: var(--font-family-mono);
+  font-family: var(--font-family-money);
   /* The hero token, but never wider than the column: a 99,999.99 EGP due still
      fits 296px on one line, 123,456.78 too (container units, no React measuring). */
   font-size: min(var(--type-amount-hero, var(--font-size-4xl)), 12.5cqi);
-  font-variant-numeric: tabular-nums;
+  font-variant-numeric: tabular-nums lining-nums;
   font-weight: var(--font-weight-bold);
   letter-spacing: -0.01em;
   line-height: var(--line-height-tight);
@@ -677,9 +677,9 @@
 }
 
 .v5-ledger-row__amount {
-  font-family: var(--font-family-mono);
+  font-family: var(--font-family-money);
   font-size: var(--font-size-lg);
-  font-variant-numeric: tabular-nums;
+  font-variant-numeric: tabular-nums lining-nums;
   font-weight: var(--font-weight-bold);
   white-space: nowrap;
 }
