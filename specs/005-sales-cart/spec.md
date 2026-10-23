@@ -236,7 +236,10 @@ When the cashier is ready to take payment, the cart emits a **`payment-intent en
     - a reason code from a closed list of four is required on both paths;
     - a quantity change on a discounted line is refused;
     - a zero cart total completes with no tender (OZ-1 = Z-A, owner decision 2026-10-24, doc 28 §11.3).
-  - Once that math exists (slice RT-854), the FR-023 approval binding carries the computed discount amount in place of `amount_minor = null`. The authority rule of FR-023 is unchanged.
+  - Once that math exists (slice RT-854), the FR-023 approval binding changes in two ways:
+    - It carries the computed discount amount in place of `amount_minor = null`.
+    - It carries the `reason_code` from the closed list. This is the `reason_code` field already on the approval request, and main validates it for `cart.discount.manual`.
+  - The cashier's add still carries only the `approval_id`. The authority rule of FR-023 is unchanged.
 
 #### FR-Attribution (cart-mutating actions carry session id; sensitive actions emit audit-event placeholders)
 

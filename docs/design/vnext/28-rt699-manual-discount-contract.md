@@ -172,8 +172,11 @@ then, customer-facing fiscal use stays blocked, as it is today.
    presentation only. Main recomputes the amount.
 3. The cashier taps **request approval**. The renderer calls `approval.request` with kind
    `cart.discount.manual` and `subject_ref = discountApprovalSubjectRef({cart_id, line_id,
-   placeholder_kind: token})`. The manager picks their name and enters their **Manager Approval
-   PIN**. The PIN goes only through the approval bridge. The dialog follows the shipped
+   placeholder_kind: token})` and the chosen `reason_code` (the existing
+   `ManagerApprovalRequest.reason_code` field, `src/shared/operator/manager-approval.ts`). For
+   `cart.discount.manual`, main refuses a reason outside the closed list (§11.2). The approval
+   record keeps the reason, so the approval binds it. The manager picks their name and enters
+   their **Manager Approval PIN**. The PIN goes only through the approval bridge. The dialog follows the shipped
    `ManagerApprovalDialog` pattern.
 4. Main verifies the PIN and issues a single-use `approval_id` bound to the subject, including
    `amountMinor`. The approver is never the requester (C6). It works offline inside the RT-114 C4
@@ -309,7 +312,7 @@ Audit:
 **Pure math (`shared`, ≥ 95% coverage):**
 
 - percent half-up at the boundary: gross 45, 10% → 5 (4.5 rounds up); gross 44, 10% → 4;
-- 1% of 1 → 0 (a zero discount is refused or allowed per OD-28-4; test whichever is decided);
+- 1% of 1 → `amount = 0`, allowed (OD-28-4 = C, §11.1);
 - 100% → net 0;
 - amount = gross → net 0; amount > gross refused;
 - overflow near `MAX_SAFE_INTEGER` refused;
@@ -338,8 +341,8 @@ Audit:
 - an idempotent retry with the same key and a different `reason_code` is refused
   `idempotency_payload_mismatch`;
 - `approver_role` is frozen correctly on both paths, after a restart between add and finalize;
-- a discount that would make the cart total 0 is refused (or completes through the zero-tender
-  path, per OD-28-4);
+- a discount that makes the cart total 0 completes with no tender, and its capture carries one
+  `cash` 0 tender (OZ-1 = Z-A, §11.3);
 - after I4, a return lookup on a discounted sale matches and quotes the net;
 
 **Renderer:**
