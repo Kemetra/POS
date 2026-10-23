@@ -1,0 +1,94 @@
+/*
+ * RT-859 — G-6 Diagnostics addendum: the catalogue check lists the matched items (visual DRAFT,
+ * pending owner approval). The frozen, owner-approved G-6 sheet is imported unchanged: frame, nav,
+ * panel, input, facts and the 2x2 diagnostics grid are the shared G-6 controls. This file adds
+ * only what the result list needs: the search panel growing into the free height, the scrolling
+ * result rows, the row anatomy and the money family for the price (RT-814).
+ */
+@import url('../G6-Manager/g6.css');
+
+/* Money family (RT-814, UX-03 variant B): the UI sans with tabular lining numerals, never mono. */
+:root {
+  --font-money: var(--font);
+}
+
+/* The second grid row takes the free height, so the search panel can hold a list. */
+.grid-2.listing {
+  grid-template-rows: auto minmax(0, 1fr);
+  align-content: stretch;
+}
+/* The counts panel keeps its own height; the search panel stretches to the bottom. */
+.grid-2.listing > .panel {
+  align-self: start;
+}
+.grid-2.listing > .panel.search {
+  align-self: stretch;
+  min-block-size: 0;
+}
+.panel.search .panel-body {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-block-size: 0;
+}
+.panel.search .field,
+.panel.search [role='status'],
+.panel.search .limited {
+  flex: none;
+}
+
+/* The result rows: a read-only list, so a row has no action and no selection. */
+.rows.hits {
+  margin-inline: -16px;
+  border-block-start: 1px solid var(--border-soft);
+  /* The sale result list's scrollbar (live-sale.css), so a longer list reads as scrollable. */
+  scrollbar-color: var(--border-strong) transparent;
+  scrollbar-width: thin;
+}
+.rows.hits:focus-visible {
+  outline: 3px solid var(--primary);
+  outline-offset: -3px;
+}
+.row.hit {
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 4px 16px;
+  min-block-size: 0;
+  padding: 8px 16px;
+}
+.hit-copy {
+  display: grid;
+  gap: 2px;
+  min-inline-size: 0;
+}
+.hit .meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+.hit .code {
+  font-family: var(--mono);
+  font-size: 13px;
+}
+.money {
+  direction: ltr;
+  unicode-bidi: isolate;
+  font-family: var(--font-money);
+  font-variant-numeric: tabular-nums lining-nums;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.limited {
+  color: var(--text-muted);
+}
+
+@media (forced-colors: active) {
+  .rows.hits,
+  .row.hit {
+    border-color: CanvasText;
+  }
+  .rows.hits:focus-visible {
+    outline-color: Highlight;
+  }
+}
