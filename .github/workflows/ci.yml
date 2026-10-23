@@ -426,6 +426,17 @@ jobs:
       - name: Package (Windows --dir, unsigned)
         run: npm run package:dir
 
+      # RT-830 (RT-748 I-7): the packaged exe's fuse wire must equal electronFuses in
+      # electron-builder.yml (undeclared fuses keep the stock Electron value). Blocking.
+      - name: Fuse readback (packaged exe vs electron-builder.yml)
+        run: npx tsx scripts/verify-packaged.ts fuses
+
+      # RT-830 decision NV-6a: the hardened exe has runAsNode off, so the stock Electron from
+      # node_modules (verified identical to the packaged runtime) loads better-sqlite3 and argon2
+      # out of the packaged app.asar in node mode. No smoke switch ships in the app. Blocking.
+      - name: Native-load smoke (packaged better-sqlite3 + argon2)
+        run: npx tsx scripts/verify-packaged.ts native
+
       # The unpacked build is a manual-smoke convenience artifact, not a gate.
       # A transient artifact-storage quota wall (recalculated every 6-12h) must
       # NOT fail the required `ci` job — the code gates already passed.
