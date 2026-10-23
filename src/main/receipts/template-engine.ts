@@ -35,13 +35,13 @@ import { format as formatMoney, of as moneyOf } from '../../shared/money.js';
 import { BusinessDayError, businessDateTimeOf } from '../../shared/time/business-day.js';
 import type { ReceiptPayload, ReceiptLineItem } from '../../shared/receipts/types.js';
 import type { TenderLineSummary, SalesTenderType } from '../../shared/sales/types.js';
+import { COLS, receiptLines } from './receipt-text.js';
 
 export interface ReceiptRenderOutput {
   escpos: Uint8Array;
   html: string;
 }
 
-const COLS = 42;
 const DEFAULT_RECEIPT_WEBSITE = 'www.example.test';
 
 function receiptWebsite(): string {
@@ -104,31 +104,14 @@ export function storeStamp(iso: string): string {
   }
 }
 
-/** Word-wrap to 42 columns with a 4-column hanging indent on continuations. */
-export function wrap(text: string, indent = 4): string[] {
-  if (text.length <= COLS) return [text];
-  const pad = ' '.repeat(indent);
-  const lines: string[] = [];
-  const indentFor = (): string => (lines.length === 0 ? '' : pad);
-  let current = '';
-  for (const word of text.split(' ')) {
-    const candidate = current === '' ? word : `${current} ${word}`;
-    if ((indentFor() + candidate).length > COLS && current !== '') {
-      lines.push(indentFor() + current);
-      current = word;
-    } else {
-      current = candidate;
-    }
-  }
-  if (current !== '') lines.push(indentFor() + current);
-  return lines;
-}
-
 const TENDER_LABELS: Record<SalesTenderType, string> = {
   cash: 'نقدًا — Cash',
   external_card_terminal: 'بطاقة — Card',
   internal_voucher: 'قسيمة — Voucher',
 };
+
+/** Adds a band (or, for a dynamic value, one per wrapped line). */
+type TextSink = (t: string, align: BandAlign, emphasis?: boolean) => void;
 
 // ── compose: the SINGLE source of layout truth ───────────────────────────────
 
@@ -137,31 +120,26 @@ function compose(payload: ReceiptPayload): Band[] {
   const rule = (char: RuleBand['char']): void => {
     bands.push({ kind: 'rule', char });
   };
-  const text = (t: string, align: BandAlign, emphasis = false): void => {
+  const text: TextSink = (t, align, emphasis = false) => {
     bands.push({ kind: 'text', text: t, align, emphasis });
   };
+  // A dynamic value (RT-204): wrapped to the roll, one band per printed line.
+  const value = (t: string, align: BandAlign, emphasis = false): void => {
+    for (const line of receiptLines(t)) text(line, align, emphasis);
+  };
 
-  // Duplicate-copy marker band — topmost, reprint_duplicate only (§(b)).
-  if (payload.variant === 'reprint_duplicate') {
-    rule('#');
-    text('نسخة طبق الأصل', 'rtl', true);
-    text('DUPLICATE COPY', 'center', true);
-    if (payload.duplicate_copy_sequence_number !== undefined) {
-      text(`Duplicate # ${String(payload.duplicate_copy_sequence_number)}`, 'center', true);
-    }
-    rule('#');
-  }
+  composeDuplicateMarker(payload, rule, text);
 
   // Header band.
   rule('=');
-  text(payload.branch_name, 'rtl');
-  text(payload.branch_address, 'rtl');
-  text(`Tax ID: ${payload.tenant_tax_registration_id}`, 'ltr');
+  value(payload.branch_name, 'rtl');
+  value(payload.branch_address, 'rtl');
+  value(`Tax ID: ${payload.tenant_tax_registration_id}`, 'ltr');
   rule('-');
-  text(`Sale # ${payload.sale_number}`, 'ltr', true);
-  text(`Receipt # ${payload.receipt_number}`, 'ltr');
-  text(`Terminal: ${payload.terminal_label}`, 'ltr');
-  text(`Cashier: ${payload.selling_operator_display_name}`, 'rtl');
+  value(`Sale # ${payload.sale_number}`, 'ltr', true);
+  value(`Receipt # ${payload.receipt_number}`, 'ltr');
+  value(`Terminal: ${payload.terminal_label}`, 'ltr');
+  value(`Cashier: ${payload.selling_operator_display_name}`, 'rtl');
   // v1: no shift line (slice2-mapping-pass.md Gap 3).
   text(storeStamp(payload.settled_at), 'ltr');
   if (payload.variant === 'reprint_duplicate' && payload.reprinted_at !== undefined) {
@@ -173,7 +151,7 @@ function compose(payload: ReceiptPayload): Band[] {
   text('العناصر', 'rtl');
   rule('-');
   for (const line of payload.lines) {
-    composeItem(line, text);
+    composeItem(line, value, text);
   }
   rule('-');
   text(`Subtotal: ${egp(payload.subtotal_minor)}`, 'ltr');
@@ -183,14 +161,14 @@ function compose(payload: ReceiptPayload): Band[] {
   text('طريقة الدفع', 'rtl');
   rule('-');
   for (const t of payload.tender_lines_summary) {
-    composeTender(t, text);
+    composeTender(t, text, value);
   }
 
   // VAT footer band.
   rule('=');
   text('ضريبة القيمة المضافة', 'rtl');
   rule('-');
-  text(`Tax ID: ${payload.tenant_tax_registration_id}`, 'ltr');
+  value(`Tax ID: ${payload.tenant_tax_registration_id}`, 'ltr');
   // v1: suppress the "14%" rate label when tax is 0 (fiscal honesty).
   const vatLabel = payload.total_tax_minor === 0 ? 'VAT:' : 'VAT (14%):';
   text(`${vatLabel} ${egp(payload.total_tax_minor)}`, 'ltr');
@@ -200,27 +178,35 @@ function compose(payload: ReceiptPayload): Band[] {
   // Closing band.
   rule('=');
   text('شكرًا لتعاملكم معنا — Thank you', 'center');
-  text(receiptWebsite(), 'center');
+  value(receiptWebsite(), 'center');
   rule('=');
 
   return bands;
 }
 
-function composeItem(
-  line: ReceiptLineItem,
-  text: (t: string, align: BandAlign, emphasis?: boolean) => void,
+/** Duplicate-copy marker band — topmost, reprint_duplicate only (§(b)). */
+function composeDuplicateMarker(
+  payload: ReceiptPayload,
+  rule: (char: RuleBand['char']) => void,
+  text: TextSink,
 ): void {
-  // v1 single-name composition: "{qty}× {name}" then the line subtotal.
-  for (const wrapped of wrap(`${String(line.quantity)}× ${line.display_name}`)) {
-    text(wrapped, 'rtl');
+  if (payload.variant !== 'reprint_duplicate') return;
+  rule('#');
+  text('نسخة طبق الأصل', 'rtl', true);
+  text('DUPLICATE COPY', 'center', true);
+  if (payload.duplicate_copy_sequence_number !== undefined) {
+    text(`Duplicate # ${String(payload.duplicate_copy_sequence_number)}`, 'center', true);
   }
+  rule('#');
+}
+
+function composeItem(line: ReceiptLineItem, value: TextSink, text: TextSink): void {
+  // v1 single-name composition: "{qty}× {name}" then the line subtotal.
+  value(`${String(line.quantity)}× ${line.display_name}`, 'rtl');
   text(egp(line.line_subtotal_minor), 'ltr');
 }
 
-function composeTender(
-  t: TenderLineSummary,
-  text: (str: string, align: BandAlign, emphasis?: boolean) => void,
-): void {
+function composeTender(t: TenderLineSummary, text: TextSink, value: TextSink): void {
   text(`${TENDER_LABELS[t.tender_type]}   ${egp(t.amount_applied_minor)}`, 'ltr');
   if (t.tender_type === 'cash' && t.change_due_minor !== undefined) {
     text(`Change due — الباقي   ${egp(t.change_due_minor)}`, 'ltr');
@@ -230,10 +216,10 @@ function composeTender(
   // allowed on the slip — the card external_reference (already ≤6-char
   // non-PAN, redacted upstream) and the voucher authority redemption id.
   if (t.external_reference !== undefined) {
-    text(`Ref: ${t.external_reference}`, 'ltr');
+    value(`Ref: ${t.external_reference}`, 'ltr');
   }
   if (t.voucher_authority_redemption_id !== undefined) {
-    text(`Voucher ref: ${t.voucher_authority_redemption_id}`, 'ltr');
+    value(`Voucher ref: ${t.voucher_authority_redemption_id}`, 'ltr');
   }
 }
 
