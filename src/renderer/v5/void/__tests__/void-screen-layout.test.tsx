@@ -37,7 +37,12 @@ async function find(): Promise<void> {
   await screen.findByTestId('void-sale');
 }
 
-const MONO = 'v5-void-num';
+const MONO = 'v5-void-id';
+const MONEY = 'v5-void-money';
+
+function texts(root: Element | null | undefined, cls: string): (string | null)[] {
+  return Array.from(root?.querySelectorAll(`.${cls}`) ?? []).map((n) => n.textContent);
+}
 
 describe('the G-6 page (RT-654)', () => {
   it('is a ScreenSection named by its one h1, with no shift strip', async () => {
@@ -78,10 +83,12 @@ describe('the found sale (RT-654)', () => {
     show();
     await find();
     const card = screen.getByTestId('void-sale');
-    const mono = Array.from(card.querySelectorAll(`.${MONO}`)).map((n) => n.textContent);
-    expect(mono).toEqual([SALE_NUMBER, '150.00 EGP', '150.00 EGP']);
-    for (const n of Array.from(card.querySelectorAll(`.${MONO}`)))
+    expect(texts(card, MONO)).toEqual([SALE_NUMBER]);
+    expect(texts(card, MONEY)).toEqual(['150.00 EGP', '150.00 EGP']);
+    for (const n of Array.from(card.querySelectorAll(`.${MONO}, .${MONEY}`)))
       expect(n).toHaveAttribute('dir', 'ltr');
+    // RT-833: no run is both an ID and an amount.
+    expect(card.querySelectorAll(`.${MONO}.${MONEY}`)).toHaveLength(0);
     const time = card.querySelector('time');
     expect(time).toHaveAttribute('datetime', '2026-06-07T10:00:00.000Z');
     expect(time).not.toHaveClass(MONO);
@@ -160,10 +167,8 @@ describe('the void journal (RT-654)', () => {
     ]);
     expect(pills.map((p) => p?.querySelector('svg') !== null)).toEqual([true, true, true, true]);
     const first = rows[0] as HTMLElement;
-    expect(Array.from(first.querySelectorAll(`.${MONO}`)).map((n) => n.textContent)).toEqual([
-      SALE_NUMBER,
-      '150.00 EGP',
-    ]);
+    expect(texts(first, MONO)).toEqual([SALE_NUMBER]);
+    expect(texts(first, MONEY)).toEqual(['150.00 EGP']);
     expect(first.querySelector('time')).not.toHaveClass(MONO);
   });
 
@@ -212,9 +217,8 @@ describe('the confirm dialog (RT-654)', () => {
     show();
     const dialog = await openDialog();
     const summary = dialog.querySelector('.v5-void-summary');
-    expect(
-      Array.from(summary?.querySelectorAll(`.${MONO}`) ?? []).map((n) => n.textContent),
-    ).toEqual([SALE_NUMBER, '150.00 EGP']);
+    expect(texts(summary, MONO)).toEqual([SALE_NUMBER]);
+    expect(texts(summary, MONEY)).toEqual(['150.00 EGP']);
     expect(summary?.textContent).not.toContain('—');
   });
 

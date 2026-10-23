@@ -123,12 +123,12 @@
   color: var(--color-text-muted);
 }
 
-/* An amount or a count: Western digits, LTR, tabular (DESIGN.md OD-3). */
-.v5-recovery-num {
+/* An amount or a count: Western digits, LTR, the money family, tabular (DESIGN.md OD-3, RT-833). */
+.v5-recovery-money {
   direction: ltr;
   unicode-bidi: isolate;
-  font-family: var(--font-family-mono);
-  font-variant-numeric: tabular-nums;
+  font-family: var(--font-family-money);
+  font-variant-numeric: tabular-nums lining-nums;
   white-space: nowrap;
 }
 
@@ -270,7 +270,7 @@
   font-size: 13px;
 }
 
-.v5-recovery-row__sum > .v5-recovery-num {
+.v5-recovery-row__sum > .v5-recovery-money {
   color: var(--color-text);
   font-size: 15px;
   font-weight: var(--font-weight-semibold);

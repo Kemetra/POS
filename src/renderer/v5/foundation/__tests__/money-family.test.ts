@@ -81,14 +81,16 @@ const MONEY_SELECTORS: ReadonlyArray<[string, string]> = [
   ['v5/shift/shift.css', '.v5-shift-amount'],
   ['v5/shift/shift.css', '.v5-shift-counts dd'],
   ['v5/manager/manager.css', '.v5-manager-num'],
+  ['v5/void/void.css', '.v5-void-money'],
+  ['v5/recovery/recovery.css', '.v5-recovery-money'],
   ['styles/tailwind.css', '.amount-due-card__value'],
 ];
 
 /**
  * Every selector that may still use the mono family: IDs, SKUs, codes, PIN and
- * reference fields, kbd chips, the receipt-slip preview. `.v5-void-num` and
- * `.v5-recovery-num` stay here only because the same class wraps both sale
- * numbers and amounts; splitting them is a follow-up (RT-814 PR body).
+ * reference fields, kbd chips, the receipt-slip preview. RT-833 split the old
+ * mixed `.v5-void-num` / `.v5-recovery-num`: amounts and counts are money
+ * classes above, the sale number is `.v5-void-id` here.
  */
 const MONO_ALLOWED: ReadonlyArray<[string, string]> = [
   ['styles/tailwind.css', '.voucher-field input'],
@@ -108,7 +110,6 @@ const MONO_ALLOWED: ReadonlyArray<[string, string]> = [
   ['v5/manager/sales/sales.css', '.v5-sales-ref'],
   ['v5/manager/stuck-shifts/stuck-shifts.css', '.v5-stuck-terminal'],
   ['v5/recovery/recovery.css', '.v5-recovery-input--code'],
-  ['v5/recovery/recovery.css', '.v5-recovery-num'],
   ['v5/recovery/recovery.css', '.v5-recovery-input--pin'],
   ['v5/sale/live-sale.css', '.v5-live-scan-field input'],
   ['v5/sale/sale-screen.css', '.v5-sale-brand strong'],
@@ -119,7 +120,7 @@ const MONO_ALLOWED: ReadonlyArray<[string, string]> = [
   ['v5/shift/shift.css', '.v5-shift-pin'],
   ['v5/void/void.css', '.v5-void-input--code'],
   ['v5/void/void.css', '.v5-void-input--pin'],
-  ['v5/void/void.css', '.v5-void-num'],
+  ['v5/void/void.css', '.v5-void-id'],
 ];
 
 describe('RT-814 money family', () => {
@@ -153,5 +154,30 @@ describe('RT-814 money family', () => {
         : [],
     );
     expect(stray).toEqual([]);
+  });
+});
+
+/** RT-833 — a class that styles both an ID and an amount must not come back. */
+describe('RT-833 void and recovery num split', () => {
+  const sources = ['v5/void', 'v5/recovery'].flatMap((dir) =>
+    readdirSync(join(RENDERER_ROOT, dir))
+      .filter((name) => /\.(css|tsx)$/.test(name))
+      .map((name) => [`${dir}/${name}`, readFileSync(join(RENDERER_ROOT, dir, name), 'utf-8')]),
+  );
+
+  it.each(['v5-void-num', 'v5-recovery-num'])('the mixed class %s is retired', (cls) => {
+    const users = sources.filter(([, text]) => (text ?? '').includes(cls)).map(([f]) => f);
+    expect(users).toEqual([]);
+  });
+
+  it('the sale number is mono LTR and amounts are money family LTR', () => {
+    const id = declsFor('v5/void/void.css', '.v5-void-id');
+    const money = declsFor('v5/void/void.css', '.v5-void-money');
+    const recovery = declsFor('v5/recovery/recovery.css', '.v5-recovery-money');
+    for (const decls of [id, money, recovery]) {
+      expect(decls.get('direction')).toBe('ltr');
+      expect(decls.get('unicode-bidi')).toBe('isolate');
+    }
+    expect(id.get('font-variant-numeric')).toBe('tabular-nums');
   });
 });

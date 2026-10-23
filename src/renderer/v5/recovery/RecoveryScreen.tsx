@@ -212,7 +212,7 @@ function HeldBody(
 
 /** An amount or a count: Western digits, LTR, tabular (DESIGN.md OD-3). */
 function Num({ children }: Readonly<{ children: string | number }>): JSX.Element {
-  return <bdi className="v5-recovery-num">{children}</bdi>;
+  return <bdi className="v5-recovery-money">{children}</bdi>;
 }
 
 /** formatCheckoutMoney's output inside a sentence: «1,250.00 EGP», «−5.00 EGP». */
