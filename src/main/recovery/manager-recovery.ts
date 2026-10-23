@@ -11,7 +11,10 @@
  *     cash went back and any card payment was voided on its terminal;
  *   • a HELD cart of another session (a draft, or a handed-off cart with no
  *     open payment) — cancel it with a reason: `manager_cancelled_held` for a
- *     draft, `manager_voided_post_handoff` for a handed-off cart.
+ *     draft, `manager_voided_post_handoff` for a handed-off cart. RT-837: that
+ *     includes the manager's OWN held cart from an earlier session (owner
+ *     decision: a manager cancels their own held sale normally); it is listed
+ *     flagged `own`, with the same PIN approval and the same audit.
  *
  * Every action consumes its OWN RT-114 approval (the signed-in manager's PIN,
  * MA-2), bound to its subject, version and amount, requested on behalf of the
@@ -296,7 +299,7 @@ export function createManagerRecovery(deps: ManagerRecoveryDeps): ManagerRecover
     ).get(cart_id)?.n ?? 0;
 
   /**
-   * Held carts of OTHER sessions on this terminal: a draft, or a handed-off
+   * Held carts of OTHER sessions on this terminal (any owner): a draft, or a handed-off
    * cart whose sale is open (not settled, no open attempt, no force-failed
    * live tender). The stuck attempt's cart is listed as the stuck payment.
    */
@@ -322,11 +325,14 @@ export function createManagerRecovery(deps: ManagerRecoveryDeps): ManagerRecover
       ) as All<HeldRow>
     ).all(at.terminal_id, at.session.id, ...(cart_id === undefined ? [] : [cart_id]));
 
-  /** Another operator's held cart (never the asker's own), or null. */
-  function othersHeldCart(at: Admitted, cart_id: string): HeldRow | null {
-    const [row] = heldRows(at, cart_id);
-    if (row === undefined || row.owning_operator_id === at.session.operator_id) return null;
-    return row;
+  /**
+   * A held cart of another session, or null. RT-837 (owner decision): the
+   * manager's own held cart from an earlier session is cancellable too — a
+   * manager cancels their own held sale normally. Held carts only: a stuck
+   * payment of one's own is still not recoverable from a new session.
+   */
+  function heldCartOfOtherSession(at: Admitted, cart_id: string): HeldRow | null {
+    return heldRows(at, cart_id)[0] ?? null;
   }
 
   function stuckView(row: StuckRow): RecoveryStuckAttemptView {
@@ -348,12 +354,13 @@ export function createManagerRecovery(deps: ManagerRecoveryDeps): ManagerRecover
     };
   }
 
-  function heldView(row: HeldRow): RecoveryHeldCartView {
+  function heldView(row: HeldRow, session: OperatorSessionRecord): RecoveryHeldCartView {
     return {
       cart_id: row.cart_id,
       owning_operator_id: row.owning_operator_id,
       kind: row.state === 'frozen_handed_off' ? 'handed_off' : 'draft',
       parked: row.parked === 1,
+      own: row.owning_operator_id === session.operator_id,
       line_count: lineCount(row.cart_id),
       total_minor: row.cart_subtotal_minor,
       updated_at: row.updated_at,
@@ -406,7 +413,7 @@ export function createManagerRecovery(deps: ManagerRecoveryDeps): ManagerRecover
 
   function cartSubject(input: SubjectInput): ApprovalSubject | null {
     const at = admittedFor(input.session);
-    const row = at === null ? null : othersHeldCart(at, input.subjectRef);
+    const row = at === null ? null : heldCartOfOtherSession(at, input.subjectRef);
     if (row === null) return null;
     return {
       version: `cart:${row.last_action_id ?? row.updated_at}`,
@@ -656,7 +663,7 @@ export function createManagerRecovery(deps: ManagerRecoveryDeps): ManagerRecover
         kind: 'held',
         recovery_mode: admitted.session.recovery_of !== undefined,
         stuck: stuck === undefined ? null : stuckView(stuck),
-        held: heldRows(admitted).map(heldView),
+        held: heldRows(admitted).map((row) => heldView(row, admitted.session)),
       };
     },
 
@@ -677,7 +684,7 @@ export function createManagerRecovery(deps: ManagerRecoveryDeps): ManagerRecover
     cancelHeldCart(req) {
       const admitted = manager();
       if ('kind' in admitted) return admitted;
-      const row = othersHeldCart(admitted, req.cart_id);
+      const row = heldCartOfOtherSession(admitted, req.cart_id);
       if (row === null) return refused('not_found');
       try {
         db.transaction(() => {

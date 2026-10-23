@@ -352,7 +352,7 @@ function HeldPanel(
             <HeldRow
               key={cart.cart_id}
               cart={cart}
-              owner={props.nameOf(cart.owning_operator_id)}
+              owner={cart.own ? RECOVERY_COPY.you : props.nameOf(cart.owning_operator_id)}
               onAction={props.onAction}
             />
           ))}

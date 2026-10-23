@@ -41,6 +41,8 @@ export interface RecoveryHeldCartView {
   kind: 'draft' | 'handed_off';
   /** Spec 024 §4.3: a parked cart is listed, flagged. Never its label. */
   parked: boolean;
+  /** RT-837: the signed-in manager's own held sale (an earlier session's), not another employee's. */
+  own: boolean;
   line_count: number;
   total_minor: number;
   updated_at: string;

@@ -46,6 +46,7 @@ export function heldCart(overrides: Partial<RecoveryHeldCartView> = {}): Recover
     owning_operator_id: OWNER_ID,
     kind: 'draft',
     parked: false,
+    own: false,
     line_count: 2,
     total_minor: 4_250,
     updated_at: '2026-10-13T08:30:00.000Z',

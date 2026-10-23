@@ -93,6 +93,7 @@ function held(
     owning_operator_id,
     kind: 'draft',
     parked: false,
+    own: false,
     line_count: 3,
     total_minor: 4_250,
     updated_at: STARTED,
