@@ -256,8 +256,10 @@ function checkNative(): number {
   if (res.stdout) process.stdout.write(res.stdout);
   if (res.stderr) process.stderr.write(res.stderr);
   if (res.status !== 0) {
+    // spawnSync sets res.error (status and signal null) when the process cannot start at all.
+    const reason = res.error ? res.error.message : `exit ${String(res.status ?? res.signal)}`;
     console.error(
-      `::error title=Native smoke::loading the packaged native modules failed (exit ${String(res.status ?? res.signal)})`,
+      `::error title=Native smoke::loading the packaged native modules failed (${reason})`,
     );
     return 1;
   }
