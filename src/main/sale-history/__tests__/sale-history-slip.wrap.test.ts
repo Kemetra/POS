@@ -123,6 +123,14 @@ const VALUES: ReadonlyArray<readonly [string, string]> = [
   ['Arabic', 'م'.repeat(120)],
 ];
 
+/** The returns block alone: from its header to the end of the slip. */
+const RETURNS_HEADER = 'المرتجعات — RETURNS';
+function fromReturnsHeader(lines: string[]): string[] {
+  const at = lines.indexOf(RETURNS_HEADER);
+  if (at === -1) throw new Error('the slip has a returns block');
+  return lines.slice(at);
+}
+
 type Build = (v: string) => Band[];
 
 const FIELDS: ReadonlyArray<readonly [string, Build]> = [
@@ -155,6 +163,9 @@ describe('RT-828 — an unbroken 120-character value wraps in every dynamic fiel
         for (const lines of [htmlLines(out.html), escposLines(out.escpos)]) {
           for (const line of lines) expect(width(line), line).toBeLessThanOrEqual(COLS);
           expect(compact(lines)).toContain(value);
+          if (/returns[- ]block/.test(field)) {
+            expect(compact(fromReturnsHeader(lines))).toContain(value);
+          }
         }
       });
     }
