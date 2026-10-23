@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="en" dir="ltr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DRAFT · RT-859 catalogue check result list</title>
+<style>
+:root{--primary:#0f766e;--primary-soft:#e6f4f1;--bg:#f7f9fa;--surface:#fff;--text:#0f1d2e;--muted:#53647a;--border:#d8dfe7;--warn-soft:#fdf1e0;--warn:#7d4500;--mono:ui-monospace,'Cascadia Code',Consolas,monospace}
+body{margin:0;background:var(--bg);color:var(--text);font:15px/1.6 'Segoe UI',Tahoma,Arial,system-ui,sans-serif}
+main{max-width:1180px;margin:0 auto;padding:32px 24px 64px}
+h1{margin:0 0 4px;font-size:24px}h2{margin:48px 0 8px;font-size:20px}h3{margin:24px 0 4px;font-size:16px}
+p{margin:0 0 12px;max-width:80ch}
+.status{margin:20px 0;padding:14px 16px;border:1px solid #a35a00;border-radius:10px;background:var(--warn-soft);color:var(--warn);font-weight:600}
+code,.num{font-family:var(--mono);font-size:.9em}
+[lang=ar]{font-family:'Dubai','Segoe UI',Tahoma,Arial,sans-serif}
+table{width:100%;border-collapse:collapse;background:var(--surface);border:1px solid var(--border)}
+th,td{padding:8px 12px;border-bottom:1px solid #e7ecf2;text-align:left;vertical-align:top}
+thead th{background:#f3f6fa;font-size:13px;color:var(--muted)}
+small{color:var(--muted)}
+.shots{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.shots figure{margin:0}.shots img{display:block;width:100%;height:auto;border:1px solid var(--border)}
+.shots figcaption{font-size:12px;color:var(--muted);margin-top:4px}
+.ev{font-size:13px;color:var(--muted)}
+a{color:var(--primary)}a:focus-visible{outline:2px solid var(--primary);outline-offset:2px}
+ul{margin:0 0 12px;padding-left:20px}li{margin-bottom:6px}
+@media (max-width:760px){.shots{grid-template-columns:1fr}table{display:block;overflow-x:auto}}
+</style>
+</head>
+<body><main>
+<h1>RT-859 · G-6 Diagnostics addendum: the catalogue check lists the matched items</h1>
+<p>The «فحص الكتالوج» search panel lists each match (name, pack, SKU, price) instead of only a count. Drawn at 1024×768 and 1280×800, in light and in forced colours. Gap G-10, owner decision D7 (RT-536), slice P-26-3 step 1. The implementation is RT-860.</p>
+<div class="status">DRAFT, pending owner sign-off on RT-859. No runtime code, bridge or contract changes. Every field drawn is one <code>catalogue.search</code> already returns on POS <code>main@be087a4f</code>.</div>
+
+<h2>1 · What <code>catalogue.search</code> returns on main (the fields this pack may draw)</h2>
+<p><code>results.items</code> is <code>ProductSnapshotDisplay[]</code>. It is ranked, holds at most 20 items, and comes with a <code>truncated</code> flag. The table shows what a <b>search</b> row carries on <code>main@be087a4f</code>.</p>
+<table>
+<thead><tr><th>Field</th><th>On a search row?</th><th>Drawn?</th><th>Source</th></tr></thead>
+<tbody>
+<tr><td><code>display_name_ar</code></td><td>Always</td><td>Yes, as the row name. It wraps and is never cut.</td><td><code>src/main/catalogue/product-repo.ts:276</code> (<code>toSnapshot</code>)</td></tr>
+<tr><td><code>price_minor</code></td><td>Always, in integer minor units</td><td>Yes, through <code>formatHumanMoney</code> (<span class="num">15.00 EGP</span>), in the money family (RT-814)</td><td><code>product-repo.ts:276</code>; <code>src/renderer/ui/format/human-format.ts:33</code></td></tr>
+<tr><td><code>sku</code></td><td><b>Always</b>. The column is NOT NULL.</td><td>Yes, as the per-row code: mono, isolated left-to-right</td><td><code>product-repo.ts:290</code></td></tr>
+<tr><td><code>unit_pack_label</code></td><td>When the product has one</td><td>Yes, before the SKU. This follows the shipped sale result row (<code>LiveSearchResults.tsx</code> <code>ProductMeta</code>).</td><td><code>product-repo.ts:276</code></td></tr>
+<tr><td><code>selling_barcode</code></td><td><b>Never.</b> <code>search()</code> calls <code>toSnapshot(r)</code> with no barcode. Only <code>lookupBarcode</code> fills it.</td><td><b>No.</b> No row shows a barcode, and none is invented.</td><td><code>product-repo.ts:196</code>, <code>:289</code></td></tr>
+<tr><td><code>display_name_en</code>, flags, <code>tax_category</code>, <code>product_id</code></td><td>Some of them</td><td>No. They are not needed to confirm a product at the till.</td><td>—</td></tr>
+</tbody></table>
+<p><b>Correction to comment 13689.</b> That comment says the barcode is filled "only for a barcode hit" and does not list <code>sku</code>. On main, the Diagnostics check calls <code>search</code> only (<code>DiagnosticsBridge</code>, <code>src/renderer/routes/app/CatalogueDiagnostics.tsx:57</code>). A search row always carries <code>sku</code> and never carries <code>selling_barcode</code>. A typed barcode still finds its product. On read-down data, each <code>aliases[]</code> entry, barcodes included, goes into <code>aliases_json</code> (<code>read-down/map-sellable-row.ts:25</code>, <code>:169</code>) and so into <code>alias_fold</code> (<code>read-down/read-down-writer.ts:146</code>). Search substring-matches <code>alias_fold</code> (<code>search.ts:52</code>). The row that comes back has a name, SKU and price, but no barcode. This is frame <a href="#barcode">C2</a>.</p>
+<p><b>On read-down data only.</b> The dev seed (<code>dev-seed-catalogue.ts</code>) keeps its barcodes in <code>product_barcodes</code> and folds only its name aliases into <code>alias_fold</code>. On the dev seed, the C2 query returns <code>not_found</code> («لا توجد نتائج»). Test C2 against a terminal with a real read-down, or with fixture data that puts the barcode in <code>aliases</code>.</p>
+<p class="ev">Other limits on main: at most <span class="num">20</span> rows (<code>search.ts:21</code> <code>SEARCH_CAP</code>; <code>product-repo.ts:196</code>). Fewer than 2 normalized characters gives <code>too_short</code> in main (<code>catalogue-bridge.ts:46</code>, <code>:163</code>). The renderer already blanks the result for a trimmed query under 2 characters, before it calls (<code>CatalogueDiagnostics.tsx:151–152</code>). The line text comes from <code>searchMessage</code> (<code>diagnostics-model.ts:61–72</code>), which shows refused, <code>too_short</code> and <code>catalogue_unavailable</code> all as «غير متاح».</p>
+
+<h2>2 · Layout and row</h2>
+<ul>
+<li><b>The frozen 2×2 grid is kept</b> (G6-Diagnostics). The device and sync panels are unchanged. Only the second grid row takes the free height. The counts panel keeps its own height. The search panel stretches to the bottom of the screen, and its list scrolls inside the panel. Nothing else on the page moves.</li>
+<li><b>Panel order:</b> field, then the shipped count line (<span lang="ar">«5 نتائج»</span>), then the list, then (only when <code>truncated</code>) the limit line.</li>
+<li><b>Row:</b> on the inline start, the name (<code>display_name_ar</code>, 15px semibold at 1280 and 14px at 1024; it wraps and is never cut). Under the name, the pack label and the SKU in muted 13px, the SKU in mono with <code>dir="ltr"</code>. On the inline end, the price in the money family: Dubai with tabular lining numerals, semibold, with <code>dir="ltr"</code> isolation. Prices line up down the list.</li>
+<li><b>Read-only:</b> a row has no action and no selection (this is Diagnostics, not the sale). The list is one tab stop (<code>tabindex="0"</code>), so a keyboard can scroll it. No row takes focus. The list's accessible name is the shipped «نتائج البحث».</li>
+<li><b>Visible rows before scrolling:</b> about 4 at 1024×768 and about 4½ at 1280×800. The count line always gives the full number returned.</li>
+</ul>
+
+<h2>3 · States</h2>
+<table>
+<thead><tr><th>Frame</th><th>Query</th><th>Bridge result</th><th>What shows</th></tr></thead>
+<tbody>
+<tr><td><a href="#results">C1 Results</a></td><td lang="ar">بنادول</td><td><code>results</code>, 5 items, <code>truncated:false</code></td><td><span lang="ar">«5 نتائج»</span> and 5 rows. Row 5 has a long name and sits below the fold.</td></tr>
+<tr><td><a href="#barcode">C2 Barcode typed</a></td><td class="num">6221000000011</td><td><code>results</code>, 1 item, matched through the alias bag (read-down data only; the dev seed returns <code>not_found</code>)</td><td><span lang="ar">«نتيجة واحدة»</span> and one row with name, pack, SKU and price. <b>No barcode on the row.</b></td></tr>
+<tr><td><a href="#long">C3 Long list</a></td><td lang="ar">فيتامين</td><td><code>results</code>, 20 items, <code>truncated:true</code></td><td><span lang="ar">«20 نتيجة»</span>, 20 rows that scroll, and under the list <span lang="ar">«النتائج محدودة؛ عدّل البحث لتضييقها.»</span></td></tr>
+<tr><td><a href="#empty">C4 Empty</a></td><td lang="ar">زنجبيل</td><td><code>not_found</code></td><td><span lang="ar">«لا توجد نتائج»</span>, and no list</td></tr>
+<tr><td><a href="#short">C5 Short query</a></td><td lang="ar">ب</td><td>(no call: the renderer blanks it)</td><td>Nothing under the field, as on main</td></tr>
+<tr><td><a href="#unavailable">C6 Refused or failed</a></td><td lang="ar">بنادول</td><td><code>refused</code>, <code>catalogue_unavailable</code>, a thrown call, or <code>too_short</code> from main</td><td><span lang="ar">«غير متاح»</span>, and no list</td></tr>
+</tbody></table>
+
+<h3 id="results">C1 · Results</h3>
+<div class="shots">
+<figure><img src="captures/G6C-Results-1024-light.png" alt="C1 results list at 1024, light"><figcaption>1024×768 · light</figcaption></figure>
+<figure><img src="captures/G6C-Results-1024-forced.png" alt="C1 results list at 1024, forced colours"><figcaption>1024×768 · forced colours</figcaption></figure>
+<figure><img src="captures/G6C-Results-1280-light.png" alt="C1 results list at 1280, light"><figcaption>1280×800 · light</figcaption></figure>
+<figure><img src="captures/G6C-Results-1280-forced.png" alt="C1 results list at 1280, forced colours"><figcaption>1280×800 · forced colours</figcaption></figure>
+</div>
+
+<h3 id="barcode">C2 · A barcode typed into the search</h3>
+<div class="shots">
+<figure><img src="captures/G6C-BarcodeQuery-1024-light.png" alt="C2 barcode query at 1024, light"><figcaption>1024×768 · light</figcaption></figure>
+<figure><img src="captures/G6C-BarcodeQuery-1024-forced.png" alt="C2 barcode query at 1024, forced colours"><figcaption>1024×768 · forced colours</figcaption></figure>
+<figure><img src="captures/G6C-BarcodeQuery-1280-light.png" alt="C2 barcode query at 1280, light"><figcaption>1280×800 · light</figcaption></figure>
+<figure><img src="captures/G6C-BarcodeQuery-1280-forced.png" alt="C2 barcode query at 1280, forced colours"><figcaption>1280×800 · forced colours</figcaption></figure>
+</div>
+
+<h3 id="long">C3 · Long list (20 rows, <code>truncated</code>)</h3>
+<div class="shots">
+<figure><img src="captures/G6C-Long-1024-light.png" alt="C3 long list at 1024, light"><figcaption>1024×768 · light</figcaption></figure>
+<figure><img src="captures/G6C-Long-1024-forced.png" alt="C3 long list at 1024, forced colours"><figcaption>1024×768 · forced colours</figcaption></figure>
+<figure><img src="captures/G6C-Long-1280-light.png" alt="C3 long list at 1280, light"><figcaption>1280×800 · light</figcaption></figure>
+<figure><img src="captures/G6C-Long-1280-forced.png" alt="C3 long list at 1280, forced colours"><figcaption>1280×800 · forced colours</figcaption></figure>
+</div>
+
+<h3 id="empty">C4 · Empty (no match)</h3>
+<div class="shots">
+<figure><img src="captures/G6C-Empty-1024-light.png" alt="C4 empty at 1024, light"><figcaption>1024×768 · light</figcaption></figure>
+<figure><img src="captures/G6C-Empty-1024-forced.png" alt="C4 empty at 1024, forced colours"><figcaption>1024×768 · forced colours</figcaption></figure>
+<figure><img src="captures/G6C-Empty-1280-light.png" alt="C4 empty at 1280, light"><figcaption>1280×800 · light</figcaption></figure>
+<figure><img src="captures/G6C-Empty-1280-forced.png" alt="C4 empty at 1280, forced colours"><figcaption>1280×800 · forced colours</figcaption></figure>
+</div>
+
+<h3 id="short">C5 · Short query (under 2 characters)</h3>
+<div class="shots">
+<figure><img src="captures/G6C-Short-1024-light.png" alt="C5 short query at 1024, light"><figcaption>1024×768 · light</figcaption></figure>
+<figure><img src="captures/G6C-Short-1024-forced.png" alt="C5 short query at 1024, forced colours"><figcaption>1024×768 · forced colours</figcaption></figure>
+<figure><img src="captures/G6C-Short-1280-light.png" alt="C5 short query at 1280, light"><figcaption>1280×800 · light</figcaption></figure>
+<figure><img src="captures/G6C-Short-1280-forced.png" alt="C5 short query at 1280, forced colours"><figcaption>1280×800 · forced colours</figcaption></figure>
+</div>
+
+<h3 id="unavailable">C6 · Refused or failed</h3>
+<div class="shots">
+<figure><img src="captures/G6C-Unavailable-1024-light.png" alt="C6 unavailable at 1024, light"><figcaption>1024×768 · light</figcaption></figure>
+<figure><img src="captures/G6C-Unavailable-1024-forced.png" alt="C6 unavailable at 1024, forced colours"><figcaption>1024×768 · forced colours</figcaption></figure>
+<figure><img src="captures/G6C-Unavailable-1280-light.png" alt="C6 unavailable at 1280, light"><figcaption>1280×800 · light</figcaption></figure>
+<figure><img src="captures/G6C-Unavailable-1280-forced.png" alt="C6 unavailable at 1280, forced colours"><figcaption>1280×800 · forced colours</figcaption></figure>
+</div>
+
+<h2>4 · Copy</h2>
+<p>There are no new strings. Every product string is copied verbatim from shipped code. Two of them come from the sale search, not from Diagnostics, so their reuse here is listed for approval (OD-6).</p>
+<table>
+<thead><tr><th>String</th><th>Use</th><th>Source on main</th></tr></thead>
+<tbody>
+<tr><td lang="ar">فحص الكتالوج · للقراءة فقط. لا يغيّر شيئًا في الكتالوج. · بحث في الكتالوج المحلي · ابحث بالاسم أو الباركود</td><td>Page and panel, unchanged</td><td><code>diagnostics-copy.ts</code> <code>DIAGNOSTICS_COPY</code></td></tr>
+<tr><td lang="ar">نتيجة واحدة · نتيجتان · {n} نتائج · {n} نتيجة</td><td>The count line, unchanged</td><td><code>diagnostics-copy.ts</code> <code>SEARCH_RESULT_FORMS</code></td></tr>
+<tr><td lang="ar">لا توجد نتائج</td><td>C4</td><td><code>DIAGNOSTICS_COPY.search.none</code></td></tr>
+<tr><td lang="ar">غير متاح</td><td>C6</td><td><code>DIAGNOSTICS_COPY.unavailable</code></td></tr>
+<tr><td lang="ar">نتائج البحث</td><td>The list's accessible name (not visible)</td><td><b>Sale search</b>: <code>LiveSearchResults.tsx:101</code></td></tr>
+<tr><td lang="ar">النتائج محدودة؛ عدّل البحث لتضييقها.</td><td>C3, under the list when <code>truncated</code></td><td><b>Sale search</b>: <code>LiveSearchResults.tsx:115</code></td></tr>
+</tbody></table>
+<p class="ev">Product names, pack labels, SKUs and prices are sample data. The first row (بنادول إكسترا, <span class="num">PARA-500</span>, <span class="num">15.00 EGP</span>) and the barcode typed in C2 are the dev seed's values (<code>src/main/catalogue/dev-seed-catalogue.ts</code>). C2 assumes they arrived by read-down, as noted in section 1. The search field keeps the shipped direction (no <code>dir</code>), so typed digits sit as they do on main.</p>
+
+<h2>5 · Owner decisions to sign off</h2>
+<table>
+<thead><tr><th>#</th><th>Decision</th><th>Drawn</th><th>Alternative</th></tr></thead>
+<tbody>
+<tr><td>OD-1</td><td>Layout</td><td>The frozen 2×2 grid is kept. The search panel grows into the free height, and its list scrolls inside it.</td><td>Move the search panel to a full-width second row. That would reflow the frozen G-6 screen.</td></tr>
+<tr><td>OD-2</td><td><b>Per-row code (D7)</b></td><td><b>A:</b> the SKU on every row, which is what search returns. Nothing changes in main or the bridge. D7's intent was barcode confirmation at the till. Search alone cannot show a barcode, and C2 shows a barcode query returning name, SKU and price.</td><td><b>B</b>, a separate decision for RT-860: <b>B1</b> calls the existing <code>catalogue.lookupBarcode</code> for a barcode-shaped query, then draws its <code>selling_barcode</code>. There is no contract change, but the Diagnostics bridge narrowing widens. <b>B2</b> fills <code>selling_barcode</code> in <code>search</code>, which changes main-process behaviour. Neither is drawn here.</td></tr>
+<tr><td>OD-3</td><td>Truncated list</td><td>The count line reads <span lang="ar">«20 نتيجة»</span>, and the shipped limit line sits under the list.</td><td>A new count string such as «first 20». It would need new copy.</td></tr>
+<tr><td>OD-4</td><td>Short query</td><td>Blank, as on main</td><td>A hint line. It would be a new string.</td></tr>
+<tr><td>OD-5</td><td>Refused or failed</td><td>One line, «غير متاح», as on main, for refused, unavailable and a thrown call alike</td><td>A notice with a glyph and a retry. That would add new strings and behaviour.</td></tr>
+<tr><td>OD-6</td><td>Reuse two sale-search strings in Diagnostics</td><td>«نتائج البحث» (accessible name) and «النتائج محدودة؛ عدّل البحث لتضييقها.»</td><td>Diagnostics-only wording, which would be new strings</td></tr>
+</tbody></table>
+<p class="ev">Note for RT-860, not drawn: a 2-character query that normalizes below 2 characters (for example, diacritics only) passes the renderer's trim check. Main then answers <code>too_short</code>, which shows «غير متاح» rather than blank. This is existing behaviour, recorded only.</p>
+
+<h2>6 · Checks and method</h2>
+<p>All 12 light references pass the shared checks (<code>tools/capture-refs.cjs</code>):</p>
+<ul>
+<li>every panel, the nav and the list fit inside the frame;</li>
+<li>no row spills sideways;</li>
+<li>no text is under 12px;</li>
+<li>no control is under 44×44;</li>
+<li>no name is clipped;</li>
+<li>axe reports 0 violations.</li>
+</ul>
+<p>C1 and C3 report <code>scroll: true</code> (the list scrolls), which is information, not a failure. Forced colours are captured with Chromium's <code>forced-colors: active</code> emulation.</p>
+<p class="ev">Regenerate the pack from this folder:</p>
+<ul>
+<li><code>python -I tools/gen_g6c.py</code></li>
+<li><code>node tools/capture_g6c.cjs</code>. Set <code>PLAYWRIGHT_CORE</code> to a <code>playwright-core</code> folder when it cannot be resolved.</li>
+</ul>
+<p class="ev">The frozen <code>../G6-Manager/g6.css</code> is imported unchanged. <code>g6c.css</code> adds only the stretch, the list, the row and the money family.</p>
+<p class="ev">Out of scope (RT-859): runtime code (RT-860), any contract or bridge change, and editing the catalogue.</p>
+</main></body>
+</html>
