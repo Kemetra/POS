@@ -17,6 +17,11 @@ describe('recoveryRefusalMessage', () => {
     expect(message).not.toMatch(/[0-9٠-٩]/);
   });
 
+  it('approval_invalid does not claim expiry or a PIN fault (RT-837)', () => {
+    const message = recoveryRefusalMessage('approval_invalid');
+    expect(message).not.toMatch(/انتهى|انتهت|الرقم السري/);
+  });
+
   it('falls back to the generic message for an unknown reason', () => {
     expect(recoveryRefusalMessage('something_new')).toBe(RECOVERY_COPY.unavailable);
   });

@@ -142,6 +142,13 @@ describe('RecoveryScreen — held sales', () => {
     );
   });
 
+  it('shows the manager’s own held sale as «أنت», never «موظف آخر» (RT-837)', async () => {
+    show(fakeBridges(heldView({ held: [heldCart({ own: true })] })));
+    const row = (await screen.findByText(RECOVERY_COPY.you)).closest('li') as HTMLElement;
+    expect(row).not.toHaveTextContent(RECOVERY_COPY.someoneElse);
+    expect(within(row).getByRole('button', { name: RECOVERY_COPY.cancelSale })).toBeVisible();
+  });
+
   it('falls back to «موظف آخر» when the roster is refused or fails', async () => {
     const refused = fakeBridges(heldView({ held: [heldCart()] }));
     refused.listRoster = () => Promise.resolve({ kind: 'refused', reason: 'no_session' } as never);

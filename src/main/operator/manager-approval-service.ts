@@ -215,8 +215,8 @@ function mayRequest(session: OperatorSessionRecord, kind: ManagerActionKind): bo
 /**
  * Four-eyes (C6). A cashier's approver is never the cashier. A recovery
  * approval is the signed-in manager's own PIN — the person at the terminal —
- * on another operator's sale (the resolver guarantees the owner is someone
- * else), so the approver must BE the session's manager.
+ * on another operator's sale — or, RT-837, the manager's own earlier-session
+ * held cart — so the approver must BE the session's manager.
  */
 function approverAllowed(
   kind: ManagerActionKind,

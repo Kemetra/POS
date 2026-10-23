@@ -83,6 +83,8 @@ let pins: ManagerPinStore;
 let approvals: ManagerApprovalService;
 let recovery: ManagerRecovery;
 let current: OperatorSessionRecord | null;
+/** The approval service's clock; a test moves it past the TTL. */
+let approvalClock = NOW;
 let audit: AuditEvent[];
 let endRecoverySession: ReturnType<typeof vi.fn<() => Promise<unknown>>>;
 let attemptId: string;
@@ -137,7 +139,12 @@ function paymentStack(db: ReturnType<typeof handleFor>) {
   return { build };
 }
 
-function insertCart(cart_id: string, state: string, session_id = DEAD_SESSION): void {
+function insertCart(
+  cart_id: string,
+  state: string,
+  session_id = DEAD_SESSION,
+  owner = CASHIER_OP,
+): void {
   raw.run(
     `INSERT INTO carts (cart_id, tenant_id, branch_id, terminal_id, owning_operator_id,
        operator_session_id, state, cart_subtotal_minor, handoff_envelope_json, last_action_id,
@@ -148,7 +155,7 @@ function insertCart(cart_id: string, state: string, session_id = DEAD_SESSION): 
       SCOPE.tenantId,
       SCOPE.branchId,
       TERMINAL,
-      CASHIER_OP,
+      owner,
       session_id,
       state,
       TOTAL,
@@ -258,11 +265,12 @@ function wireApprovals(): void {
       'recovery.cancel_held_cart': via((r) => r.resolvers.cancelHeldCart),
     },
     auditEmitter: { emit: (e) => audit.push(e) },
-    now: () => NOW,
+    now: () => approvalClock,
   });
 }
 
 beforeEach(async () => {
+  approvalClock = NOW;
   raw = freshGrantDb();
   handle = handleFor(raw);
   audit = [];
@@ -357,6 +365,7 @@ describe('recovery.listHeld — totals only', () => {
           owning_operator_id: CASHIER_OP,
           kind: 'draft',
           parked: false,
+          own: false,
           line_count: 0,
           total_minor: TOTAL,
           updated_at: NOW,
@@ -568,6 +577,80 @@ describe('recovery.cancelHeldCart', () => {
   });
 });
 
+/** RT-837: the manager's own held sale from an earlier session. */
+const OWN_OLD_SESSION = 'sess-mgr-earlier';
+const MANAGER_OP = 'op-mgr';
+
+describe('recovery — the manager’s own held sale (RT-837)', () => {
+  it('lists it as the manager’s own, not as another employee’s', () => {
+    insertCart('cart-mine', 'editing', OWN_OLD_SESSION, MANAGER_OP);
+    insertCart('cart-theirs', 'editing');
+    const held = (recovery.listHeld() as { held: { cart_id: string; own: boolean }[] }).held;
+    expect(held.map((c) => [c.cart_id, c.own]).sort()).toEqual([
+      ['cart-mine', true],
+      ['cart-theirs', false],
+    ]);
+  });
+
+  it.each([
+    ['editing', 'manager_cancelled_held', 'cart.void'],
+    ['frozen_handed_off', 'manager_voided_post_handoff', 'cart.cancel.post_handoff'],
+  ])(
+    'cancels it with the manager’s PIN (%s), audited like a manager cancel',
+    async (state, reason, kind) => {
+      insertCart('cart-mine', state, OWN_OLD_SESSION, MANAGER_OP);
+      const id = await approve('recovery.cancel_held_cart', 'cart-mine');
+      audit = [];
+      expect(recovery.cancelHeldCart({ cart_id: 'cart-mine', approval_id: id })).toEqual({
+        kind: 'cancelled',
+      });
+      expect(value(`SELECT cancellation_reason FROM carts WHERE cart_id = 'cart-mine'`)).toBe(
+        reason,
+      );
+      expect(value(`SELECT action_kind FROM cart_action_outbox WHERE cart_id = 'cart-mine'`)).toBe(
+        kind,
+      );
+      expect(categories()).toEqual(['cart.held_cancelled_by_manager']);
+      expect(audit[0]).toMatchObject({
+        acting_operator_id: MANAGER_OP,
+        approving_supervisor_id: MANAGER.userId,
+      });
+    },
+  );
+
+  it('never touches the cart of the live session', () => {
+    insertCart('cart-live', 'editing', 'sess-mgr', MANAGER_OP);
+    expect(recovery.listHeld()).toMatchObject({ held: [] });
+    expect(
+      recovery.cancelHeldCart({ cart_id: 'cart-live', approval_id: UNKNOWN_APPROVAL }),
+    ).toEqual({ kind: 'refused', reason: 'not_found' });
+  });
+
+  it('still refuses a wrong PIN, and spends no approval', async () => {
+    insertCart('cart-mine', 'editing', OWN_OLD_SESSION, MANAGER_OP);
+    const outcome = await approvals.request({
+      action_kind: 'recovery.cancel_held_cart',
+      subject_ref: 'cart-mine',
+      reason_code: 'manager_recovery',
+      approver_ref: managerRef(MANAGER.userId),
+      pin: '000000',
+    });
+    expect(outcome).toEqual({ kind: 'refused', reason: 'approval_unavailable' });
+    expect(value(`SELECT state FROM carts WHERE cart_id = 'cart-mine'`)).toBe('editing');
+  });
+
+  it('still refuses an expired approval, leaving the cart held', async () => {
+    insertCart('cart-mine', 'editing', OWN_OLD_SESSION, MANAGER_OP);
+    const id = await approve('recovery.cancel_held_cart', 'cart-mine');
+    approvalClock = '2026-10-13T09:10:00.000Z';
+    expect(recovery.cancelHeldCart({ cart_id: 'cart-mine', approval_id: id })).toEqual({
+      kind: 'refused',
+      reason: 'approval_invalid',
+    });
+    expect(value(`SELECT state FROM carts WHERE cart_id = 'cart-mine'`)).toBe('editing');
+  });
+});
+
 const refusedWith = (reason: string) => ({ kind: 'refused', reason });
 
 async function payByCard(amount: number): Promise<void> {
@@ -625,7 +708,6 @@ describe('recovery — who may recover', () => {
     const session = manager({ operator_id: CASHIER_OP, recovery_of: undefined });
     current = session;
     expect(recovery.resolvers.completeAttempt({ subjectRef: attemptId, session })).toBeNull();
-    expect(recovery.resolvers.cancelHeldCart({ subjectRef: 'cart-held', session })).toBeNull();
     await expect(
       recovery.completeAttempt({
         payment_attempt_id: attemptId,
@@ -633,9 +715,6 @@ describe('recovery — who may recover', () => {
         cash_received_minor: TOTAL,
       }),
     ).resolves.toEqual(refusedWith('not_found'));
-    expect(
-      recovery.cancelHeldCart({ cart_id: 'cart-held', approval_id: UNKNOWN_APPROVAL }),
-    ).toEqual(refusedWith('not_found'));
   });
 });
 
