@@ -1,0 +1,83 @@
+## select substr(cart_id,1,8) cart, substr(owning_operator_id,1,12) owner, substr(operator_session_id,1,8) sess, state, cart_subtotal_minor sub, park_label, parked_at, cancelled_at, cancellation_reason from carts order by created_at
+cart | owner | sess | state | sub | park_label | parked_at | cancelled_at | cancellation_reason
+798a5e4b | U3L1C4BznoKc | 6a790ec5 | cancelled | 1000 | M-own | 2026-10-23T14:34:20.665Z | 2026-10-23T14:56:00.845Z | manager_cancelled_held
+6fd37278 | U3L1C4BznoKc | 6a790ec5 | frozen_handed_off | 725 |  |  |  | 
+5a646000 | U3L1C4BznoKc | 6a790ec5 | frozen_handed_off | 2550 |  |  |  | 
+58515b8a | U3L1C4BznoKc | 6a790ec5 | cancelled | 725 |  | 2026-10-23T14:34:00.698Z | 2026-10-23T14:56:05.866Z | manager_cancelled_held
+22fa3ab9 | U3L1C4BznoKc | 6a790ec5 | frozen_handed_off | 725 |  |  |  | 
+321a5587 | rt227_cashie | a36de6fc | cancelled | 2550 | C-park | 2026-10-23T14:43:19.102Z | 2026-10-23T14:51:26.861Z | manager_cancelled_held
+1bdac2cd | U3L1C4BznoKc | 910286a8 | cancelled | 1000 |  |  | 2026-10-23T14:56:48.433Z | cashier_voided
+2d05b0f2 | rt227_cashie | 052f1675 | cancelled | 1000 |  | 2026-10-23T14:59:30.491Z | 2026-10-23T15:04:41.912Z | manager_cancelled_held
+80405a96 | U3L1C4BznoKc | 07a4fc1b | frozen_handed_off | 725 |  |  |  | 
+## select applied_at, substr(cart_id,1,8) cart, action_kind from cart_park_actions order by applied_at
+applied_at | cart | action_kind
+2026-10-23T14:29:53.086Z | 798a5e4b | cart.park
+2026-10-23T14:32:26.664Z | 798a5e4b | cart.resume
+2026-10-23T14:32:49.792Z | 798a5e4b | cart.park
+2026-10-23T14:34:00.698Z | 798a5e4b | cart.resume
+2026-10-23T14:34:20.665Z | 798a5e4b | cart.park
+2026-10-23T14:43:19.102Z | 321a5587 | cart.park
+2026-10-23T14:56:26.049Z | 1bdac2cd | cart.park
+2026-10-23T14:56:44.690Z | 1bdac2cd | cart.resume
+2026-10-23T14:59:30.491Z | 2d05b0f2 | cart.park
+## select issued_at, consumed_at, action_kind, substr(subject_ref,1,8) subj, substr(requester_operator_id,1,12) req, approver_user_id from manager_approvals order by issued_at
+issued_at | consumed_at | action_kind | subj | req | approver_user_id
+2026-10-23T14:51:26.860Z | 2026-10-23T14:51:26.860Z | recovery.cancel_held_cart | 321a5587 | rt227_cashie | c7a28ac6-1260-4d10-80fb-3aed1b13c3cc
+2026-10-23T14:56:00.844Z | 2026-10-23T14:56:00.845Z | recovery.cancel_held_cart | 798a5e4b | U3L1C4BznoKc | c7a28ac6-1260-4d10-80fb-3aed1b13c3cc
+2026-10-23T14:56:05.865Z | 2026-10-23T14:56:05.865Z | recovery.cancel_held_cart | 58515b8a | U3L1C4BznoKc | c7a28ac6-1260-4d10-80fb-3aed1b13c3cc
+2026-10-23T15:04:41.912Z | 2026-10-23T15:04:41.912Z | recovery.cancel_held_cart | 2d05b0f2 | rt227_cashie | c7a28ac6-1260-4d10-80fb-3aed1b13c3cc
+## select created_at, action_category, substr(acting_operator_id,1,12) op, approving_supervisor_id from audit_events where action_category like 'cart.%' or action_category like 'manager_approval%' or action_category like 'shift%' or action_category like 'cashier.pin%' or action_category like 'sale.%' order by created_at
+created_at | action_category | op | approving_supervisor_id
+2026-10-23T14:29:53.086Z | cart.parked | U3L1C4BznoKc | 
+2026-10-23T14:30:16.185Z | cart.handoff_to_payment | U3L1C4BznoKc | 
+2026-10-23T14:30:58.758Z | sale.finalized | U3L1C4BznoKc | 
+2026-10-23T14:30:58.758Z | sale.number_day_rule.switched | system:devic | 
+2026-10-23T14:30:59.598Z | sale.receipt.printed | U3L1C4BznoKc | 
+2026-10-23T14:30:59.599Z | sale.drawer.suppressed | U3L1C4BznoKc | 
+2026-10-23T14:32:26.664Z | cart.resumed | U3L1C4BznoKc | 
+2026-10-23T14:32:49.792Z | cart.parked | U3L1C4BznoKc | 
+2026-10-23T14:33:08.263Z | cart.handoff_to_payment | U3L1C4BznoKc | 
+2026-10-23T14:33:14.929Z | sale.finalized | U3L1C4BznoKc | 
+2026-10-23T14:33:15.717Z | sale.receipt.printed | U3L1C4BznoKc | 
+2026-10-23T14:33:15.717Z | sale.drawer.suppressed | U3L1C4BznoKc | 
+2026-10-23T14:34:00.698Z | cart.parked | U3L1C4BznoKc | 
+2026-10-23T14:34:00.698Z | cart.resumed | U3L1C4BznoKc | 
+2026-10-23T14:34:20.665Z | cart.parked | U3L1C4BznoKc | 
+2026-10-23T14:34:51.632Z | cart.handoff_to_payment | U3L1C4BznoKc | 
+2026-10-23T14:35:31.199Z | sale.finalized | U3L1C4BznoKc | 
+2026-10-23T14:35:31.979Z | sale.receipt.printed | U3L1C4BznoKc | 
+2026-10-23T14:35:31.979Z | sale.drawer.suppressed | U3L1C4BznoKc | 
+2026-10-23T14:38:38.951Z | cashier.pin.provisioned | U3L1C4BznoKc | 
+2026-10-23T14:38:45.977Z | cashier.pin.provisioned | U3L1C4BznoKc | 
+2026-10-23T14:39:28.832Z | cashier.pin.reset | U3L1C4BznoKc | 
+2026-10-23T14:39:34.997Z | cashier.pin.reset | U3L1C4BznoKc | 
+2026-10-23T14:43:19.102Z | cart.parked | rt227_cashie | 
+2026-10-23T14:51:26.860Z | manager_approval.granted | U3L1C4BznoKc | c7a28ac6-1260-4d10-80fb-3aed1b13c3cc
+2026-10-23T14:51:26.861Z | cart.held_cancelled_by_manager | rt227_cashie | c7a28ac6-1260-4d10-80fb-3aed1b13c3cc
+2026-10-23T14:56:00.844Z | manager_approval.granted | U3L1C4BznoKc | c7a28ac6-1260-4d10-80fb-3aed1b13c3cc
+2026-10-23T14:56:00.845Z | cart.held_cancelled_by_manager | U3L1C4BznoKc | c7a28ac6-1260-4d10-80fb-3aed1b13c3cc
+2026-10-23T14:56:05.865Z | manager_approval.granted | U3L1C4BznoKc | c7a28ac6-1260-4d10-80fb-3aed1b13c3cc
+2026-10-23T14:56:05.866Z | cart.held_cancelled_by_manager | U3L1C4BznoKc | c7a28ac6-1260-4d10-80fb-3aed1b13c3cc
+2026-10-23T14:56:26.049Z | cart.parked | U3L1C4BznoKc | 
+2026-10-23T14:56:44.690Z | cart.resumed | U3L1C4BznoKc | 
+2026-10-23T14:59:30.491Z | cart.parked | rt227_cashie | 
+2026-10-23T15:00:00.143Z | manager_approval.refused | U3L1C4BznoKc | 
+2026-10-23T15:04:41.912Z | manager_approval.granted | U3L1C4BznoKc | c7a28ac6-1260-4d10-80fb-3aed1b13c3cc
+2026-10-23T15:04:41.913Z | cart.held_cancelled_by_manager | rt227_cashie | c7a28ac6-1260-4d10-80fb-3aed1b13c3cc
+2026-10-23T15:12:37.903Z | cart.handoff_to_payment | U3L1C4BznoKc | 
+2026-10-23T15:13:06.254Z | sale.finalized | U3L1C4BznoKc | 
+2026-10-23T15:13:07.152Z | sale.receipt.printed | U3L1C4BznoKc | 
+2026-10-23T15:13:07.153Z | sale.drawer.suppressed | U3L1C4BznoKc | 
+## select count(*) payloads_with_park_label from audit_events where payload like '%R1-park%' or payload like '%S1b-park%' or payload like '%M-own%' or payload like '%C-park%' or payload like '%park_label%'
+payloads_with_park_label
+0
+## select * from shift_cashup_opens
+shift_id | tenant_id | branch_id | terminal_id | opening_user_id | currency_code | opening_float_minor | opened_at | created_at
+01a16936-16e2-702c-8967-bcc3607adcde | 9be1cac9-f6dc-4e0b-b2bb-6f4a4145801a | 9847b3e1-3ded-4b51-8dd5-0cf07a4893de | 4dd4324b-646f-427f-83a6-a8dc96a34a25 | 62acf6ea-0966-4708-9343-c6de90e94002 | EGP | 10000 | 2026-10-23T14:41:54.914Z | 2026-10-23T14:41:54.914Z
+## select * from shift_cashup_closes
+shift_id | closed_at | closing_user_id | close_kind | forced_reason | opening_float_minor | cash_sales_total_minor | cash_refunds_total_minor | pay_in_total_minor | pay_out_total_minor | expected_cash_minor | counted_cash_minor | variance_minor | sale_count | cash_refund_return_refs_json | variance_approved_by_user_id | created_at
+01a16936-16e2-702c-8967-bcc3607adcde | 2026-10-23T15:06:36.515Z | 62acf6ea-0966-4708-9343-c6de90e94002 | normal |  | 10000 | 0 | 0 | 0 | 0 | 10000 | 10000 | 0 | 0 | [] |  | 2026-10-23T15:06:36.515Z
+## select * from shift_sync_outbox
+seq | fact_kind | shift_id | movement_id | tenant_id | branch_id | terminal_id | auth_path | idempotency_key | request_body | enqueued_at | supersedes_seq | origin_seq
+1 | open | 01a16936-16e2-702c-8967-bcc3607adcde |  | 9be1cac9-f6dc-4e0b-b2bb-6f4a4145801a | 9847b3e1-3ded-4b51-8dd5-0cf07a4893de | 4dd4324b-646f-427f-83a6-a8dc96a34a25 | device | pos-pulse-shift-open:01a16936-16e2-702c-8967-bcc3607adcde | {"shiftId":"01a16936-16e2-702c-8967-bcc3607adcde","openedAt":"2026-10-23T14:41:54.914Z","openingUserId":"62acf6ea-0966-4708-9343-c6de90e94002","currencyCode":"EG
+2 | close | 01a16936-16e2-702c-8967-bcc3607adcde |  | 9be1cac9-f6dc-4e0b-b2bb-6f4a4145801a | 9847b3e1-3ded-4b51-8dd5-0cf07a4893de | 4dd4324b-646f-427f-83a6-a8dc96a34a25 | device | pos-pulse-shift-close:01a16936-16e2-702c-8967-bcc3607adcde | {"closedAt":"2026-10-23T15:06:36.515Z","closingUserId":"62acf6ea-0966-4708-9343-c6de90e94002","closeKind":"normal","openingFloat":"100.00","cashSalesTotal":"0.

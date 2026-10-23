@@ -1,0 +1,32 @@
+              at               
+-------------------------------
+ 2026-10-23 14:24:20.740188+00
+(1 row)
+
+ sales | tenders | audit | support_sessions | pairing_codes | tenants 
+-------+---------+-------+------------------+---------------+---------
+    93 |      11 |  2403 |                1 |            33 |       2
+(1 row)
+
+                  id                  |           name           |           slug           | status |          deleted_at           
+--------------------------------------+--------------------------+--------------------------+--------+-------------------------------
+ 9be1cac9-f6dc-4e0b-b2bb-6f4a4145801a | RT9 Lab Tenant           | rt9-lab                  | active | 
+ 01a16893-e5fe-788d-9038-8b75371bb2d4 | RT781 lab support target | rt781-lab-support-target | active | 2026-10-23 12:47:33.244929+00
+(2 rows)
+
+                  id                  |           email           | is_platform_admin 
+--------------------------------------+---------------------------+-------------------
+ b74f1728-8240-48e8-b9e4-bf6a22130eaf | rt9-admin@example.invalid | f
+(1 row)
+
+ERROR:  relation "schema_migrations" does not exist
+LINE 1: select name, applied_at from schema_migrations where name li...
+                                     ^
+                  id                   |          applied_at           
+---------------------------------------+-------------------------------
+ 0063_inventory_effects_activation     | 2026-10-21 20:04:39.676497+00
+ 0062_platform_support_sessions        | 2026-10-21 20:04:39.657752+00
+ 0061_posting_status_legacy_posted_idx | 2026-10-21 20:04:39.644833+00
+(3 rows)
+
+sha256:f5f32624aefb96954ffbd57ecd3480e0f2dfb37bb40ecadcb1ebbe996db755c4 rt9-api:79537b34

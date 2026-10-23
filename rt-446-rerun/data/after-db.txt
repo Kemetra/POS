@@ -1,0 +1,23 @@
+              at               
+-------------------------------
+ 2026-10-23 15:20:01.763182+00
+(1 row)
+
+ sales | tenders | audit | support_sessions | pairing_codes | tenants 
+-------+---------+-------+------------------+---------------+---------
+    97 |      11 |  2414 |                3 |            36 |       4
+(1 row)
+
+                  id                  |           name           |           slug           | status |          deleted_at           
+--------------------------------------+--------------------------+--------------------------+--------+-------------------------------
+ 9be1cac9-f6dc-4e0b-b2bb-6f4a4145801a | RT9 Lab Tenant           | rt9-lab                  | active | 
+ 01a16893-e5fe-788d-9038-8b75371bb2d4 | RT781 lab support target | rt781-lab-support-target | active | 2026-10-23 12:47:33.244929+00
+ 01a16954-7918-7559-99ae-18555b5c5b06 | RT782 normal target      | rt782-normal-target      | active | 2026-10-23 15:19:52.066114+00
+ 01a16954-7925-7559-99ae-4db1a7981a9c | RT782 suspended target   | rt782-suspended-target   | active | 2026-10-23 15:19:52.074519+00
+(4 rows)
+
+                  id                  |           email           | is_platform_admin 
+--------------------------------------+---------------------------+-------------------
+ b74f1728-8240-48e8-b9e4-bf6a22130eaf | rt9-admin@example.invalid | f
+(1 row)
+
