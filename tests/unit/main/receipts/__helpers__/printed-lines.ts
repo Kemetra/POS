@@ -14,13 +14,14 @@ export function htmlLines(html: string): string[] {
   );
 }
 
+const ESC = String.fromCodePoint(0x1b);
+const GS = String.fromCodePoint(0x1d);
+const NUL = String.fromCodePoint(0);
+// ESC @ (init), ESC a n / ESC E n (align, emphasis), GS V NUL (cut): printer commands, not text.
+const ESCPOS_COMMANDS = new RegExp(`${ESC}@|${ESC}[aE][^]|${GS}V${NUL}`, 'g');
+
 export function escposLines(bytes: Uint8Array): string[] {
-  return new TextDecoder()
-    .decode(bytes)
-    .replace(/\u001b@/g, '')
-    .replace(/\u001b[aE]./g, '')
-    .replace(/\u001dV\u0000/g, '')
-    .split('\n');
+  return new TextDecoder().decode(bytes).replace(ESCPOS_COMMANDS, '').split('\n');
 }
 
 export const compact = (lines: string[]): string => lines.join('').replace(/\s+/g, '');
