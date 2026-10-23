@@ -72,7 +72,7 @@ const UNNAMED_LINE = 'صنف مرتجع';
  * THE way any dynamic value reaches the slip (Codex P2, a1703dc): made
  * printable (control and bidi characters stripped), capped, a dash when
  * empty, then — after its static `label` — hard-wrapped to the 42-column
- * roll by code points. Every printed line fits; nothing is clipped.
+ * roll by display cells. Every printed line fits; nothing is clipped.
  */
 export function slipText(value: string | null | undefined, label = ''): string[] {
   const clean = value === null || value === undefined ? null : slipLineName(value);
