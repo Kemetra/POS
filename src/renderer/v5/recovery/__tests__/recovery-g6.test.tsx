@@ -107,7 +107,7 @@ describe('RecoveryScreen — V5 notices', () => {
     const outcome = noticeOf(
       await screen.findByText(new RegExp(RECOVERY_COPY.change)),
     ) as HTMLElement;
-    expect(within(outcome).getByText(formatCheckoutMoney(5_000))).toHaveClass('v5-recovery-num');
+    expect(within(outcome).getByText(formatCheckoutMoney(5_000))).toHaveClass('v5-recovery-money');
     expect(outcome).toHaveTextContent(
       `${RECOVERY_COPY.completed} ${RECOVERY_COPY.change}: ${formatCheckoutMoney(5_000)}`,
     );
@@ -124,12 +124,12 @@ describe('RecoveryScreen — amounts and controls', () => {
     show(fakeBridges(heldView({ stuck: stuckAttempt(), held: [heldCart()] })));
     const [row] = await screen.findAllByRole('listitem');
     const amount = within(row as HTMLElement).getByText(formatCheckoutMoney(4_250));
-    expect(amount).toHaveClass('v5-recovery-num');
-    expect(within(row as HTMLElement).getByText('2')).toHaveClass('v5-recovery-num');
+    expect(amount).toHaveClass('v5-recovery-money');
+    expect(within(row as HTMLElement).getByText('2')).toHaveClass('v5-recovery-money');
     const due = within(screen.getByRole('region', { name: RECOVERY_COPY.stuckTitle })).getByText(
       formatCheckoutMoney(10_000),
     );
-    expect(due).toHaveClass('v5-recovery-num');
+    expect(due).toHaveClass('v5-recovery-money');
   });
 
   it('marks «إكمال البيع» primary and keeps both cancels neutral (OD-5)', async () => {

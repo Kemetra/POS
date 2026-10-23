@@ -131,7 +131,7 @@ function CashField(
     <div className="v5-recovery-fields">
       <p>
         {RECOVERY_COPY.remaining}:{' '}
-        <bdi className="v5-recovery-num">{formatCheckoutMoney(props.stuck.remaining_minor)}</bdi>
+        <bdi className="v5-recovery-money">{formatCheckoutMoney(props.stuck.remaining_minor)}</bdi>
       </p>
       <label htmlFor={cashId}>{RECOVERY_COPY.cashReceived}</label>
       <input
@@ -189,7 +189,7 @@ function TenderConfirms(
           }}
         >
           {RECOVERY_COPY.confirmCash} (
-          <bdi className="v5-recovery-num">{formatCheckoutMoney(stuck.cash_minor)}</bdi>)
+          <bdi className="v5-recovery-money">{formatCheckoutMoney(stuck.cash_minor)}</bdi>)
         </Confirm>
       )}
       {stuck.card_minor > 0 && (

@@ -186,12 +186,20 @@
   min-inline-size: 160px;
 }
 
-/* The sale number and amounts only: LTR, tabular, monospace (DESIGN.md numerals). */
-.v5-void-num {
+/* The sale number only: an ID, LTR, monospace (DESIGN.md numerals). */
+.v5-void-id {
   direction: ltr;
   unicode-bidi: isolate;
   font-family: var(--font-family-mono);
   font-variant-numeric: tabular-nums;
+}
+
+/* An amount: LTR, the money family with tabular lining numerals (RT-814, RT-833). */
+.v5-void-money {
+  direction: ltr;
+  unicode-bidi: isolate;
+  font-family: var(--font-family-money);
+  font-variant-numeric: tabular-nums lining-nums;
 }
 
 /* Arabic dates stay in the text face (Dubai); only their digits are tabular. */
