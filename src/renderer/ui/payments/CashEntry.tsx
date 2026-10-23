@@ -310,7 +310,7 @@ export function CashEntry({
           )}
           <button
             type="button"
-            className="cash-entry__confirm checkout-commit v5-btn v5-btn--primary v5-btn--commit"
+            className="cash-entry__confirm v5-btn v5-btn--primary v5-btn--commit"
             data-testid="cash-entry-confirm"
             style={{ minHeight: touchTarget.commit }}
             disabled={!canConfirm || isApplying}

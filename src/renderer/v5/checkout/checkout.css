@@ -506,6 +506,51 @@
   font-weight: var(--font-weight-semibold);
 }
 
+/* ── Voucher entry rows (VoucherEntry) ─────────────────────────────────
+ * RT-681: the stacked slot container and its rows, moved from the global
+ * stylesheet. Inside the entry panel the container drops its own frame and the
+ * rows drop their inline padding, so the panel is the only card.
+ */
+.v5-entry-slots {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-card);
+  overflow: hidden;
+  background: var(--color-surface);
+}
+
+.v5-entry-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  padding: var(--space-3) var(--space-4);
+  min-height: 56px;
+  border-bottom: 1px solid var(--color-border-soft);
+}
+
+.v5-entry-row:last-child {
+  border-bottom: none;
+}
+
+.v5-entry-row__label {
+  font-weight: var(--font-weight-semibold);
+  font-size: var(--font-size-sm);
+  color: var(--color-text);
+  min-width: 140px;
+}
+
+.v5-entry-row__value {
+  margin-inline-start: auto;
+}
+
+.v5-checkout__entry .v5-entry-slots {
+  border: none;
+  background: transparent;
+}
+
+.v5-checkout__entry .v5-entry-row {
+  padding-inline: 0;
+}
+
 /* ── Recovery lines (RecoveryPanel) ────────────────────────────────────────
  * In the pinned action bar, above the commit. Tones are the Notice's; a plain
  * refusal line is neutral, as the catalogue asks (M-P17, M-P19, M-P20).
@@ -651,6 +696,53 @@
 }
 
 /*
+ * RT-238 — the pinned action bar (15 §4 A2 ActionSlots). It is a sibling of the
+ * scrolling panes, so it never scrolls away. inline-start = cancel,
+ * inline-end = primary/commit, and an empty slot stays empty: the end slot is
+ * pushed to the inline-end edge even when the start slot has nothing in it.
+ * RT-681: moved here from the global stylesheet under its V5 name. The commits
+ * it holds are shared .v5-btn--primary .v5-btn--commit buttons
+ * (v5/foundation/buttons.css); the 60px/56px density sits on the ledger slot below.
+ */
+.v5-checkout-actions {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding-block-start: var(--space-3);
+  border-block-start: 1px solid var(--color-border-soft);
+}
+
+.v5-checkout-actions__row {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-4);
+}
+
+.v5-checkout-actions__slot {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-inline-size: 0;
+}
+
+.v5-checkout-actions__slot--start {
+  align-items: flex-start;
+}
+
+.v5-checkout-actions__slot--end {
+  align-items: flex-end;
+  margin-inline-start: auto;
+}
+
+.v5-checkout-actions__reason {
+  margin: 0;
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-warning-emphasis);
+}
+
+/*
  * The actions: the Checkout action bar (RT-238 slots) mounted unchanged. In the
  * money column the two slots stack — the primary/commit slot first, the cancel
  * slot below it in a separate region ≥ 16px away (DESIGN.md touch targets), as
@@ -663,19 +755,19 @@
   border-block-start: 1px solid var(--color-border);
 }
 
-.v5-ledger__actions .checkout-actions {
+.v5-ledger__actions .v5-checkout-actions {
   gap: var(--space-2);
   padding-block-start: 0;
   border-block-start: 0;
 }
 
-.v5-ledger__actions .checkout-actions__row {
+.v5-ledger__actions .v5-checkout-actions__row {
   flex-direction: column;
   align-items: stretch;
   gap: var(--space-4);
 }
 
-.v5-ledger__actions .checkout-actions__slot {
+.v5-ledger__actions .v5-checkout-actions__slot {
   align-items: stretch;
   margin-inline-start: 0;
 }
@@ -686,25 +778,25 @@
  * commit does NOT drop into the place cancel held; when the commit leaves,
  * cancel does not rise into the commit's place. Never collapse an empty slot.
  */
-.v5-ledger__actions .checkout-actions__slot--end {
+.v5-ledger__actions .v5-checkout-actions__slot--end {
   min-block-size: 60px;
 }
 
 /* Every commit the slot can hold spans the column at one fixed height
    (DESIGN.md: full panel width), so apply → settle never changes the band. */
-.v5-ledger__actions .checkout-actions__slot--end button {
+.v5-ledger__actions .v5-checkout-actions__slot--end button {
   inline-size: 100%;
   block-size: 60px;
   min-block-size: 60px;
 }
 
-.v5-ledger__actions .checkout-actions__slot--start {
+.v5-ledger__actions .v5-checkout-actions__slot--start {
   min-block-size: calc(44px + var(--space-4) + 1px);
   padding-block-start: var(--space-4);
   border-block-start: 1px solid var(--color-border-soft);
 }
 
-.v5-ledger__actions .checkout-actions__slot--start > button {
+.v5-ledger__actions .v5-checkout-actions__slot--start > button {
   inline-size: 100%;
   block-size: 44px;
   min-block-size: 44px;
@@ -860,23 +952,86 @@
     padding: var(--space-2) var(--space-3) var(--space-3);
   }
 
-  .v5-ledger__actions .checkout-actions__row {
+  .v5-ledger__actions .v5-checkout-actions__row {
     gap: var(--space-3);
   }
 
-  .v5-ledger__actions .checkout-actions__slot--start {
+  .v5-ledger__actions .v5-checkout-actions__slot--start {
     min-block-size: calc(44px + var(--space-3) + 1px);
     padding-block-start: var(--space-3);
   }
 
-  .v5-ledger__actions .checkout-actions__slot--end {
+  .v5-ledger__actions .v5-checkout-actions__slot--end {
     min-block-size: 56px;
   }
 
-  .v5-ledger__actions .checkout-actions__slot--end button {
+  .v5-ledger__actions .v5-checkout-actions__slot--end button {
     block-size: 56px;
     min-block-size: 56px;
   }
+}
+
+/* ── Operator badge (OperatorBadge, in the Checkout frame) ───────────────
+ * RT-681: moved from the global stylesheet under its V5 name; no visual change.
+ */
+.v5-operator-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  overflow: hidden;
+  max-inline-size: 100%;
+}
+
+.v5-operator-badge__avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  inline-size: 32px;
+  block-size: 32px;
+  min-inline-size: 32px;
+  border-radius: var(--radius-pill);
+  background-color: var(--color-primary-soft);
+  color: var(--color-primary);
+  font-size: 0.6875rem; /* 11px */
+  font-weight: var(--font-weight-bold);
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
+}
+
+.v5-operator-badge__name {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.v5-operator-badge__role {
+  display: inline-flex;
+  align-items: center;
+  padding-inline: var(--space-2);
+  block-size: 20px;
+  border-radius: var(--radius-pill);
+  font-size: 0.6875rem; /* 11px */
+  font-weight: var(--font-weight-semibold);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.v5-operator-badge__role[data-role='cashier'] {
+  background-color: var(--color-info-soft);
+  color: var(--color-info);
+}
+
+.v5-operator-badge__role[data-role='manager'] {
+  background-color: var(--color-primary-soft);
+  color: var(--color-primary);
+}
+
+.v5-operator-badge__role[data-role='admin'] {
+  background-color: var(--color-warning-soft);
+  color: var(--color-warning);
 }
 
 /* ── Settle-in and reduced motion ──────────────────────────────────────── */

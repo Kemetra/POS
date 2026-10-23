@@ -560,86 +560,11 @@ body {
   /* RT-241 (D-B1): the drawer-failure banner is retired; the drawer notice is
      a v5 Banner/Notice (v5/foundation/messages.css). */
 
-  /*
-   * The payment-surface confirm and cancel are shared .v5-btn buttons
-   * (v5/foundation/buttons.css): confirm is a primary commit, cancel a
-   * danger-quiet entry into the cancel flow. No local fill, border or hover.
-   */
-
-  /* ── Entry surfaces ───────────────────────────────────────────────────
-   * The entry component mounts beneath the tender grid. It is a peer card
-   * (rule above); its internal rows get the reference's row rhythm.
-   */
-  .payment-surface__entry .tender-slots {
-    border: none;
-    background: transparent;
-  }
-
-  .payment-surface__entry .tender-row {
-    padding-inline: 0;
-  }
-
-  /* ── Footer actions ───────────────────────────────────────────────────
-   * The reference pairs a filled teal confirm with a quiet outlined cancel,
-   * both on one row at the surface foot.
-   */
-  /*
-   * RT-238 — the pinned action bar (15 §4 A2 ActionSlots). It is a sibling of the
-   * scrolling panes, so it never scrolls away. inline-start = cancel,
-   * inline-end = primary/commit, and an empty slot stays empty: the end slot is
-   * pushed to the inline-end edge even when the start slot has nothing in it.
-   */
-  .checkout-actions {
-    flex: none;
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-3);
-    padding-block-start: var(--space-3);
-    border-block-start: 1px solid var(--color-border-soft);
-  }
-
-  .checkout-actions__row {
-    display: flex;
-    align-items: flex-start;
-    gap: var(--space-4);
-  }
-
-  .checkout-actions__slot {
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-1);
-    min-inline-size: 0;
-  }
-
-  .checkout-actions__slot--start {
-    align-items: flex-start;
-  }
-
-  .checkout-actions__slot--end {
-    align-items: flex-end;
-    margin-inline-start: auto;
-  }
-
-  .checkout-actions__reason {
-    margin: 0;
-    font-size: var(--font-size-sm);
-    font-weight: var(--font-weight-semibold);
-    color: var(--color-warning-emphasis);
-  }
-
   /* The entry's own button row is empty once its commit is pinned into the bar. */
   .cash-entry__actions:empty,
   .external-card-terminal-entry__actions:empty {
     display: none;
   }
-
-  /*
-   * RT-238 — commit chrome. The Checkout commits (`.checkout-commit`) are shared
-   * .v5-btn--primary .v5-btn--commit buttons (v5/foundation/buttons.css): one
-   * filled primary per region, and a commit that cannot proceed is sunken and
-   * dashed, never just dimmed. The 60px/56px density sits on the ledger slot
-   * (v5/checkout/checkout.css), keyed to the v5-screen container.
-   */
 
   /* ══════════════════════════════════════════════════════════════════════
    * 022 US0-R2 — RE-HOMED INTO `@layer components` (was unlayered).
@@ -962,68 +887,6 @@ body {
 
   /* The takeover buttons are shared .v5-btn (v5/foundation/buttons.css). */
 
-  /* ── OperatorBadge ───────────────────────────────────────────────────── */
-
-  .operator-badge {
-    display: inline-flex;
-    align-items: center;
-    gap: var(--space-2);
-    overflow: hidden;
-    max-inline-size: 100%;
-  }
-
-  .operator-badge__avatar {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    inline-size: 32px;
-    block-size: 32px;
-    min-inline-size: 32px;
-    border-radius: var(--radius-pill);
-    background-color: var(--color-primary-soft);
-    color: var(--color-primary);
-    font-size: 0.6875rem; /* 11px */
-    font-weight: var(--font-weight-bold);
-    font-variant-numeric: tabular-nums;
-    flex-shrink: 0;
-  }
-
-  .operator-badge__name {
-    font-size: var(--font-size-sm);
-    font-weight: var(--font-weight-semibold);
-    color: var(--color-text);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .operator-badge__role {
-    display: inline-flex;
-    align-items: center;
-    padding-inline: var(--space-2);
-    block-size: 20px;
-    border-radius: var(--radius-pill);
-    font-size: 0.6875rem; /* 11px */
-    font-weight: var(--font-weight-semibold);
-    white-space: nowrap;
-    flex-shrink: 0;
-  }
-
-  .operator-badge__role[data-role='cashier'] {
-    background-color: var(--color-info-soft);
-    color: var(--color-info);
-  }
-
-  .operator-badge__role[data-role='manager'] {
-    background-color: var(--color-primary-soft);
-    color: var(--color-primary);
-  }
-
-  .operator-badge__role[data-role='admin'] {
-    background-color: var(--color-warning-soft);
-    color: var(--color-warning);
-  }
-
   /* === POS v3.5 prototype port (Phase 0 Task 1) — tender/account/held classes from docs/design/pos-v3.5/design-reference/kit.css === */
   /*
    * STYLE-ONLY port of class vocabulary that later tender-screen work needs.
@@ -1044,14 +907,6 @@ body {
    * card ring (kit.css 1745-1747) is folded into the base selected-card rule
    * below.
    */
-
-  /* ── Tender: stacked slot container ───────────────────────────────────── */
-  .tender-slots {
-    border: 1px solid var(--color-border);
-    border-radius: var(--radius-card);
-    overflow: hidden;
-    background: var(--color-surface);
-  }
 
   /* ── Tender: credit-account selector rows ─────────────────────────────── */
   .account-row {
@@ -1185,7 +1040,7 @@ body {
    * present in earlier slices. Rules are token-mapped — NO raw hex, NO new
    * custom-property names. Token values re-theme through :root[data-theme='dark']
    * (ADR-0004). NO dark-forked component selectors (theme-contract.test.ts
-   * forbids them). Classes already present above (.tender-slots, .method-card,
+   * forbids them). Classes already present above (.method-card,
    * .method-grid, .account-row, .tender-method-grid) are left as-is.
    *
    * Sources: kit.css lines 400-555 (tender screen section), token-mapped.
@@ -1215,49 +1070,6 @@ body {
     font-weight: var(--font-weight-bold);
     color: var(--color-text);
     letter-spacing: -0.01em;
-  }
-
-  /* ── Tender rows (kit.css 461-473) ─────────────────────────────────────── */
-  /*
-   * .tender-slots is already defined above; these are the row-level classes.
-   */
-  .tender-row {
-    display: flex;
-    align-items: center;
-    gap: var(--space-4);
-    padding: var(--space-3) var(--space-4);
-    min-height: 56px;
-    border-bottom: 1px solid var(--color-border-soft);
-  }
-  .tender-row:last-child {
-    border-bottom: none;
-  }
-  .tender-row--totals {
-    background: var(--color-surface-elevated);
-  }
-  .tender-row__label {
-    font-weight: var(--font-weight-semibold);
-    font-size: var(--font-size-sm);
-    color: var(--color-text);
-    min-width: 140px;
-  }
-  .tender-row__value {
-    margin-inline-start: auto;
-  }
-  .tender-row__body {
-    color: var(--color-text-muted);
-    font-size: var(--font-size-sm);
-  }
-  /* Muted value modifier — used for deferred/informational amounts. */
-  .tender-row__value--muted {
-    color: var(--color-text-muted);
-  }
-  /* Deferred balance highlight (kit.css 608). */
-  .tender-row__value--deferred {
-    font-family: var(--font-family-mono);
-    font-variant-numeric: tabular-nums;
-    font-weight: var(--font-weight-bold);
-    color: var(--color-warning-emphasis);
   }
 
   /* ── Voucher-field wrapper (kit.css 511-524) ────────────────────────────── */

@@ -106,8 +106,8 @@ describe('Checkout marks the due, the change and the actions, inside the guard',
     }
     // The commit and the cancel slot both sit in the pinned actions row.
     const actions = guard?.querySelector('.v5-ledger__actions');
-    expect(actions?.querySelector('.checkout-actions__slot--end')).not.toBeNull();
-    expect(actions?.querySelector('.checkout-actions__slot--start')).not.toBeNull();
+    expect(actions?.querySelector('.v5-checkout-actions__slot--end')).not.toBeNull();
+    expect(actions?.querySelector('.v5-checkout-actions__slot--start')).not.toBeNull();
     // Fits in the test DOM (no layout): no notice, nothing inert.
     expect(document.querySelector('[data-testid="fit-block"]')).toBeNull();
     expect(guard).not.toHaveAttribute('inert');

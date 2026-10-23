@@ -172,11 +172,11 @@ export function VoucherEntry({
           - Client-side voucher lookup is FORBIDDEN — validity is resolved
             MAIN-SIDE via the V-A client. No VOUCHERS table, no voucherKnown.
       */}
-      <div className="tender-slots">
+      <div className="v5-entry-slots">
         {/* Voucher code row — voucher-field wraps the input + applied indicator */}
-        <div className="tender-row">
-          <span className="tender-row__label">رمز القسيمة</span>
-          <span className="tender-row__value">
+        <div className="v5-entry-row">
+          <span className="v5-entry-row__label">رمز القسيمة</span>
+          <span className="v5-entry-row__value">
             <span className="voucher-field">
               <input
                 type="text"
@@ -209,11 +209,14 @@ export function VoucherEntry({
         </div>
 
         {/* Amount-to-apply row */}
-        <div className="tender-row">
-          <label className="tender-row__label voucher-entry__label" htmlFor="voucher-amount-input">
+        <div className="v5-entry-row">
+          <label
+            className="v5-entry-row__label voucher-entry__label"
+            htmlFor="voucher-amount-input"
+          >
             المبلغ المطبّق (<span dir="ltr">EGP</span>)
           </label>
-          <span className="tender-row__value">
+          <span className="v5-entry-row__value">
             <input
               id="voucher-amount-input"
               data-scan-refuse="amount"
@@ -248,7 +251,7 @@ export function VoucherEntry({
       <PinnedPrimary>
         <button
           type="button"
-          className="voucher-entry__confirm checkout-commit v5-btn v5-btn--primary v5-btn--commit"
+          className="voucher-entry__confirm v5-btn v5-btn--primary v5-btn--commit"
           data-testid="voucher-entry-confirm"
           style={{ minHeight: touchTarget.commit }}
           disabled={!canSubmit}

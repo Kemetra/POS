@@ -319,7 +319,7 @@ describe('Checkout across the band, with recorded change and the Back reason', (
     expect(change?.contains(screen.getByTestId('payment-ledger-change'))).toBe(true);
     expect(follows(due, change as Element)).toBe(true);
     expect(follows(change as Element, middle)).toBe(true);
-    expect(actions.querySelector('.checkout-actions__slot--end')).not.toBeNull();
-    expect(actions.querySelector('.checkout-actions__slot--start')).not.toBeNull();
+    expect(actions.querySelector('.v5-checkout-actions__slot--end')).not.toBeNull();
+    expect(actions.querySelector('.v5-checkout-actions__slot--start')).not.toBeNull();
   });
 });
