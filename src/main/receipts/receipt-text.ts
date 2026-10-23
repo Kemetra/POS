@@ -12,8 +12,16 @@ export const COLS = 42;
 const INDENT = '    ';
 const CONTINUATION = COLS - INDENT.length;
 
-/** Control characters and bidi embeddings/overrides/isolates (no reordering tricks). */
-const UNPRINTABLE = /[\p{Cc}‪-‮⁦-⁩]/gu;
+/** Bidi embeddings, overrides and isolates (no reordering tricks), by code point. */
+const BIDI_CONTROLS: ReadonlyArray<readonly [number, number]> = [
+  [0x202a, 0x202e],
+  [0x2066, 0x2069],
+];
+const bidiClass = BIDI_CONTROLS.map(
+  ([from, to]) => `${String.fromCodePoint(from)}-${String.fromCodePoint(to)}`,
+).join('');
+/** Control characters and bidi controls. */
+const UNPRINTABLE = new RegExp(`[\\p{Cc}${bidiClass}]`, 'gu');
 
 /** Server or operator text made safe to print: control and bidi characters removed. */
 export function stripUnprintable(raw: string): string {

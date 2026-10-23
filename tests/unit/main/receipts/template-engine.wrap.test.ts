@@ -13,49 +13,46 @@ import type { SaleId, SaleNumber, TenderLineSummary } from '../../../../src/shar
 
 const COLS = 42;
 
+const oneLine = (display_name: string): ReceiptPayload['lines'][number] => ({
+  item_ref: 'i',
+  display_name,
+  quantity: 1,
+  unit_price_minor: 100,
+  line_subtotal_minor: 100,
+  note: null,
+});
+
 function payload(overrides: Partial<ReceiptPayload> = {}): ReceiptPayload {
   return {
     variant: 'first_print',
-    sale_id: 'sale-1' as SaleId,
-    sale_number: 'TERM-01-2026-05-27-000001' as SaleNumber,
-    receipt_number: 'TERM-01-2026-05-27-000001',
-    tenant_tax_registration_id: '100123456789012',
-    branch_name: 'صيدلية الرحمة قناطر',
-    branch_address: 'الفرع الرئيسي — العاشر من رمضان',
-    terminal_label: 'TERM-01',
-    selling_operator_display_name: 'Mohamed Ahmed',
-    subtotal_minor: 12500,
+    sale_id: 's-9' as SaleId,
+    sale_number: 'S-9' as SaleNumber,
+    receipt_number: 'R-9',
+    tenant_tax_registration_id: '555',
+    branch_name: 'Branch',
+    branch_address: 'Street 1',
+    terminal_label: 'T9',
+    selling_operator_display_name: 'Op',
+    subtotal_minor: 100,
     total_tax_minor: 0,
     total_change_due_minor: 0,
-    lines: [
-      {
-        item_ref: 'SKU-001',
-        display_name: 'Augmentin 625mg',
-        quantity: 1,
-        unit_price_minor: 12500,
-        line_subtotal_minor: 12500,
-        note: null,
-      },
-    ],
-    tender_lines_summary: [{ tender_type: 'cash', amount_applied_minor: 12500 }],
-    settled_at: '2026-05-27T08:42:18.000Z',
-    finalized_at: '2026-05-27T08:42:19.000Z',
-    local_calendar_day: '2026-05-27',
+    lines: [oneLine('Item')],
+    tender_lines_summary: [{ tender_type: 'cash', amount_applied_minor: 100 }],
+    settled_at: '2026-06-01T10:00:00.000Z',
+    finalized_at: '2026-06-01T10:00:01.000Z',
+    local_calendar_day: '2026-06-01',
     ...overrides,
   };
 }
 
 const width = (s: string): number => Array.from(s).length;
 
+const ENTITIES: Record<string, string> = { '&lt;': '<', '&gt;': '>', '&quot;': '"', '&amp;': '&' };
+
 function htmlLines(html: string): string[] {
-  const bands = html.match(/<div class="(?:band|rule)[^"]*"[^>]*>[^<]*<\/div>/g) ?? [];
-  return bands.map((b) =>
-    b
-      .replace(/<[^>]+>/g, '')
-      .replace(/&lt;/g, '<')
-      .replace(/&gt;/g, '>')
-      .replace(/&quot;/g, '"')
-      .replace(/&amp;/g, '&'),
+  const band = /<div class="(?:band|rule)[^"]*"[^>]*>([^<]*)<\/div>/g;
+  return Array.from(html.matchAll(band), (m) =>
+    (m[1] ?? '').replace(/&(?:lt|gt|quot|amp);/g, (e) => ENTITIES[e] ?? e),
   );
 }
 
@@ -91,21 +88,7 @@ const FIELDS: ReadonlyArray<readonly [string, (v: string) => Partial<ReceiptPayl
   ['receipt_number', (v) => ({ receipt_number: v })],
   ['terminal_label', (v) => ({ terminal_label: v })],
   ['selling_operator_display_name', (v) => ({ selling_operator_display_name: v })],
-  [
-    'line display_name',
-    (v) => ({
-      lines: [
-        {
-          item_ref: 'SKU-X',
-          display_name: v,
-          quantity: 1,
-          unit_price_minor: 12500,
-          line_subtotal_minor: 12500,
-          note: null,
-        },
-      ],
-    }),
-  ],
+  ['line display_name', (v) => ({ lines: [oneLine(v)] })],
   [
     'card external_reference',
     (v) => tenderWith('external_card_terminal', { external_reference: v }),
@@ -166,10 +149,12 @@ describe('RT-204 — the receipt website line (configured text) wraps as well', 
 
 describe('RT-204 — control and bidi override characters never reach the printer', () => {
   it('strips them from a dynamic value', () => {
-    const out = renderReceipt(payload({ terminal_label: 'T‮ERM\u0007-01' }));
+    const rlo = String.fromCharCode(0x202e);
+    const bell = String.fromCharCode(7);
+    const out = renderReceipt(payload({ terminal_label: `T${rlo}ERM${bell}-01` }));
     expect(out.html).toContain('Terminal: TERM-01');
-    expect(out.html).not.toContain('‮');
-    expect(new TextDecoder().decode(out.escpos)).not.toContain('\u0007');
+    expect(out.html).not.toContain(rlo);
+    expect(new TextDecoder().decode(out.escpos)).not.toContain(bell);
   });
 });
 
