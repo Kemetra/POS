@@ -81,3 +81,27 @@ shift_id | closed_at | closing_user_id | close_kind | forced_reason | opening_fl
 seq | fact_kind | shift_id | movement_id | tenant_id | branch_id | terminal_id | auth_path | idempotency_key | request_body | enqueued_at | supersedes_seq | origin_seq
 1 | open | 01a16936-16e2-702c-8967-bcc3607adcde |  | 9be1cac9-f6dc-4e0b-b2bb-6f4a4145801a | 9847b3e1-3ded-4b51-8dd5-0cf07a4893de | 4dd4324b-646f-427f-83a6-a8dc96a34a25 | device | pos-pulse-shift-open:01a16936-16e2-702c-8967-bcc3607adcde | {"shiftId":"01a16936-16e2-702c-8967-bcc3607adcde","openedAt":"2026-10-23T14:41:54.914Z","openingUserId":"62acf6ea-0966-4708-9343-c6de90e94002","currencyCode":"EG
 2 | close | 01a16936-16e2-702c-8967-bcc3607adcde |  | 9be1cac9-f6dc-4e0b-b2bb-6f4a4145801a | 9847b3e1-3ded-4b51-8dd5-0cf07a4893de | 4dd4324b-646f-427f-83a6-a8dc96a34a25 | device | pos-pulse-shift-close:01a16936-16e2-702c-8967-bcc3607adcde | {"closedAt":"2026-10-23T15:06:36.515Z","closingUserId":"62acf6ea-0966-4708-9343-c6de90e94002","closeKind":"normal","openingFloat":"100.00","cashSalesTotal":"0.
+## select group_concat(name) from pragma_table_info('payment_tender_lines')
+group_concat(name)
+tender_line_id,payment_attempt_id,tender_type,amount_applied_minor,state,change_due_minor,external_reference,voucher_redemption_intent_token,voucher_authority_redemption_id,applied_at,refused_at,reversed_at,reversal_pending_since,refusal_reason,attribution_operator_id,apply_order,last_action_id
+## select substr(c.cart_id,1,8) cart, (select count(*) from cart_park_actions a where a.cart_id=c.cart_id) park_actions, (select count(*) from payment_tender_lines t where t.cart_id=c.cart_id) tender_lines from carts c where c.cart_id in (select cart_id from cart_park_actions) order by c.created_at
+Traceback (most recent call last):
+  File "C:\Users\Shaaban\AppData\Local\Temp\claude\C--Users-Shaaban-Documents-GitHub\949ea02d-b9d5-417d-bd3d-d61a3ce253d1\scratchpad\q\dbq.py", line 5, in <module>
+    cur = con.execute(sql)
+sqlite3.OperationalError: no such column: t.cart_id
+## select substr(c.cart_id,1,8) cart, c.state, (select count(*) from cart_park_actions a where a.cart_id=c.cart_id) park_actions, (select count(*) from payment_attempts p where p.envelope_cart_id=c.cart_id) attempts, (select count(*) from payment_tender_lines t join payment_attempts p on p.payment_attempt_id=t.payment_attempt_id where p.envelope_cart_id=c.cart_id) tender_lines from carts c where c.cart_id in (select cart_id from cart_park_actions) order by c.created_at
+cart | state | park_actions | attempts | tender_lines
+798a5e4b | cancelled | 5 | 0 | 0
+321a5587 | cancelled | 1 | 0 | 0
+1bdac2cd | cancelled | 2 | 0 | 0
+2d05b0f2 | cancelled | 1 | 0 | 0
+## select count(*) total_tender_lines from payment_tender_lines
+total_tender_lines
+4
+## select substr(c.cart_id,1,8) cart, (select count(*) from payment_tender_lines t join payment_attempts p on p.payment_attempt_id=t.payment_attempt_id where p.envelope_cart_id=c.cart_id) tender_lines from carts c where c.parked_at is not null or c.cart_id in (select cart_id from cart_park_actions)
+cart | tender_lines
+798a5e4b | 0
+58515b8a | 0
+321a5587 | 0
+1bdac2cd | 0
+2d05b0f2 | 0
