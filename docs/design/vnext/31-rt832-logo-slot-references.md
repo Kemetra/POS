@@ -1,8 +1,9 @@
 # RT-832 — Tenant-logo slot references (RT-473 OD-7)
 
 > **Work Mode: Docs (design references).** Jira **RT-832**; relates RT-472, RT-473, RT-475.
-> **PROPOSED — awaiting owner sign-off.** Nothing here is approved. The owner's sign-off is what
-> records OD-7 on RT-473 and on RT-832. No runtime code changes; the frames are the real screens on
+> **APPROVED 2026-10-23 (owner).** The owner signed off the four slot boxes, sign-in option A,
+> forced colours on an un-forced white card, and the powered-by line «بدعم من Retail Tower». Recorded
+> on RT-832 and on RT-473 as **OD-7**. The receipt rendition stays **pending OD-8**. No runtime code changes; the frames are the real screens on
 > `main` with the slot drawn in flow.
 >
 > **Frames and table:** [`RT832-Logo-Slots-Spec.html`](visual-acceptance/RT832-Logo-slots/RT832-Logo-Slots-Spec.html)
@@ -37,7 +38,7 @@ scales = 8, with no per-width entry. A width-dependent box would need a contract
 |:--|:--|:--|
 | Boot | Centred; box, 24px gap and the loading status centred as one group | 24px to the status |
 | Pairing | First child of the 440px card, above the leading icon, on the inline-start edge (RTL: right) | 16px (the card grid gap); card padding 32px (28px at 1024) |
-| Sign-in header | Inline-start end of the context strip (RTL: right), at the gutter (24px at 1280, 16px at 1024); replaces the 26px mark and the «POS Pulse» wordmark (option A) | 14px to the separator (the existing strip gap); the strip stays 48px (44px at 1024) |
+| Sign-in header | Inline-start end of the context strip (RTL: right), at the gutter (24px at 1280, 16px at 1024); replaces the 26px mark and the «POS Pulse» wordmark (option A, approved) | 14px to the separator (the existing strip gap); the strip stays 48px (44px at 1024) |
 | Lock | First child of the 440px lock dialog, above the lock head, on the inline-start edge; the 56px lock glyph stays | 12px (the dialog grid gap); dialog padding 24px |
 
 - **No logo.** The slot collapses: no placeholder, no reserved space, no powered-by line. Every
@@ -45,13 +46,13 @@ scales = 8, with no per-width entry. A width-dependent box would need a contract
 - **Powered-by (OD-12 decided: «Retail Tower»).** Shown only with a logo. 12px muted
   «بدعم من Retail Tower», the name isolated LTR. Boot: centred, 24px under the status. Pairing and
   lock: centred at the foot of the card or dialog. Sign-in: the inline-end end of the strip. The
-  Arabic prefix is proposed copy.
+  Arabic prefix and the line are approved (2026-10-23).
 - **`low_contrast` (FR-11).** White card: `#fff`, 1px border, 8px radius, padding outside the box
   (table). In the strip the padding is 2px / 4px so the strip does not grow.
 - **Forced colours.** Images are not recoloured, so a logo's contrast on `Canvas` is unknowable. The
   frames propose that every logo sits on the white card with `forced-color-adjust: none` and a
   visible border. This extends the shipped un-force precedent (selected and current states) to a
-  logo card, so it is an owner decision.
+  logo card; approved by the owner on 2026-10-23.
 - **Long terminal label.** The label is admin free text with no length limit and the strip does not
   wrap, so with a logo and the powered-by line the context must truncate
   (`min-inline-size: 0; overflow: hidden; text-overflow: ellipsis`) while the logo, separator and
@@ -66,14 +67,16 @@ Not sized. It needs the printer dpi and printable width from the printer self-te
 still owes. Formula only: `width_px ≤ floor(48 / 25.4 × dpi)`, `height_px ≤ floor(15 / 25.4 × dpi)`
 (at most 48×15 mm). **PENDING OD-8.**
 
-## 4. Owner decisions asked
+## 4. Owner decisions (signed 2026-10-23)
 
-1. The four boxes and their 1x/2x sizes (§1).
-2. Sign-in placement, **A** (drawn: the logo replaces the mark and wordmark) or **B** (logo beside
-   the wordmark with a separator; costs about 95px plus a 14px separator of the strip).
-3. Forced colours: every logo on the un-forced white card.
-4. The powered-by prefix «بدعم من» and its position per screen.
-5. No logo means no powered-by line and no placeholder.
+1. The four boxes and their 1x/2x sizes (§1): **approved**.
+2. Sign-in placement: **option A** (the logo replaces the mark and wordmark): **approved**. Option B
+   (logo beside the wordmark with a separator) is **rejected**.
+3. Forced colours: every logo on the un-forced white card: **approved**.
+4. The powered-by line «بدعم من Retail Tower», shown only with a logo and never as a placeholder:
+   **approved**.
+
+Still open: the receipt rendition, **pending OD-8** (§3).
 
 ## 5. Method and evidence
 
