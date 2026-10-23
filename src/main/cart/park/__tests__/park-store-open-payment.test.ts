@@ -1,11 +1,11 @@
-import { readdirSync, readFileSync } from 'node:fs';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
-import initSqlJs from 'sql.js';
 import type { Database as SqlJsDatabase } from 'sql.js';
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
-import type { DatabaseHandle } from '../../../db/client.js';
+import {
+  freshGrantDb,
+  handleFor,
+  initGrantSql,
+} from '../../../operator/__tests__/__helpers__/offline-grant-fixture.js';
 import { bindParkStore, type ParkStore } from '../park-store.js';
 
 /**
@@ -14,81 +14,42 @@ import { bindParkStore, type ParkStore } from '../park-store.js';
  * payment; only money still in flight may block a resume.
  */
 
-const REPO_ROOT = path.resolve(
-  path.dirname(fileURLToPath(import.meta.url)),
-  '..',
-  '..',
-  '..',
-  '..',
-  '..',
-);
-const MIGRATIONS_DIR = path.join(REPO_ROOT, 'migrations');
+let db: SqlJsDatabase;
 
-let SQL: Awaited<ReturnType<typeof initSqlJs>>;
-let sqlDb: SqlJsDatabase;
-
-beforeAll(async () => {
-  SQL = await initSqlJs();
-});
+beforeAll(initGrantSql);
 
 beforeEach(() => {
-  sqlDb = new SQL.Database();
-  const files = readdirSync(MIGRATIONS_DIR)
-    .filter((f) => f.endsWith('.sql'))
-    .sort();
-  for (const file of files) sqlDb.run(readFileSync(path.join(MIGRATIONS_DIR, file), 'utf8'));
+  db = freshGrantDb();
   // Partial fixture rows; the predicate under test never follows a foreign key.
-  sqlDb.run('PRAGMA foreign_keys = OFF');
+  db.run('PRAGMA foreign_keys = OFF');
 });
 
 afterEach(() => {
-  sqlDb.close();
+  db.close();
 });
 
-function handle(): DatabaseHandle {
-  const open = <T>(sql: string, params: unknown[], each: (rows: T[]) => T | undefined): unknown => {
-    const stmt = sqlDb.prepare(sql);
-    try {
-      stmt.bind(params as never);
-      const rows: T[] = [];
-      while (stmt.step()) rows.push(stmt.getAsObject() as unknown as T);
-      return each(rows);
-    } finally {
-      stmt.free();
-    }
-  };
-  return {
-    prepare: (sql: string) => ({
-      get: (...params: unknown[]) => open(sql, params, (rows) => rows[0]),
-    }),
-  } as unknown as DatabaseHandle;
-}
+const store = (): ParkStore => bindParkStore(handleFor(db));
 
-const store = (): ParkStore => bindParkStore(handle());
-
-interface ColumnInfo {
-  name: string;
-  type: string;
-  notnull: number;
-  dflt_value: string | null;
-}
-
+// UUID-shaped filler: several tables CHECK their id columns are 36-char lowercase UUIDs.
 const FILLER_UUID = '00000000-0000-4000-8000-000000000000';
 
+/** Fills every NOT NULL column without a default (from PRAGMA table_info), then applies overrides. */
 function insert(table: string, overrides: Record<string, string | number | null>): void {
-  const stmt = sqlDb.prepare(`PRAGMA table_info(${table})`);
-  const columns: ColumnInfo[] = [];
-  while (stmt.step()) columns.push(stmt.getAsObject() as unknown as ColumnInfo);
-  stmt.free();
-  const row: Record<string, string | number | null> = {};
-  for (const col of columns) {
-    if (col.name in overrides) row[col.name] = overrides[col.name] ?? null;
-    else if (col.notnull === 1 && col.dflt_value === null) {
-      row[col.name] = /INT|REAL|NUM/i.test(col.type) ? 0 : FILLER_UUID;
+  const columns = (db.exec(`PRAGMA table_info(${table})`)[0]?.values ?? []) as [
+    number,
+    string,
+    string,
+    number,
+    string | null,
+  ][];
+  const row: Record<string, string | number | null> = { ...overrides };
+  for (const [, name, type, notnull, dflt] of columns) {
+    if (!(name in row) && notnull === 1 && dflt === null) {
+      row[name] = /INT|REAL|NUM/i.test(type) ? 0 : FILLER_UUID;
     }
   }
   const names = Object.keys(row);
-  sqlDb.run(
+  db.run(
     `INSERT INTO ${table} (${names.join(', ')}) VALUES (${names.map(() => '?').join(', ')})`,
     names.map((n) => row[n] ?? null),
   );
