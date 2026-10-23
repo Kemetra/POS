@@ -428,6 +428,14 @@ jobs:
 
       # RT-830 (RT-748 I-7): the packaged exe's fuse wire must equal electronFuses in
       # electron-builder.yml (undeclared fuses keep the stock Electron value). Blocking.
+      # PROBE (RT-830 negative proof, never merged): tamper with the packaged exe after
+      # packaging, so the readback below must fail and name runAsNode.
+      - name: PROBE tamper RunAsNode on in the packaged exe
+        run: >-
+          node -e "require('@electron/fuses').flipFuses('dist-electron/win-unpacked/POS Pulse.exe',
+          {version: require('@electron/fuses').FuseVersion.V1,
+          [require('@electron/fuses').FuseV1Options.RunAsNode]: true}).then(n => console.log('flipped', n))"
+
       - name: Fuse readback (packaged exe vs electron-builder.yml)
         run: npx tsx scripts/verify-packaged.ts fuses
 
