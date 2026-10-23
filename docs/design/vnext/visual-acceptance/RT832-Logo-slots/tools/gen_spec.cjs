@@ -21,7 +21,7 @@ const chipOuter = (key, s) => {
 };
 
 const PLACEMENT = {
-  boot: 'Centred horizontally. Stacked above the loading status, with the box, a 24px gap and the status centred as one group in the viewport.',
+  boot: 'Centred horizontally. Stacked above the loading status, with the box, a 24px gap, the status and the powered-by line (24px below the status) centred in the viewport as one stack; the stack, not the logo and status alone, is the centred unit, as the captures show.',
   pairing: 'First child of the 440px card, above the leading icon. Aligned to the inline-start edge of the card content (RTL: the right edge).',
   sign_in: 'Inline-start end of the context strip (RTL: the right end), at the strip gutter (24px at 1280, 16px at 1024). Replaces the 26px mark and the «POS Pulse» wordmark (option A, approved, §4).',
   lock: 'First child of the 440px lock dialog, above the lock head. Aligned to the inline-start edge of the dialog content (RTL: the right edge). The 56px lock glyph stays.',

@@ -36,7 +36,7 @@ scales = 8, with no per-width entry. A width-dependent box would need a contract
 
 | Slot | Placement | Spacing outside the box |
 |:--|:--|:--|
-| Boot | Centred; box, 24px gap and the loading status centred as one group | 24px to the status |
+| Boot | Centred; box, 24px gap, the loading status and (with a logo) the powered-by line 24px below it, centred in the viewport as one stack | 24px to the status |
 | Pairing | First child of the 440px card, above the leading icon, on the inline-start edge (RTL: right) | 16px (the card grid gap); card padding 32px (28px at 1024) |
 | Sign-in header | Inline-start end of the context strip (RTL: right), at the gutter (24px at 1280, 16px at 1024); replaces the 26px mark and the «POS Pulse» wordmark (option A, approved) | 14px to the separator (the existing strip gap); the strip stays 48px (44px at 1024) |
 | Lock | First child of the 440px lock dialog, above the lock head, on the inline-start edge; the 56px lock glyph stays | 12px (the dialog grid gap); dialog padding 24px |
