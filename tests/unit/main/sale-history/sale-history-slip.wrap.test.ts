@@ -7,16 +7,23 @@
  */
 import { describe, expect, it } from 'vitest';
 
-import { renderBands, type Band } from '../../receipts/template-engine.js';
-import type { SaleHistoryDetail } from '../../../shared/sale-history/types.js';
+import {
+  COLS,
+  VALUES,
+  compact,
+  escposLines,
+  htmlLines,
+  width,
+} from '../receipts/__helpers__/printed-lines.js';
+import { renderBands, type Band } from '../../../../src/main/receipts/template-engine.js';
+import type { SaleHistoryDetail } from '../../../../src/shared/sale-history/types.js';
 import {
   duplicateBands,
   duplicateFromDetail,
   saleRecordBands,
   type SlipContext,
-} from '../sale-history-slip.js';
+} from '../../../../src/main/sale-history/sale-history-slip.js';
 
-const COLS = 42;
 const AT = '2026-10-16T09:00:00.000Z';
 
 function detail(over: Partial<SaleHistoryDetail> = {}): SaleHistoryDetail {
@@ -95,33 +102,6 @@ function returnedDuplicate(d: SaleHistoryDetail): Band[] {
   if (payload === null) throw new Error('the fixture builds a duplicate');
   return duplicateBands(payload, ctx(d));
 }
-
-const width = (s: string): number => Array.from(s).length;
-const ENTITIES: Record<string, string> = { '&lt;': '<', '&gt;': '>', '&quot;': '"', '&amp;': '&' };
-
-function htmlLines(html: string): string[] {
-  const band = /<div class="(?:band|rule)[^"]*"[^>]*>([^<]*)<\/div>/g;
-  return Array.from(html.matchAll(band), (m) =>
-    (m[1] ?? '').replace(/&(?:lt|gt|quot|amp);/g, (e) => ENTITIES[e] ?? e),
-  );
-}
-
-function escposLines(bytes: Uint8Array): string[] {
-  return new TextDecoder()
-    .decode(bytes)
-    .replace(/\u001b@/g, '')
-    .replace(/\u001b[aE]./g, '')
-    .replace(/\u001dV\u0000/g, '')
-    .split('\n');
-}
-
-const compact = (lines: string[]): string => lines.join('').replace(/\s+/g, '');
-
-const VALUES: ReadonlyArray<readonly [string, string]> = [
-  ['ASCII', 'A'.repeat(120)],
-  ['emoji', '😀'.repeat(120)],
-  ['Arabic', 'م'.repeat(120)],
-];
 
 /** The returns block alone: from its header to the end of the slip. */
 const RETURNS_HEADER = 'المرتجعات — RETURNS';
