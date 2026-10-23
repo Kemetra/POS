@@ -213,7 +213,7 @@
     color: GrayText;
   }
 
-  /* An unavailable commit keeps its dashed edge, as .checkout-commit did. */
+  /* An unavailable commit keeps its dashed edge. */
   .v5-btn.v5-btn--commit:is(:disabled, [aria-disabled='true']) {
     border: 2px dashed GrayText;
   }

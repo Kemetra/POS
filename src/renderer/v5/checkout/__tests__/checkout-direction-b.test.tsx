@@ -434,15 +434,15 @@ describe('Checkout action slots keep their place (A2, N-02) — CSS tripwire', (
   }
 
   it.each([
-    '.v5-ledger__actions .checkout-actions__slot--end',
-    '.v5-ledger__actions .checkout-actions__slot--start',
+    '.v5-ledger__actions .v5-checkout-actions__slot--end',
+    '.v5-ledger__actions .v5-checkout-actions__slot--start',
   ])('%s reserves its height at both densities', (selector) => {
     const sized = blocks(selector).filter((body) => /min-block-size:/.test(body));
     expect(sized.length).toBeGreaterThanOrEqual(2);
   });
 
   it('no rule collapses an empty action slot or the action band', () => {
-    expect(css).not.toMatch(/checkout-actions__slot[^{]*:empty/);
+    expect(css).not.toMatch(/v5-checkout-actions__slot[^{]*:empty/);
     expect(css).not.toMatch(/v5-ledger__actions[^{]*:not\(:has/);
   });
 });

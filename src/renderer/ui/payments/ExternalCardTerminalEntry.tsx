@@ -189,7 +189,7 @@ export function ExternalCardTerminalEntry({
           )}
           <button
             type="button"
-            className="external-card-terminal-entry__confirm checkout-commit v5-btn v5-btn--primary v5-btn--commit"
+            className="external-card-terminal-entry__confirm v5-btn v5-btn--primary v5-btn--commit"
             data-testid="external-card-confirm"
             style={{ minHeight: touchTarget.commit }}
             disabled={!canConfirm}

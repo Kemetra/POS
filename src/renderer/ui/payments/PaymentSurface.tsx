@@ -622,7 +622,7 @@ function PaymentSurfaceBody({
   // bring it into view so the cashier never has to hunt for the amount field.
   useEffect(() => {
     if (phase !== 'entry') return;
-    const entry = document.querySelector('.payment-surface__entry');
+    const entry = document.querySelector('.v5-checkout__entry');
     // jsdom has no layout and no scrollIntoView; the real window always does.
     if (entry !== null && 'scrollIntoView' in entry) entry.scrollIntoView({ block: 'nearest' });
   }, [phase]);
@@ -1633,7 +1633,7 @@ function PaymentSurfaceBody({
       return (
         <button
           type="button"
-          className="checkout-commit v5-btn v5-btn--primary v5-btn--commit"
+          className="v5-btn v5-btn--primary v5-btn--commit"
           data-testid="payment-surface-reread"
           onClick={retryFailedRead}
         >
@@ -1645,7 +1645,7 @@ function PaymentSurfaceBody({
     return (
       <button
         type="button"
-        className="payment-surface__confirm checkout-commit v5-btn v5-btn--primary v5-btn--commit"
+        className="v5-btn v5-btn--primary v5-btn--commit"
         data-testid="payment-surface-confirm"
         disabled={isConfirming}
         aria-disabled={isConfirming || !fullyTendered ? 'true' : undefined}
@@ -1663,7 +1663,7 @@ function PaymentSurfaceBody({
     if (cancelOpen) return null;
     if (afterApply === 'failed') {
       return (
-        <output className="checkout-actions__reason" data-testid="payment-surface-reread-notice">
+        <output className="v5-checkout-actions__reason" data-testid="payment-surface-reread-notice">
           {readAfter === 'start' ? START_READ_FAILED_COPY : TENDER_READ_FAILED_COPY}
         </output>
       );
@@ -1672,7 +1672,7 @@ function PaymentSurfaceBody({
     return (
       <p
         id="payment-commit-reason"
-        className="checkout-actions__reason"
+        className="v5-checkout-actions__reason"
         data-testid="payment-surface-commit-reason"
       >
         المبلغ أقل من المستحق
@@ -1695,7 +1695,7 @@ function PaymentSurfaceBody({
           phase === 'entry' ? (
             <button
               type="button"
-              className="payment-surface__cancel v5-btn v5-btn--danger-quiet"
+              className="v5-btn v5-btn--danger-quiet"
               data-testid="payment-surface-cancel"
               disabled={isCancelling}
               aria-disabled={isCancelling ? 'true' : undefined}
@@ -1820,10 +1820,7 @@ function PaymentSurfaceBody({
 
             {/* S3d mode: entry component for the selected tender. */}
             {entryOpen && (
-              <div
-                className="payment-surface__entry v5-checkout__entry"
-                data-testid="payment-surface-entry"
-              >
+              <div className="v5-checkout__entry" data-testid="payment-surface-entry">
                 {selectedTender === 'cash' && (
                   <CashEntry
                     remainingBalanceMinor={remainingBalanceMinor}
@@ -1883,12 +1880,7 @@ function PaymentSurfaceBody({
 
         {/* Slice-1 mode: status banner only (no bridge wiring). */}
         {bridge === null && selectedTender !== null && (
-          <div
-            className="payment-surface__tender-selected"
-            data-testid="payment-surface-tender-selected"
-            role="status"
-            aria-live="polite"
-          >
+          <div data-testid="payment-surface-tender-selected" role="status" aria-live="polite">
             {TENDER_SELECTED_COPY[selectedTender]}
           </div>
         )}
