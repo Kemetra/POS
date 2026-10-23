@@ -48,6 +48,12 @@ describe('parseElectronFuses', () => {
     });
   });
 
+  it('does not end the block at a column-0 comment between entries', () => {
+    const text =
+      'electronFuses:\n  runAsNode: false\n# a note\n  onlyLoadAppFromAsar: true\nfiles:\n  - x\n';
+    expect(parseElectronFuses(text)).toEqual({ runAsNode: false, onlyLoadAppFromAsar: true });
+  });
+
   it('fails closed on a value it does not understand', () => {
     expect(() => parseElectronFuses('electronFuses:\n  runAsNode: no\n')).toThrow(/unparseable/);
     expect(() => parseElectronFuses('productName: x\n')).toThrow(/no top-level electronFuses/);

@@ -77,7 +77,8 @@ function fuseBlockLines(lines: readonly string[]): string[] {
   const start = lines.findIndex((l) => (l.split('#', 1)[0] ?? '').trimEnd() === 'electronFuses:');
   if (start < 0) throw new Error('electron-builder.yml has no top-level electronFuses block');
   const rest = lines.slice(start + 1);
-  const end = rest.findIndex((l) => /^\S/.test(l));
+  // A comment at column 0 does not end a YAML mapping; only a non-comment top-level line does.
+  const end = rest.findIndex((l) => /^[^\s#]/.test(l));
   return end < 0 ? rest : rest.slice(0, end);
 }
 
