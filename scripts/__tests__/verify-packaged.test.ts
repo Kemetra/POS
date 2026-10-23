@@ -79,7 +79,7 @@ describe('compareFuses', () => {
   const matching = { ...stock, 0: DISABLE, 5: ENABLE };
 
   it('passes when declared fuses are flipped and the rest keep stock values', () => {
-    const { rows, problems } = compareFuses(declared, matching, stock);
+    const { rows, problems } = compareFuses({ declared, packaged: matching, stock });
     expect(problems).toEqual([]);
     expect(rows).toHaveLength(9);
     expect(rows.find((r) => r.name === 'runAsNode')).toMatchObject({
@@ -93,14 +93,22 @@ describe('compareFuses', () => {
   });
 
   it('names a declared fuse that was not flipped', () => {
-    const { problems } = compareFuses(declared, { ...matching, 0: ENABLE }, stock);
+    const { problems } = compareFuses({
+      declared: declared,
+      packaged: { ...matching, 0: ENABLE },
+      stock,
+    });
     expect(problems).toEqual([
       'runAsNode: packaged enabled, expected disabled (declared in electron-builder.yml)',
     ]);
   });
 
   it('names an undeclared fuse that drifted from the stock default', () => {
-    const { problems } = compareFuses(declared, { ...matching, 1: ENABLE }, stock);
+    const { problems } = compareFuses({
+      declared: declared,
+      packaged: { ...matching, 1: ENABLE },
+      stock,
+    });
     expect(problems).toEqual([
       'enableCookieEncryption: packaged enabled, expected disabled (stock Electron default)',
     ]);
@@ -109,7 +117,11 @@ describe('compareFuses', () => {
   it('flags a fuse missing from the packaged wire and a declared key the wire lacks', () => {
     const withoutSeven: Record<string, unknown> = { ...matching };
     delete withoutSeven[7];
-    const { problems } = compareFuses({ ...declared, madeUpFuse: true }, withoutSeven, stock);
+    const { problems } = compareFuses({
+      declared: { ...declared, madeUpFuse: true },
+      packaged: withoutSeven,
+      stock,
+    });
     expect(problems).toContain(
       'grantFileProtocolExtraPrivileges: missing from the packaged fuse wire',
     );
@@ -119,7 +131,11 @@ describe('compareFuses', () => {
   });
 
   it('flags an extra packaged fuse the stock wire does not have', () => {
-    const { problems } = compareFuses(declared, { ...matching, 9: ENABLE }, stock);
+    const { problems } = compareFuses({
+      declared: declared,
+      packaged: { ...matching, 9: ENABLE },
+      stock,
+    });
     expect(problems).toEqual(['fuse#9: not in the stock Electron wire and not declared']);
   });
 });
@@ -137,10 +153,13 @@ describe('runtimeMismatches', () => {
       writeFileSync(path.join(app, 'diff.bin'), 'a');
       writeFileSync(path.join(dist, 'diff.bin'), 'b');
       writeFileSync(path.join(dist, 'gone.bin'), 'c');
-      expect(runtimeMismatches(app, dist, ['same.bin', 'diff.bin', 'gone.bin'])).toEqual([
-        'diff.bin',
-        'gone.bin',
-      ]);
+      expect(
+        runtimeMismatches({
+          appDir: app,
+          electronDistDir: dist,
+          files: ['same.bin', 'diff.bin', 'gone.bin'],
+        }),
+      ).toEqual(['diff.bin', 'gone.bin']);
     } finally {
       rmSync(root, { recursive: true, force: true });
     }

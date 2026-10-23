@@ -60,22 +60,35 @@ export function configKey(fuseName: string): string {
  * error, so a config change this parser does not understand fails closed instead of being skipped.
  */
 export function parseElectronFuses(yamlText: string): Record<string, boolean> {
-  const lines = yamlText.split(/\r?\n/);
-  const start = lines.findIndex((l) => /^electronFuses:\s*(#.*)?$/.test(l));
-  if (start < 0) throw new Error('electron-builder.yml has no top-level electronFuses block');
   const fuses: Record<string, boolean> = {};
-  for (const raw of lines.slice(start + 1)) {
-    if (/^\S/.test(raw)) break;
-    const line = raw.replace(/#.*$/, '').trim();
-    if (line === '') continue;
-    const m = /^([A-Za-z][A-Za-z0-9]*):\s*(true|false)$/.exec(line);
-    const key = m?.[1];
-    if (!m || key === undefined) throw new Error(`unparseable electronFuses line: ${raw.trim()}`);
+  for (const raw of fuseBlockLines(yamlText.split(/\r?\n/))) {
+    const entry = parseFuseLine(raw);
+    if (entry === null) continue;
+    const [key, value] = entry;
     if (key in fuses) throw new Error(`duplicate electronFuses key: ${key}`);
-    fuses[key] = m[2] === 'true';
+    fuses[key] = value;
   }
   if (Object.keys(fuses).length === 0) throw new Error('electronFuses block declares no fuses');
   return fuses;
+}
+
+/** The indented lines under the top-level `electronFuses:` key, up to the next top-level key. */
+function fuseBlockLines(lines: readonly string[]): string[] {
+  const start = lines.findIndex((l) => (l.split('#', 1)[0] ?? '').trimEnd() === 'electronFuses:');
+  if (start < 0) throw new Error('electron-builder.yml has no top-level electronFuses block');
+  const rest = lines.slice(start + 1);
+  const end = rest.findIndex((l) => /^\S/.test(l));
+  return end < 0 ? rest : rest.slice(0, end);
+}
+
+/** `key: true|false` -> [key, value]; a blank or comment-only line -> null; anything else throws. */
+function parseFuseLine(raw: string): [string, boolean] | null {
+  const line = (raw.split('#', 1)[0] ?? '').trim();
+  if (line === '') return null;
+  const m = /^([A-Za-z]\w*):\s*(true|false)$/.exec(line);
+  const key = m?.[1];
+  if (!m || key === undefined) throw new Error(`unparseable electronFuses line: ${raw.trim()}`);
+  return [key, m[2] === 'true'];
 }
 
 export interface FuseRow {
@@ -89,45 +102,66 @@ export interface FuseRow {
 
 type Wire = Record<string, unknown>;
 
+/** The three inputs of a fuse comparison. */
+export interface FuseInputs {
+  declared: Record<string, boolean>;
+  packaged: Wire;
+  stock: Wire;
+}
+
 /** Compares the packaged wire with the declared config and, for undeclared fuses, the stock wire. */
-export function compareFuses(
-  declared: Record<string, boolean>,
-  packaged: Wire,
-  stock: Wire,
-): { rows: FuseRow[]; problems: string[] } {
-  const problems: string[] = [];
-  const indexes = [...new Set([...Object.keys(packaged), ...Object.keys(stock)])]
+export function compareFuses(inputs: FuseInputs): { rows: FuseRow[]; problems: string[] } {
+  const rows = wireIndexes(inputs).map((index) => fuseRow(index, inputs));
+  const problems = rows.map(rowProblem).filter((p): p is string => p !== null);
+  const known = new Set(rows.map((r) => r.name));
+  for (const key of Object.keys(inputs.declared).filter((k) => !known.has(k))) {
+    problems.push(`${key}: declared in electron-builder.yml but not in the packaged fuse wire`);
+  }
+  return { rows, problems };
+}
+
+/** Numeric fuse indexes present in either wire, ascending (the `version` key is skipped). */
+function wireIndexes({ packaged, stock }: FuseInputs): number[] {
+  return [...new Set([...Object.keys(packaged), ...Object.keys(stock)])]
     .filter((k) => /^\d+$/.test(k))
     .map(Number)
     .sort((a, b) => a - b);
-  const known = new Set<string>();
-  const rows = indexes.map((index): FuseRow => {
-    const fuseName = (FuseV1Options as unknown as Record<number, string | undefined>)[index];
-    const name = fuseName ? configKey(fuseName) : `fuse#${String(index)}`;
-    known.add(name);
-    const isDeclared = name in declared;
-    const expected = isDeclared
-      ? declared[name]
-        ? ENABLE
-        : DISABLE
-      : (stock[index] as number | undefined);
-    const actual = packaged[index] as number | undefined;
-    const ok = expected !== undefined && actual === expected;
-    if (actual === undefined) problems.push(`${name}: missing from the packaged fuse wire`);
-    else if (expected === undefined)
-      problems.push(`${name}: not in the stock Electron wire and not declared`);
-    else if (!ok) {
-      problems.push(
-        `${name}: packaged ${stateName(actual)}, expected ${stateName(expected)} (${isDeclared ? 'declared in electron-builder.yml' : 'stock Electron default'})`,
-      );
-    }
-    return { index, name, source: isDeclared ? 'declared' : 'stock default', expected, actual, ok };
-  });
-  for (const key of Object.keys(declared)) {
-    if (!known.has(key))
-      problems.push(`${key}: declared in electron-builder.yml but not in the packaged fuse wire`);
-  }
-  return { rows, problems };
+}
+
+/** electron-builder key for a wire index; indexes @electron/fuses does not name become `fuse#N`. */
+function fuseKeyAt(index: number): string {
+  const fuseName = (FuseV1Options as unknown as Record<number, string | undefined>)[index];
+  return fuseName ? configKey(fuseName) : `fuse#${String(index)}`;
+}
+
+function fuseRow(index: number, { declared, packaged, stock }: FuseInputs): FuseRow {
+  const name = fuseKeyAt(index);
+  const declaredValue = declared[name];
+  const source = declaredValue === undefined ? 'stock default' : 'declared';
+  const expected =
+    declaredValue === undefined
+      ? (stock[index] as number | undefined)
+      : STATE[String(declaredValue)];
+  const actual = packaged[index] as number | undefined;
+  return {
+    index,
+    name,
+    source,
+    expected,
+    actual,
+    ok: expected !== undefined && actual === expected,
+  };
+}
+
+const STATE: Record<string, number> = { true: ENABLE, false: DISABLE };
+
+function rowProblem(r: FuseRow): string | null {
+  if (r.actual === undefined) return `${r.name}: missing from the packaged fuse wire`;
+  if (r.expected === undefined) return `${r.name}: not in the stock Electron wire and not declared`;
+  if (r.ok) return null;
+  const why =
+    r.source === 'declared' ? 'declared in electron-builder.yml' : 'stock Electron default';
+  return `${r.name}: packaged ${stateName(r.actual)}, expected ${stateName(r.expected)} (${why})`;
 }
 
 function stateName(v: number | undefined): string {
@@ -137,25 +171,26 @@ function stateName(v: number | undefined): string {
   return `state ${String(v)}`;
 }
 
-function sha256(file: string): string {
-  return createHash('sha256').update(readFileSync(file)).digest('hex');
-}
-
 /** Files that differ between the packaged runtime and the node_modules Electron distribution. */
-export function runtimeMismatches(
-  appDir: string,
-  electronDistDir: string,
+export function runtimeMismatches({
+  appDir,
+  electronDistDir,
   files = ELECTRON_RUNTIME_FILES,
-): string[] {
+}: {
+  appDir: string;
+  electronDistDir: string;
+  files?: string[];
+}): string[] {
   return files.filter((f) => {
-    const a = path.join(appDir, f);
-    const b = path.join(electronDistDir, f);
-    return !existsSync(a) || !existsSync(b) || sha256(a) !== sha256(b);
+    const [a, b] = [path.join(appDir, f), path.join(electronDistDir, f)];
+    if (!existsSync(a) || !existsSync(b)) return true;
+    const [ha, hb] = [a, b].map((p) => createHash('sha256').update(readFileSync(p)).digest('hex'));
+    return ha !== hb;
   });
 }
 
 /** Node-mode script run by the stock Electron: loads each module out of the packaged app.asar. */
-export const NATIVE_SMOKE_SCRIPT = String.raw`
+export const NATIVE_SMOKE_SCRIPT = `
 const path = require('node:path');
 const asar = process.argv[process.argv.length - 1];
 (async () => {
@@ -176,7 +211,7 @@ async function checkFuses(): Promise<number> {
   const declared = parseElectronFuses(readFileSync(BUILDER_CONFIG, 'utf8'));
   const packaged = (await getCurrentFuseWire(PACKAGED_EXE)) as unknown as Wire;
   const stock = (await getCurrentFuseWire(STOCK_EXE)) as unknown as Wire;
-  const { rows, problems } = compareFuses(declared, packaged, stock);
+  const { rows, problems } = compareFuses({ declared, packaged, stock });
   for (const r of rows) {
     console.log(
       `${r.ok ? 'ok  ' : 'FAIL'} ${r.name.padEnd(40)} ${stateName(r.actual).padEnd(9)} (${r.source})`,
@@ -196,7 +231,7 @@ function checkNative(): number {
   const unpacked = path.join(APP_DIR, 'resources', 'app.asar.unpacked', 'node_modules');
   const missing = NATIVE_MODULES.filter((m) => {
     const dir = path.join(unpacked, m, 'build', 'Release');
-    return !existsSync(dir) || !readdirNode(dir);
+    return !existsSync(dir) || !readdirSync(dir).some((f) => f.endsWith('.node'));
   });
   if (missing.length > 0) {
     console.error(
@@ -204,7 +239,7 @@ function checkNative(): number {
     );
     return 1;
   }
-  const drift = runtimeMismatches(APP_DIR, path.dirname(STOCK_EXE));
+  const drift = runtimeMismatches({ appDir: APP_DIR, electronDistDir: path.dirname(STOCK_EXE) });
   if (drift.length > 0) {
     console.error(
       `::error title=Native smoke::packaged Electron differs from node_modules/electron: ${drift.join(', ')}`,
@@ -229,10 +264,6 @@ function checkNative(): number {
     'native smoke: better-sqlite3 and argon2 load from the packaged app under the shipped Electron',
   );
   return 0;
-}
-
-function readdirNode(dir: string): boolean {
-  return readdirSync(dir).some((f) => f.endsWith('.node'));
 }
 
 async function main(): Promise<number> {
