@@ -362,9 +362,9 @@
 
 .v5-sale-money-counts dd {
   margin: 0;
-  font-family: var(--font-family-mono);
+  font-family: var(--font-family-money);
   font-weight: var(--font-weight-semibold);
-  font-variant-numeric: tabular-nums;
+  font-variant-numeric: tabular-nums lining-nums;
 }
 
 /* As in the pack: the label above, the amount below it at the inline end — never wrapped. */

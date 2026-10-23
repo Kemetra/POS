@@ -161,8 +161,13 @@
 .v5-manager-num {
   direction: ltr;
   unicode-bidi: isolate;
+  font-family: var(--font-family-money);
+  font-variant-numeric: tabular-nums lining-nums;
+}
+
+/* RT-814: a sale or return reference is an ID, so it keeps the mono family. */
+.v5-manager-num.v5-returns-code {
   font-family: var(--font-family-mono);
-  font-variant-numeric: tabular-nums;
 }
 
 .v5-manager-field {

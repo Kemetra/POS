@@ -103,6 +103,11 @@
      and totals do not jitter as values change. dir="ltr" isolation is applied
      at the call site (FR-21). */
   --font-family-mono: ui-monospace, 'Cascadia Code', 'JetBrains Mono', 'Consolas', monospace;
+  /* RT-814 (RT-262 decision B, UX-03): prices, totals and quantities use the UI
+     sans. Dubai digits are already fixed-width and lining, so no font file or
+     feature is needed; rules pair this with tabular-nums lining-nums. Mono above
+     is for IDs, SKUs, codes and evidence only. */
+  --font-family-money: var(--font-family-sans);
 
   --font-weight-regular: 400;
   --font-weight-medium: 500;
@@ -1064,8 +1069,8 @@ body {
     color: var(--color-text-muted);
   }
   .amount-due-card__value {
-    font-family: var(--font-family-mono);
-    font-variant-numeric: tabular-nums;
+    font-family: var(--font-family-money);
+    font-variant-numeric: tabular-nums lining-nums;
     font-size: 2rem;
     font-weight: var(--font-weight-bold);
     color: var(--color-text);

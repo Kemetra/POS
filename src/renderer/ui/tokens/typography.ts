@@ -2,6 +2,7 @@ export const typography = {
   family: {
     sans: 'var(--font-family-sans)',
     mono: 'var(--font-family-mono)',
+    money: 'var(--font-family-money)',
   },
   weight: {
     regular: 'var(--font-weight-regular)',

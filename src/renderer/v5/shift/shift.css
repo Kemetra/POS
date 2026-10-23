@@ -41,8 +41,8 @@
 }
 
 .v5-shift-money {
-  font-family: var(--font-family-mono);
-  font-variant-numeric: tabular-nums;
+  font-family: var(--font-family-money);
+  font-variant-numeric: tabular-nums lining-nums;
   font-weight: var(--font-weight-semibold);
 }
 
@@ -195,9 +195,9 @@
 
 .v5-shift-amount {
   text-align: left;
-  font-family: var(--font-family-mono);
+  font-family: var(--font-family-money);
   font-size: 18px;
-  font-variant-numeric: tabular-nums;
+  font-variant-numeric: tabular-nums lining-nums;
 }
 
 .v5-shift-card__body .v5-shift-amount {
@@ -425,8 +425,8 @@
   border: 1px solid var(--color-border-strong);
   border-radius: var(--radius-pill);
   background: var(--color-surface-elevated);
-  font-family: var(--font-family-mono);
-  font-variant-numeric: tabular-nums;
+  font-family: var(--font-family-money);
+  font-variant-numeric: tabular-nums lining-nums;
   font-weight: var(--font-weight-bold);
   text-align: center;
 }
