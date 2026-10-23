@@ -31,6 +31,9 @@ export const RECOVERY_COPY = Object.freeze({
   complete: 'إكمال البيع',
   cancelPayment: 'إلغاء الدفع',
   cancelSale: 'إلغاء البيع',
+  // RT-846 (Addendum A3/A4): shown instead of «إلغاء البيع» when no manager PIN is set.
+  cancelSaleNoPin:
+    'لا يمكن إلغاء المبيعات المحفوظة لأنه لا يوجد رقم سري مدير على هذه الطرفية. سجّله من شاشة الوردية.',
   cashReceived: 'النقدية المستلمة للمتبقي',
   confirmCash: 'أرجعتُ النقدية المدفوعة للعميل',
   confirmCard: 'ألغيتُ دفع البطاقة على جهاز البطاقة',

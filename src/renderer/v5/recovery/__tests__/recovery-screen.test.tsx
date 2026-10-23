@@ -162,6 +162,84 @@ describe('RecoveryScreen — held sales', () => {
   });
 });
 
+describe('RecoveryScreen — no manager PIN (RT-846, Addendum A3/A4)', () => {
+  const noPin = (bridges: FakeBridges): FakeBridges => {
+    bridges.approval.listApprovers.mockResolvedValue({ kind: 'approvers', approvers: [] });
+    return bridges;
+  };
+
+  it.each([
+    ['another operator’s sale', heldCart({ own: false })],
+    ['the manager’s own sale', heldCart({ own: true })],
+  ])('hides «إلغاء البيع» for %s and says why', async (_name, cart) => {
+    show(noPin(fakeBridges(heldView({ held: [cart] }))));
+    const note = await screen.findByText(RECOVERY_COPY.cancelSaleNoPin);
+    expect(note).toBeVisible();
+    expect(screen.queryByRole('button', { name: RECOVERY_COPY.cancelSale })).toBeNull();
+    // the row itself stays: the manager still sees what is held
+    expect(screen.getAllByRole('listitem')).toHaveLength(1);
+  });
+
+  it('shows one note for many held sales, and names the real cause and place', async () => {
+    show(
+      noPin(
+        fakeBridges(heldView({ held: [heldCart({ cart_id: 'a' }), heldCart({ cart_id: 'b' })] })),
+      ),
+    );
+    expect(await screen.findAllByText(RECOVERY_COPY.cancelSaleNoPin)).toHaveLength(1);
+    expect(RECOVERY_COPY.cancelSaleNoPin).toMatch(/رقم سري/);
+    expect(RECOVERY_COPY.cancelSaleNoPin).toMatch(/شاشة الوردية/);
+  });
+
+  it('shows no note when there is nothing held', async () => {
+    show(noPin(fakeBridges(heldView())));
+    await screen.findByText(RECOVERY_COPY.noneHeld);
+    expect(screen.queryByText(RECOVERY_COPY.cancelSaleNoPin)).toBeNull();
+  });
+
+  it('keeps the button, and no note, when a PIN is set', async () => {
+    show(fakeBridges(heldView({ held: [heldCart({ own: true })] })));
+    expect(await screen.findByRole('button', { name: RECOVERY_COPY.cancelSale })).toBeVisible();
+    expect(screen.queryByText(RECOVERY_COPY.cancelSaleNoPin)).toBeNull();
+  });
+
+  it('does not claim «no PIN» when the approver read is refused or fails', async () => {
+    const refused = fakeBridges(heldView({ held: [heldCart()] }));
+    refused.approval.listApprovers.mockResolvedValue({ kind: 'refused', reason: 'session_locked' });
+    show(refused);
+    expect(await screen.findByRole('button', { name: RECOVERY_COPY.cancelSale })).toBeVisible();
+    expect(screen.queryByText(RECOVERY_COPY.cancelSaleNoPin)).toBeNull();
+    cleanup();
+    const failed = fakeBridges(heldView({ held: [heldCart()] }));
+    failed.approval.listApprovers.mockRejectedValue(new Error('ipc'));
+    show(failed);
+    expect(await screen.findByRole('button', { name: RECOVERY_COPY.cancelSale })).toBeVisible();
+  });
+
+  it('keeps the button while the approver lookup is pending, and announces the note when it lands', async () => {
+    const bridges = fakeBridges(heldView({ held: [heldCart()] }));
+    let settle: (v: { kind: 'approvers'; approvers: [] }) => void = () => undefined;
+    bridges.approval.listApprovers.mockReturnValue(
+      new Promise((r) => {
+        settle = r;
+      }),
+    );
+    show(bridges);
+    expect(await screen.findByRole('button', { name: RECOVERY_COPY.cancelSale })).toBeVisible();
+    settle({ kind: 'approvers', approvers: [] });
+    expect(await screen.findByRole('status')).toHaveTextContent(RECOVERY_COPY.cancelSaleNoPin);
+    expect(screen.queryByRole('button', { name: RECOVERY_COPY.cancelSale })).toBeNull();
+  });
+
+  it('asks for the cancel-held-cart approvers', async () => {
+    const bridges = show(fakeBridges(heldView({ held: [heldCart()] })));
+    await screen.findByRole('button', { name: RECOVERY_COPY.cancelSale });
+    expect(bridges.approval.listApprovers).toHaveBeenCalledWith({
+      action_kind: 'recovery.cancel_held_cart',
+    });
+  });
+});
+
 describe('RecoveryScreen — actions', () => {
   it('opens the action, reports the outcome and reloads the list', async () => {
     const bridges = show(fakeBridges(heldView({ held: [heldCart()] })));

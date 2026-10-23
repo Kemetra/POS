@@ -14,6 +14,7 @@ import { ScreenSection } from '../foundation/ScreenSection';
 import { Icon } from '../../icons/Icon';
 import { RECOVERY_COPY, recoveryRefusalMessage } from './recovery-copy';
 import { RecoveryActionDialog, type RecoveryAction } from './RecoveryActionDialog';
+import { RECOVERY_ACTION_KIND } from './recovery-actions';
 import { RecoveryAlert } from './RecoveryAlert';
 import './recovery.css';
 
@@ -98,8 +99,34 @@ function useRosterNames(list: RecoveryBridges['listRoster']): ReadonlyMap<string
   return names;
 }
 
+/**
+ * RT-846 — can this manager confirm «إلغاء البيع»? Only a positive "no approver"
+ * answer means no PIN; a refused or failed read is not that, and the dialog
+ * already names its own reason, so the button stays offered then.
+ */
+function useCanCancelSale(approval: ManagerApprovalBridgeAPI): 'loading' | 'yes' | 'no_pin' {
+  const [state, setState] = useState<'loading' | 'yes' | 'no_pin'>('loading');
+  useEffect(() => {
+    let live = true;
+    approval.listApprovers({ action_kind: RECOVERY_ACTION_KIND.cancel_cart }).then(
+      (answer) => {
+        if (live)
+          setState(answer.kind === 'approvers' && answer.approvers.length === 0 ? 'no_pin' : 'yes');
+      },
+      () => {
+        if (live) setState('yes');
+      },
+    );
+    return () => {
+      live = false;
+    };
+  }, [approval]);
+  return state;
+}
+
 export function RecoveryScreen({ bridges }: Readonly<{ bridges: RecoveryBridges }>): JSX.Element {
   const { held, reload } = useHeld(bridges.recovery);
+  const canCancelSale = useCanCancelSale(bridges.approval);
   const names = useRosterNames(bridges.listRoster);
   const [action, setAction] = useState<RecoveryAction | null>(null);
   const [outcome, setOutcome] = useState<string | null>(null);
@@ -118,7 +145,7 @@ export function RecoveryScreen({ bridges }: Readonly<{ bridges: RecoveryBridges 
             <Outcome message={outcome} />
           </Notice>
         )}
-        <HeldBody held={held} nameOf={nameOf} onAction={open} />
+        <HeldBody held={held} nameOf={nameOf} onAction={open} canCancelSale={canCancelSale} />
       </div>
       {action !== null && (
         <RecoveryActionDialog
@@ -143,6 +170,7 @@ function HeldBody(
     held: Held;
     nameOf: (id: string) => string;
     onAction: (action: RecoveryAction) => void;
+    canCancelSale: 'loading' | 'yes' | 'no_pin';
   }>,
 ): JSX.Element {
   const { held } = props;
@@ -171,7 +199,12 @@ function HeldBody(
       )}
       <div className="v5-recovery-grid">
         <StuckPanel stuck={held.stuck} nameOf={props.nameOf} onAction={props.onAction} />
-        <HeldPanel held={held.held} nameOf={props.nameOf} onAction={props.onAction} />
+        <HeldPanel
+          held={held.held}
+          nameOf={props.nameOf}
+          onAction={props.onAction}
+          canCancelSale={props.canCancelSale}
+        />
       </div>
     </>
   );
@@ -340,6 +373,7 @@ function HeldPanel(
     held: RecoveryHeldCartView[];
     nameOf: (id: string) => string;
     onAction: (action: RecoveryAction) => void;
+    canCancelSale: 'loading' | 'yes' | 'no_pin';
   }>,
 ): JSX.Element {
   return (
@@ -347,16 +381,24 @@ function HeldPanel(
       {props.held.length === 0 ? (
         <Empty text={RECOVERY_COPY.noneHeld} />
       ) : (
-        <ul className="v5-recovery-rows">
-          {props.held.map((cart) => (
-            <HeldRow
-              key={cart.cart_id}
-              cart={cart}
-              owner={cart.own ? RECOVERY_COPY.you : props.nameOf(cart.owning_operator_id)}
-              onAction={props.onAction}
-            />
-          ))}
-        </ul>
+        <>
+          {props.canCancelSale === 'no_pin' && (
+            <div className="v5-recovery-neutral">
+              <Notice tone="info">{RECOVERY_COPY.cancelSaleNoPin}</Notice>
+            </div>
+          )}
+          <ul className="v5-recovery-rows">
+            {props.held.map((cart) => (
+              <HeldRow
+                key={cart.cart_id}
+                cart={cart}
+                owner={cart.own ? RECOVERY_COPY.you : props.nameOf(cart.owning_operator_id)}
+                onAction={props.onAction}
+                canCancel={props.canCancelSale !== 'no_pin'}
+              />
+            ))}
+          </ul>
+        </>
       )}
     </Panel>
   );
@@ -367,6 +409,7 @@ function HeldRow(
     cart: RecoveryHeldCartView;
     owner: string;
     onAction: (action: RecoveryAction) => void;
+    canCancel: boolean;
   }>,
 ): JSX.Element {
   const { cart } = props;
@@ -390,15 +433,17 @@ function HeldRow(
           {RECOVERY_COPY.lines} <Num>{cart.line_count}</Num>
         </span>
       </div>
-      <button
-        type="button"
-        className="v5-recovery-btn v5-btn v5-btn--danger-quiet"
-        onClick={() => {
-          props.onAction({ kind: 'cancel_cart', cart });
-        }}
-      >
-        {RECOVERY_COPY.cancelSale}
-      </button>
+      {props.canCancel && (
+        <button
+          type="button"
+          className="v5-recovery-btn v5-btn v5-btn--danger-quiet"
+          onClick={() => {
+            props.onAction({ kind: 'cancel_cart', cart });
+          }}
+        >
+          {RECOVERY_COPY.cancelSale}
+        </button>
+      )}
     </li>
   );
 }
