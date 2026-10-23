@@ -85,6 +85,7 @@ ${img(p('light', 'wide'), `${s.label} ${w} · 4:1 logo · light`)}
 ${img(p('light', 'lowc'), `${s.label} ${w} · low_contrast logo on the white card · light`)}
 ${img(p('forced', 'none'), `${s.label} ${w} · no logo · forced-colors`)}
 ${img(p('forced', 'wide'), `${s.label} ${w} · 4:1 logo on the white card · forced-colors`)}
+${k === 'sign_in' ? img(p('light', 'longlabel'), `${s.label} ${w} · long terminal label (about 100 characters), truncated with an ellipsis`) : ''}
 </div>
 <p class="ev">Dark register, <b>not offered</b> in the pilot, for reference only: <a href="captures/dark-not-offered/${k}-${w}-dark-wide.png">${k}-${w}-dark-wide.png</a>.</p>`;
       })
@@ -134,7 +135,7 @@ ul{margin:0 0 12px;padding-left:20px}li{margin-bottom:6px}
 <tbody>
 ${rows}
 </tbody></table>
-<p class="ev">Box = the rendition bounds <b>including</b> the uniform 8% clear space that S2 normalization adds. Layout spacing outside the box (below) is separate, so clear space is never applied twice. Smallest accepted masters: a square logo is at least 512×512 and a horizontal one at least 256 px tall, so a 4:1 master is at least 1024×256. Every 2x rendition above is within those: the largest 2x square is 480×480 (boot), under 512, and the tallest 2x horizontal box is 240, under 256.</p>
+<p class="ev">Box = the rendition bounds <b>including</b> the uniform 8% clear space that S2 normalization adds. Layout spacing outside the box (below) is separate, so clear space is never applied twice. Smallest accepted masters: a square logo is at least 512×512 and a horizontal one at least 256 px tall, so a 4:1 master is at least 1024×256. Every 2x rendition above is within those: the largest 2x square fit is 240×240 (boot, 2x box 480×240), under 512, and no 2x box is taller than 240, under 256.</p>
 
 <h2>2 · Placement and spacing (RTL)</h2>
 <table><thead><tr><th>Slot</th><th>Placement</th><th>Spacing outside the box</th></tr></thead><tbody>
@@ -146,6 +147,7 @@ ${placementRows}
 <li><b>Powered-by line (OD-12 decided: «Retail Tower»).</b> Shown only when a logo is shown. 12px muted text, «${cfg.poweredBy.prefix} <span dir="ltr">${cfg.poweredBy.name}</span>», the name isolated LTR. Boot: centred under the status, 24px below. Pairing and lock: centred at the foot of the card or dialog. Sign-in: the inline-end end of the strip. The Arabic prefix is proposed copy and needs the owner's approval with the rest.</li>
 <li><b><code>low_contrast</code> (FR-11).</b> When the server reports <code>low_contrast</code> (contrast below 3:1 against the light surface) the logo sits on a white card: <code>#fff</code>, a 1px border, 8px radius. The card padding is <b>outside</b> the box: ${cfg.chip.cardPad}px on the card slots, ${cfg.chip.stripPadBlock}px block / ${cfg.chip.stripPadInline}px inline in the strip, so the strip stays within 48px (44px at 1024).</li>
 <li><b>Forced colours.</b> Images are not recoloured by forced-colors, so a logo's contrast on <code>Canvas</code> cannot be known. The frames show the proposal: in forced-colors every logo sits on the white card, with <code>forced-color-adjust: none</code> on the card and a visible 1px border. This extends the shipped un-force precedent (selected and current states) to a logo card, so it is flagged for the owner (§5).</li>
+<li><b>Long terminal label.</b> The terminal label is admin free text with no length limit, and the strip does not wrap. With a logo and the powered-by line in the strip, the label must truncate: the context gets <code>min-inline-size: 0; overflow: hidden; text-overflow: ellipsis</code> while the logo, the separator and the powered-by line stay <code>flex: none</code>. The sign-in frames include a long-label capture at both widths (no overflow asserted).</li>
 <li><b>Dark.</b> Dark is not offered in the pilot (DESIGN.md, OD-4), so no dark slot is proposed. <code>low_contrast</code> is computed only against the light surface, so a logo's contrast in the dark register is unverified. The dark captures are reference only.</li>
 </ul>
 

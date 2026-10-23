@@ -64,7 +64,7 @@ ul{margin:0 0 12px;padding-left:20px}li{margin-bottom:6px}
 <td class="num">6.4</td>
 <td class="num">226×106<br><small>pad 12/12 + 1px border</small></td></tr>
 </tbody></table>
-<p class="ev">Box = the rendition bounds <b>including</b> the uniform 8% clear space that S2 normalization adds. Layout spacing outside the box (below) is separate, so clear space is never applied twice. Smallest accepted masters: a square logo is at least 512×512 and a horizontal one at least 256 px tall, so a 4:1 master is at least 1024×256. Every 2x rendition above is within those: the largest 2x square is 480×480 (boot), under 512, and the tallest 2x horizontal box is 240, under 256.</p>
+<p class="ev">Box = the rendition bounds <b>including</b> the uniform 8% clear space that S2 normalization adds. Layout spacing outside the box (below) is separate, so clear space is never applied twice. Smallest accepted masters: a square logo is at least 512×512 and a horizontal one at least 256 px tall, so a 4:1 master is at least 1024×256. Every 2x rendition above is within those: the largest 2x square fit is 240×240 (boot, 2x box 480×240), under 512, and no 2x box is taller than 240, under 256.</p>
 
 <h2>2 · Placement and spacing (RTL)</h2>
 <table><thead><tr><th>Slot</th><th>Placement</th><th>Spacing outside the box</th></tr></thead><tbody>
@@ -79,6 +79,7 @@ ul{margin:0 0 12px;padding-left:20px}li{margin-bottom:6px}
 <li><b>Powered-by line (OD-12 decided: «Retail Tower»).</b> Shown only when a logo is shown. 12px muted text, «بدعم من <span dir="ltr">Retail Tower</span>», the name isolated LTR. Boot: centred under the status, 24px below. Pairing and lock: centred at the foot of the card or dialog. Sign-in: the inline-end end of the strip. The Arabic prefix is proposed copy and needs the owner's approval with the rest.</li>
 <li><b><code>low_contrast</code> (FR-11).</b> When the server reports <code>low_contrast</code> (contrast below 3:1 against the light surface) the logo sits on a white card: <code>#fff</code>, a 1px border, 8px radius. The card padding is <b>outside</b> the box: 12px on the card slots, 2px block / 4px inline in the strip, so the strip stays within 48px (44px at 1024).</li>
 <li><b>Forced colours.</b> Images are not recoloured by forced-colors, so a logo's contrast on <code>Canvas</code> cannot be known. The frames show the proposal: in forced-colors every logo sits on the white card, with <code>forced-color-adjust: none</code> on the card and a visible 1px border. This extends the shipped un-force precedent (selected and current states) to a logo card, so it is flagged for the owner (§5).</li>
+<li><b>Long terminal label.</b> The terminal label is admin free text with no length limit, and the strip does not wrap. With a logo and the powered-by line in the strip, the label must truncate: the context gets <code>min-inline-size: 0; overflow: hidden; text-overflow: ellipsis</code> while the logo, the separator and the powered-by line stay <code>flex: none</code>. The sign-in frames include a long-label capture at both widths (no overflow asserted).</li>
 <li><b>Dark.</b> Dark is not offered in the pilot (DESIGN.md, OD-4), so no dark slot is proposed. <code>low_contrast</code> is computed only against the light surface, so a logo's contrast in the dark register is unverified. The dark captures are reference only.</li>
 </ul>
 
@@ -114,6 +115,7 @@ ul{margin:0 0 12px;padding-left:20px}li{margin-bottom:6px}
 <figure><a href="captures/boot-1024-light-lowc.png"><img src="captures/boot-1024-light-lowc.png" alt="Boot 1024 · low_contrast logo on the white card · light" loading="lazy"></a><figcaption>Boot 1024 · low_contrast logo on the white card · light</figcaption></figure>
 <figure><a href="captures/boot-1024-forced-none.png"><img src="captures/boot-1024-forced-none.png" alt="Boot 1024 · no logo · forced-colors" loading="lazy"></a><figcaption>Boot 1024 · no logo · forced-colors</figcaption></figure>
 <figure><a href="captures/boot-1024-forced-wide.png"><img src="captures/boot-1024-forced-wide.png" alt="Boot 1024 · 4:1 logo on the white card · forced-colors" loading="lazy"></a><figcaption>Boot 1024 · 4:1 logo on the white card · forced-colors</figcaption></figure>
+
 </div>
 <p class="ev">Dark register, <b>not offered</b> in the pilot, for reference only: <a href="captures/dark-not-offered/boot-1024-dark-wide.png">boot-1024-dark-wide.png</a>.</p>
 <h3>1280×800</h3>
@@ -127,6 +129,7 @@ ul{margin:0 0 12px;padding-left:20px}li{margin-bottom:6px}
 <figure><a href="captures/boot-1280-light-lowc.png"><img src="captures/boot-1280-light-lowc.png" alt="Boot 1280 · low_contrast logo on the white card · light" loading="lazy"></a><figcaption>Boot 1280 · low_contrast logo on the white card · light</figcaption></figure>
 <figure><a href="captures/boot-1280-forced-none.png"><img src="captures/boot-1280-forced-none.png" alt="Boot 1280 · no logo · forced-colors" loading="lazy"></a><figcaption>Boot 1280 · no logo · forced-colors</figcaption></figure>
 <figure><a href="captures/boot-1280-forced-wide.png"><img src="captures/boot-1280-forced-wide.png" alt="Boot 1280 · 4:1 logo on the white card · forced-colors" loading="lazy"></a><figcaption>Boot 1280 · 4:1 logo on the white card · forced-colors</figcaption></figure>
+
 </div>
 <p class="ev">Dark register, <b>not offered</b> in the pilot, for reference only: <a href="captures/dark-not-offered/boot-1280-dark-wide.png">boot-1280-dark-wide.png</a>.</p></section>
 <section class="frame" id="pairing"><h2>Pairing <small class="num">pairing</small></h2>
@@ -142,6 +145,7 @@ ul{margin:0 0 12px;padding-left:20px}li{margin-bottom:6px}
 <figure><a href="captures/pairing-1024-light-lowc.png"><img src="captures/pairing-1024-light-lowc.png" alt="Pairing 1024 · low_contrast logo on the white card · light" loading="lazy"></a><figcaption>Pairing 1024 · low_contrast logo on the white card · light</figcaption></figure>
 <figure><a href="captures/pairing-1024-forced-none.png"><img src="captures/pairing-1024-forced-none.png" alt="Pairing 1024 · no logo · forced-colors" loading="lazy"></a><figcaption>Pairing 1024 · no logo · forced-colors</figcaption></figure>
 <figure><a href="captures/pairing-1024-forced-wide.png"><img src="captures/pairing-1024-forced-wide.png" alt="Pairing 1024 · 4:1 logo on the white card · forced-colors" loading="lazy"></a><figcaption>Pairing 1024 · 4:1 logo on the white card · forced-colors</figcaption></figure>
+
 </div>
 <p class="ev">Dark register, <b>not offered</b> in the pilot, for reference only: <a href="captures/dark-not-offered/pairing-1024-dark-wide.png">pairing-1024-dark-wide.png</a>.</p>
 <h3>1280×800</h3>
@@ -155,6 +159,7 @@ ul{margin:0 0 12px;padding-left:20px}li{margin-bottom:6px}
 <figure><a href="captures/pairing-1280-light-lowc.png"><img src="captures/pairing-1280-light-lowc.png" alt="Pairing 1280 · low_contrast logo on the white card · light" loading="lazy"></a><figcaption>Pairing 1280 · low_contrast logo on the white card · light</figcaption></figure>
 <figure><a href="captures/pairing-1280-forced-none.png"><img src="captures/pairing-1280-forced-none.png" alt="Pairing 1280 · no logo · forced-colors" loading="lazy"></a><figcaption>Pairing 1280 · no logo · forced-colors</figcaption></figure>
 <figure><a href="captures/pairing-1280-forced-wide.png"><img src="captures/pairing-1280-forced-wide.png" alt="Pairing 1280 · 4:1 logo on the white card · forced-colors" loading="lazy"></a><figcaption>Pairing 1280 · 4:1 logo on the white card · forced-colors</figcaption></figure>
+
 </div>
 <p class="ev">Dark register, <b>not offered</b> in the pilot, for reference only: <a href="captures/dark-not-offered/pairing-1280-dark-wide.png">pairing-1280-dark-wide.png</a>.</p></section>
 <section class="frame" id="sign_in"><h2>Sign-in header <small class="num">sign_in</small></h2>
@@ -170,6 +175,7 @@ ul{margin:0 0 12px;padding-left:20px}li{margin-bottom:6px}
 <figure><a href="captures/sign_in-1024-light-lowc.png"><img src="captures/sign_in-1024-light-lowc.png" alt="Sign-in header 1024 · low_contrast logo on the white card · light" loading="lazy"></a><figcaption>Sign-in header 1024 · low_contrast logo on the white card · light</figcaption></figure>
 <figure><a href="captures/sign_in-1024-forced-none.png"><img src="captures/sign_in-1024-forced-none.png" alt="Sign-in header 1024 · no logo · forced-colors" loading="lazy"></a><figcaption>Sign-in header 1024 · no logo · forced-colors</figcaption></figure>
 <figure><a href="captures/sign_in-1024-forced-wide.png"><img src="captures/sign_in-1024-forced-wide.png" alt="Sign-in header 1024 · 4:1 logo on the white card · forced-colors" loading="lazy"></a><figcaption>Sign-in header 1024 · 4:1 logo on the white card · forced-colors</figcaption></figure>
+<figure><a href="captures/sign_in-1024-light-longlabel.png"><img src="captures/sign_in-1024-light-longlabel.png" alt="Sign-in header 1024 · long terminal label (about 100 characters), truncated with an ellipsis" loading="lazy"></a><figcaption>Sign-in header 1024 · long terminal label (about 100 characters), truncated with an ellipsis</figcaption></figure>
 </div>
 <p class="ev">Dark register, <b>not offered</b> in the pilot, for reference only: <a href="captures/dark-not-offered/sign_in-1024-dark-wide.png">sign_in-1024-dark-wide.png</a>.</p>
 <h3>1280×800</h3>
@@ -183,6 +189,7 @@ ul{margin:0 0 12px;padding-left:20px}li{margin-bottom:6px}
 <figure><a href="captures/sign_in-1280-light-lowc.png"><img src="captures/sign_in-1280-light-lowc.png" alt="Sign-in header 1280 · low_contrast logo on the white card · light" loading="lazy"></a><figcaption>Sign-in header 1280 · low_contrast logo on the white card · light</figcaption></figure>
 <figure><a href="captures/sign_in-1280-forced-none.png"><img src="captures/sign_in-1280-forced-none.png" alt="Sign-in header 1280 · no logo · forced-colors" loading="lazy"></a><figcaption>Sign-in header 1280 · no logo · forced-colors</figcaption></figure>
 <figure><a href="captures/sign_in-1280-forced-wide.png"><img src="captures/sign_in-1280-forced-wide.png" alt="Sign-in header 1280 · 4:1 logo on the white card · forced-colors" loading="lazy"></a><figcaption>Sign-in header 1280 · 4:1 logo on the white card · forced-colors</figcaption></figure>
+<figure><a href="captures/sign_in-1280-light-longlabel.png"><img src="captures/sign_in-1280-light-longlabel.png" alt="Sign-in header 1280 · long terminal label (about 100 characters), truncated with an ellipsis" loading="lazy"></a><figcaption>Sign-in header 1280 · long terminal label (about 100 characters), truncated with an ellipsis</figcaption></figure>
 </div>
 <p class="ev">Dark register, <b>not offered</b> in the pilot, for reference only: <a href="captures/dark-not-offered/sign_in-1280-dark-wide.png">sign_in-1280-dark-wide.png</a>.</p></section>
 <section class="frame" id="lock"><h2>Lock <small class="num">lock</small></h2>
@@ -198,6 +205,7 @@ ul{margin:0 0 12px;padding-left:20px}li{margin-bottom:6px}
 <figure><a href="captures/lock-1024-light-lowc.png"><img src="captures/lock-1024-light-lowc.png" alt="Lock 1024 · low_contrast logo on the white card · light" loading="lazy"></a><figcaption>Lock 1024 · low_contrast logo on the white card · light</figcaption></figure>
 <figure><a href="captures/lock-1024-forced-none.png"><img src="captures/lock-1024-forced-none.png" alt="Lock 1024 · no logo · forced-colors" loading="lazy"></a><figcaption>Lock 1024 · no logo · forced-colors</figcaption></figure>
 <figure><a href="captures/lock-1024-forced-wide.png"><img src="captures/lock-1024-forced-wide.png" alt="Lock 1024 · 4:1 logo on the white card · forced-colors" loading="lazy"></a><figcaption>Lock 1024 · 4:1 logo on the white card · forced-colors</figcaption></figure>
+
 </div>
 <p class="ev">Dark register, <b>not offered</b> in the pilot, for reference only: <a href="captures/dark-not-offered/lock-1024-dark-wide.png">lock-1024-dark-wide.png</a>.</p>
 <h3>1280×800</h3>
@@ -211,6 +219,7 @@ ul{margin:0 0 12px;padding-left:20px}li{margin-bottom:6px}
 <figure><a href="captures/lock-1280-light-lowc.png"><img src="captures/lock-1280-light-lowc.png" alt="Lock 1280 · low_contrast logo on the white card · light" loading="lazy"></a><figcaption>Lock 1280 · low_contrast logo on the white card · light</figcaption></figure>
 <figure><a href="captures/lock-1280-forced-none.png"><img src="captures/lock-1280-forced-none.png" alt="Lock 1280 · no logo · forced-colors" loading="lazy"></a><figcaption>Lock 1280 · no logo · forced-colors</figcaption></figure>
 <figure><a href="captures/lock-1280-forced-wide.png"><img src="captures/lock-1280-forced-wide.png" alt="Lock 1280 · 4:1 logo on the white card · forced-colors" loading="lazy"></a><figcaption>Lock 1280 · 4:1 logo on the white card · forced-colors</figcaption></figure>
+
 </div>
 <p class="ev">Dark register, <b>not offered</b> in the pilot, for reference only: <a href="captures/dark-not-offered/lock-1280-dark-wide.png">lock-1280-dark-wide.png</a>.</p></section>
 

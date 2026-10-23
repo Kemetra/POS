@@ -11,12 +11,16 @@ const { chromium } = require(process.env.PLAYWRIGHT_CORE || 'playwright-core');
 const cfg = require('./slots.cjs');
 
 const BASE = process.argv[2];
+const ONLY = process.env.ONLY ? process.env.ONLY.split(',') : null; // e.g. ONLY=sign_in re-captures one screen
 const OUT = path.resolve(process.argv[3] || path.join(__dirname, '..', 'captures'));
 if (!BASE) {
   console.error('usage: node capture_rt832.cjs <base-url> <out-dir>');
   process.exit(2);
 }
 fs.mkdirSync(path.join(OUT, 'dark-not-offered'), { recursive: true });
+
+// About 100 characters of Arabic: stands in for a long admin-entered terminal label (no length limit exists).
+const LONG_LABEL = 'صيدلية النور الفرع الرئيسي مدينة نصر الطرفية رقم 3 بجوار الصراف' + ' - ' + 'صيدلية النور الفرع الرئيسي مدينة نصر الطرفية رقم 3 بجوار الصراف';
 
 const ROUTES = {
   boot: '/rt832-boot.html',
@@ -50,7 +54,7 @@ const SAMPLES = {
 };
 
 // Runs in the page. Inserts the slot in flow at the proposed spot and returns the measured boxes.
-function inject({ screen, slot, sample, chip, forced, powered, cfg }) {
+function inject({ screen, slot, sample, chip, forced, powered, cfg, longLabel }) {
   const doc = document;
   const mk = (tag, css, text) => {
     const e = doc.createElement(tag);
@@ -113,9 +117,17 @@ function inject({ screen, slot, sample, chip, forced, powered, cfg }) {
   } else {
     const bar = doc.querySelector('.v5-entry__bar');
     bar.querySelector('.v5-entry__brand').style.display = 'none';
+    // The terminal label is admin free text with no length limit: the branded strip must truncate it.
+    const ctx = bar.querySelector('.v5-entry__context');
+    if (ctx) {
+      ctx.style.cssText += 'min-inline-size:0;overflow:hidden;text-overflow:ellipsis;flex:0 1 auto;';
+      if (longLabel) ctx.querySelector('bdi').textContent = longLabel;
+    }
+    bar.querySelector('.v5-entry__sep').style.flex = 'none';
     bar.prepend(wrap);
     if (powered) {
       pb.style.marginInlineStart = 'auto';
+      pb.style.flex = 'none';
       bar.appendChild(pb);
     }
   }
@@ -185,7 +197,8 @@ function annotate({ m, slot, screen, label, cfg }) {
 
 (async () => {
   const browser = await chromium.launch();
-  const record = {};
+  const jsonPath = path.join(OUT, 'slot-fit.json');
+  const record = ONLY && fs.existsSync(jsonPath) ? JSON.parse(fs.readFileSync(jsonPath, 'utf8')) : {};
   const fail = [];
   const plan = [
     ['light', 'none'],
@@ -197,11 +210,14 @@ function annotate({ m, slot, screen, label, cfg }) {
     ['forced', 'wide'],
     ['forced', 'annotated'],
     ['dark', 'wide'],
+    ['light', 'longlabel'],
   ];
   for (const [screen, route] of Object.entries(ROUTES)) {
+    if (ONLY && !ONLY.includes(screen)) continue;
     const slot = cfg.slots[screen];
     for (const vp of cfg.viewports) {
       for (const [mode, variant] of plan) {
+        if (variant === 'longlabel' && screen !== 'sign_in') continue;
         const ctx = await browser.newContext({ viewport: { width: vp.w, height: vp.h }, deviceScaleFactor: 1 });
         const page = await ctx.newPage();
         if (mode === 'forced') await page.emulateMedia({ forcedColors: 'active' });
@@ -210,12 +226,13 @@ function annotate({ m, slot, screen, label, cfg }) {
         if (mode === 'dark') await page.evaluate(() => { document.documentElement.dataset.theme = 'dark'; });
         const forced = mode === 'forced';
         const sample = variant === 'lowc' ? 'pale' : variant === 'square' || variant === 'annotated' ? 'square' : 'wide';
+        const longLabel = variant === 'longlabel' ? LONG_LABEL : null;
         // forced colours: images are not forced, so a logo's contrast on Canvas is unknowable -> always the white card.
         const chip = variant === 'lowc' || (forced && variant !== 'none');
         const key = `${screen}-${vp.w}-${mode}-${variant}`;
         let m = null;
         if (variant !== 'none') {
-          m = await page.evaluate(inject, { screen, slot, sample: SAMPLES[sample], chip, forced, powered: true, cfg });
+          m = await page.evaluate(inject, { screen, slot, sample: SAMPLES[sample], chip, forced, powered: true, cfg, longLabel });
           await page.waitForTimeout(150);
           if (m.scrollW > vp.w + 0.5 || m.scrollH > vp.h + 0.5) fail.push(`${key}: page overflows ${vp.w}x${vp.h} (${m.scrollW}x${m.scrollH})`);
           const edge = (o) => o && (o.x < -0.5 || o.y < -0.5 || o.x + o.w > vp.w + 0.5 || o.y + o.h > vp.h + 0.5);
@@ -237,7 +254,7 @@ function annotate({ m, slot, screen, label, cfg }) {
       }
     }
   }
-  fs.writeFileSync(path.join(OUT, 'slot-fit.json'), JSON.stringify(record, null, 1));
+  fs.writeFileSync(jsonPath, JSON.stringify(record, null, 1));
   await browser.close();
   if (fail.length) {
     console.error('FIT FAILURES:\n' + fail.join('\n'));

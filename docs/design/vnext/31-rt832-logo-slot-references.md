@@ -28,8 +28,8 @@ scales = 8, with no per-width entry. A width-dependent box would need a contract
 - **Fit.** `contain` inside the box × scale, never above the master's native size, never cropped or
   stretched.
 - **Masters.** Smallest accepted masters are 512×512 (square) and 256 px tall (horizontal, so at
-  least 1024×256 at 4:1). Every 2x rendition fits within them: the largest 2x square is 480×480
-  (boot), and no 2x box is taller than 240.
+  least 1024×256 at 4:1). Every 2x rendition fits within them: the largest 2x square fit is 240×240
+  (boot, 2x box 480×240), under 512, and no 2x box is taller than 240, under 256.
 
 ## 2. Placement in RTL, spacing, states
 
@@ -52,6 +52,10 @@ scales = 8, with no per-width entry. A width-dependent box would need a contract
   frames propose that every logo sits on the white card with `forced-color-adjust: none` and a
   visible border. This extends the shipped un-force precedent (selected and current states) to a
   logo card, so it is an owner decision.
+- **Long terminal label.** The label is admin free text with no length limit and the strip does not
+  wrap, so with a logo and the powered-by line the context must truncate
+  (`min-inline-size: 0; overflow: hidden; text-overflow: ellipsis`) while the logo, separator and
+  powered-by line stay `flex: none`. The sign-in frames include a long-label capture at both widths.
 - **Dark.** Not offered in the pilot (DESIGN.md, OD-4), so no dark slot is proposed. `low_contrast`
   is computed only against the light surface, so a logo's contrast in the dark register is
   unverified. The dark captures are reference only.
