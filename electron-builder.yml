@@ -12,7 +12,7 @@ win:
 # instead (src/main/app/launch-switch-guard.ts).
 electronFuses:
   # ELECTRON_RUN_AS_NODE=1 would turn POS Pulse.exe into a plain Node runtime.
-  runAsNode: false
+  runAsNode: true
   # NODE_OPTIONS code injection into main (Electron already restricts most
   # options in packaged apps; this removes the env var entirely).
   enableNodeOptionsEnvironmentVariable: false
