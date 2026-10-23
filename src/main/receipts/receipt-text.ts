@@ -50,23 +50,29 @@ function splitToken(word: string): Piece[] {
   return pieces;
 }
 
+/** Whether `word` must start a new line rather than join `current`. */
+function startsNewLine(current: string, piece: Piece, onFirstLine: boolean): boolean {
+  if (current === '') return false;
+  // A glued piece never shares a line: a space there would alter the value.
+  if (piece.glued) return true;
+  const indent = onFirstLine ? 0 : INDENT.length;
+  return columnWidth(`${current} ${piece.text}`) + indent > COLS;
+}
+
 /** Word-wrap to the roll by code points, with a hanging indent on continuations. */
 export function wrapColumns(text: string): string[] {
-  const words = text
+  const pieces = text
     .split(' ')
     .filter((w) => w !== '')
     .flatMap(splitToken);
   const out: string[] = [];
   let current = '';
-  for (const { text: word, glued } of words) {
-    const candidate = current === '' ? word : `${current} ${word}`;
-    const indent = out.length === 0 ? 0 : INDENT.length;
-    // A glued piece never shares a line: a space there would alter the value.
-    if (current !== '' && (glued || columnWidth(candidate) + indent > COLS)) {
+  for (const piece of pieces) {
+    if (startsNewLine(current, piece, out.length === 0)) {
       out.push(current);
-      current = word;
+      current = piece.text;
     } else {
-      current = candidate;
+      current = current === '' ? piece.text : `${current} ${piece.text}`;
     }
   }
   if (current !== '') out.push(current);
