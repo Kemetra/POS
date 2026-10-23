@@ -128,16 +128,7 @@ function compose(payload: ReceiptPayload): Band[] {
     for (const line of receiptLines(t)) text(line, align, emphasis);
   };
 
-  // Duplicate-copy marker band — topmost, reprint_duplicate only (§(b)).
-  if (payload.variant === 'reprint_duplicate') {
-    rule('#');
-    text('نسخة طبق الأصل', 'rtl', true);
-    text('DUPLICATE COPY', 'center', true);
-    if (payload.duplicate_copy_sequence_number !== undefined) {
-      text(`Duplicate # ${String(payload.duplicate_copy_sequence_number)}`, 'center', true);
-    }
-    rule('#');
-  }
+  composeDuplicateMarker(payload, rule, text);
 
   // Header band.
   rule('=');
@@ -191,6 +182,22 @@ function compose(payload: ReceiptPayload): Band[] {
   rule('=');
 
   return bands;
+}
+
+/** Duplicate-copy marker band — topmost, reprint_duplicate only (§(b)). */
+function composeDuplicateMarker(
+  payload: ReceiptPayload,
+  rule: (char: RuleBand['char']) => void,
+  text: TextSink,
+): void {
+  if (payload.variant !== 'reprint_duplicate') return;
+  rule('#');
+  text('نسخة طبق الأصل', 'rtl', true);
+  text('DUPLICATE COPY', 'center', true);
+  if (payload.duplicate_copy_sequence_number !== undefined) {
+    text(`Duplicate # ${String(payload.duplicate_copy_sequence_number)}`, 'center', true);
+  }
+  rule('#');
 }
 
 function composeItem(line: ReceiptLineItem, value: TextSink, text: TextSink): void {

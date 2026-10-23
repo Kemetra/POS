@@ -9,7 +9,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { renderReceipt } from '../../../../src/main/receipts/template-engine.js';
 import type { ReceiptPayload } from '../../../../src/shared/receipts/types.js';
-import type { SaleId, SaleNumber } from '../../../../src/shared/sales/types.js';
+import type { SaleId, SaleNumber, TenderLineSummary } from '../../../../src/shared/sales/types.js';
 
 const COLS = 42;
 
@@ -76,6 +76,13 @@ const VALUES: ReadonlyArray<readonly [string, string]> = [
   ['Arabic', 'م'.repeat(120)],
 ];
 
+function tenderWith(
+  tender_type: TenderLineSummary['tender_type'],
+  extra: Partial<TenderLineSummary>,
+): Partial<ReceiptPayload> {
+  return { tender_lines_summary: [{ tender_type, amount_applied_minor: 12500, ...extra }] };
+}
+
 const FIELDS: ReadonlyArray<readonly [string, (v: string) => Partial<ReceiptPayload>]> = [
   ['branch_name', (v) => ({ branch_name: v })],
   ['branch_address', (v) => ({ branch_address: v })],
@@ -101,27 +108,11 @@ const FIELDS: ReadonlyArray<readonly [string, (v: string) => Partial<ReceiptPayl
   ],
   [
     'card external_reference',
-    (v) => ({
-      tender_lines_summary: [
-        {
-          tender_type: 'external_card_terminal',
-          amount_applied_minor: 12500,
-          external_reference: v,
-        },
-      ],
-    }),
+    (v) => tenderWith('external_card_terminal', { external_reference: v }),
   ],
   [
     'voucher_authority_redemption_id',
-    (v) => ({
-      tender_lines_summary: [
-        {
-          tender_type: 'internal_voucher',
-          amount_applied_minor: 12500,
-          voucher_authority_redemption_id: v,
-        },
-      ],
-    }),
+    (v) => tenderWith('internal_voucher', { voucher_authority_redemption_id: v }),
   ],
 ];
 
