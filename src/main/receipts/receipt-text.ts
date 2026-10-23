@@ -33,13 +33,19 @@ export function columnWidth(text: string): number {
   return Array.from(text).length;
 }
 
+/** A word to place; `glued` pieces continue a hard-split token and start a new line. */
+interface Piece {
+  readonly text: string;
+  readonly glued: boolean;
+}
+
 /** A token longer than a continuation line, cut into pieces that fit. */
-function splitToken(word: string): string[] {
+function splitToken(word: string): Piece[] {
   const chars = Array.from(word);
-  if (chars.length <= CONTINUATION) return [word];
-  const pieces: string[] = [];
+  if (chars.length <= CONTINUATION) return [{ text: word, glued: false }];
+  const pieces: Piece[] = [];
   for (let i = 0; i < chars.length; i += CONTINUATION) {
-    pieces.push(chars.slice(i, i + CONTINUATION).join(''));
+    pieces.push({ text: chars.slice(i, i + CONTINUATION).join(''), glued: i > 0 });
   }
   return pieces;
 }
@@ -52,10 +58,11 @@ export function wrapColumns(text: string): string[] {
     .flatMap(splitToken);
   const out: string[] = [];
   let current = '';
-  for (const word of words) {
+  for (const { text: word, glued } of words) {
     const candidate = current === '' ? word : `${current} ${word}`;
     const indent = out.length === 0 ? 0 : INDENT.length;
-    if (current !== '' && columnWidth(candidate) + indent > COLS) {
+    // A glued piece never shares a line: a space there would alter the value.
+    if (current !== '' && (glued || columnWidth(candidate) + indent > COLS)) {
       out.push(current);
       current = word;
     } else {
@@ -74,5 +81,7 @@ export function wrapColumns(text: string): string[] {
  */
 export function receiptLines(text: string): string[] {
   const clean = stripUnprintable(text);
-  return columnWidth(clean) <= COLS ? [clean] : wrapColumns(clean);
+  if (columnWidth(clean) <= COLS) return [clean];
+  const lines = wrapColumns(clean);
+  return lines.length === 0 ? [''] : lines;
 }

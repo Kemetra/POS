@@ -129,6 +129,22 @@ describe('RT-204 — an unbroken 120-character value wraps in every dynamic fiel
   });
 });
 
+describe('RT-204 — a hard-split token is never altered', () => {
+  it('inserts no space inside a 39-character token that is followed by more words', () => {
+    const token = 'A'.repeat(39);
+    const out = renderReceipt(payload({ branch_name: `${token} BBB` }));
+    for (const lines of [htmlLines(out.html), escposLines(out.escpos)]) {
+      expect(lines.join('|')).not.toMatch(/A\s+A/);
+      expect(compact(lines)).toContain(`${token}BBB`);
+    }
+  });
+
+  it('keeps a band for an overlong whitespace-only value', () => {
+    const out = renderReceipt(payload({ branch_address: ' '.repeat(60) }));
+    expect(htmlLines(out.html)).toContain('');
+  });
+});
+
 describe('RT-204 — the receipt website line (configured text) wraps as well', () => {
   const saved = process.env['POS_PULSE_RECEIPT_WEBSITE'];
   afterEach(() => {
