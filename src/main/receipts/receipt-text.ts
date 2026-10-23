@@ -31,21 +31,56 @@ export function stripUnprintable(raw: string): string {
 
 const segmenter = new Intl.Segmenter(undefined, { granularity: 'grapheme' });
 
-/** East Asian Wide / Fullwidth blocks (UAX #11 W and F), as code point ranges. */
+/**
+ * East Asian Wide / Fullwidth (UAX #11 W and F) code point ranges, Unicode 15.1.
+ * Characters with default emoji presentation are measured by EMOJI_CELLS, not listed here.
+ */
 const WIDE_RANGES: ReadonlyArray<readonly [number, number]> = [
   [0x1100, 0x115f],
-  [0x2e80, 0x303e],
-  [0x3041, 0x33ff],
-  [0x3400, 0x4dbf],
-  [0x4e00, 0x9fff],
-  [0xa000, 0xa4cf],
-  [0xa960, 0xa97f],
+  [0x2329, 0x232a],
+  [0x2e80, 0x2e99],
+  [0x2e9b, 0x2ef3],
+  [0x2f00, 0x2fd5],
+  [0x2ff0, 0x2fff],
+  [0x3000, 0x303e],
+  [0x3041, 0x3096],
+  [0x3099, 0x30ff],
+  [0x3105, 0x312f],
+  [0x3131, 0x318e],
+  [0x3190, 0x31e3],
+  [0x31f0, 0x321e],
+  [0x3220, 0x3247],
+  [0x3250, 0x4dbf],
+  [0x4e00, 0xa48c],
+  [0xa490, 0xa4c6],
+  [0xa960, 0xa97c],
   [0xac00, 0xd7a3],
   [0xf900, 0xfaff],
-  [0xfe30, 0xfe6f],
-  [0xff00, 0xff60],
+  [0xfe10, 0xfe19],
+  [0xfe30, 0xfe52],
+  [0xfe54, 0xfe66],
+  [0xfe68, 0xfe6b],
+  [0xff01, 0xff60],
   [0xffe0, 0xffe6],
-  [0x20000, 0x3fffd],
+  [0x16fe0, 0x16fe4],
+  [0x16ff0, 0x16ff1],
+  [0x17000, 0x187f7],
+  [0x18800, 0x18cd5],
+  [0x18d00, 0x18d08],
+  [0x1aff0, 0x1affe],
+  [0x1b000, 0x1b122],
+  [0x1b132, 0x1b132],
+  [0x1b150, 0x1b152],
+  [0x1b155, 0x1b155],
+  [0x1b164, 0x1b167],
+  [0x1b170, 0x1b2fb],
+  [0x1f200, 0x1f202],
+  [0x1f210, 0x1f23b],
+  [0x1f240, 0x1f248],
+  [0x1f250, 0x1f251],
+  [0x1f260, 0x1f265],
+  [0x20000, 0x2fffd],
+  [0x30000, 0x3fffd],
 ];
 const isWide = (cp: number): boolean => WIDE_RANGES.some(([from, to]) => cp >= from && cp <= to);
 
@@ -109,8 +144,15 @@ function startsNewLine(current: string, piece: Piece, onFirstLine: boolean): boo
 /** Words with the run of spaces before each; leading and trailing spaces are not content. */
 function wordsWithGaps(text: string): Array<readonly [string, string]> {
   const words: Array<readonly [string, string]> = [];
-  for (const m of text.matchAll(/( *)([^ ]+)/g))
-    words.push([m[2] ?? '', words.length === 0 ? '' : (m[1] ?? '')]);
+  let spaces = 0;
+  for (const part of text.split(' ')) {
+    if (part === '') {
+      spaces += 1;
+      continue;
+    }
+    words.push([part, words.length === 0 ? '' : ' '.repeat(spaces + 1)]);
+    spaces = 0;
+  }
   return words;
 }
 

@@ -7,10 +7,11 @@ export const COLS = 42;
 const segmenter = new Intl.Segmenter(undefined, { granularity: 'grapheme' });
 
 // The test's own East Asian Wide / Fullwidth ranges: an oracle independent of the production table.
-const WIDE = /[ᄀ-ᅟ⺀-〾ぁ-㏿㐀-䶿一-鿿가-힣豈-﫿︰-﹯＀-｠￠-￦\u{20000}-\u{3FFFD}]/u;
+const WIDE =
+  /[ᄀ-ᅟ⺀-〾ぁ-㏿㐀-䶿一-鿿가-힣豈-﫿︰-﹯＀-｠￠-￦\u{1B000}-\u{1B2FB}\u{20000}-\u{3FFFD}]/u;
 const EMOJI_CELLS = /\p{Emoji_Presentation}|️/u;
 /** Marks, joiners and variation selectors: they never open a printed line. */
-const CLUSTER_TAIL = /^[\p{Mn}\p{Me}‍︀-️]/u;
+const CLUSTER_TAIL = /^(?:[\p{Mn}\p{Me}]|\u200D)/u;
 
 /** Display cells a printed line takes on the roll: wide and emoji graphemes are 2, the rest 1. */
 export function width(s: string): number {
@@ -58,6 +59,8 @@ export const VALUES: ReadonlyArray<readonly [string, string]> = [
  */
 export const WIDE_VALUES: ReadonlyArray<readonly [string, string]> = [
   ['CJK wide', '中'.repeat(80)],
+  ['angle brackets U+2329', '\u2329'.repeat(30)],
+  ['Kana Supplement U+1B000', '\u{1B000}'.repeat(30)],
   ['fullwidth Latin', 'Ａ'.repeat(80)],
   ['CJK words with spaces', '双 中文 '.repeat(15)],
   ['combining marks', 'é'.repeat(40)],
