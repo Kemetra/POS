@@ -32,7 +32,8 @@ export function stripUnprintable(raw: string): string {
 const segmenter = new Intl.Segmenter(undefined, { granularity: 'grapheme' });
 
 /**
- * East Asian Wide / Fullwidth (UAX #11 W and F) code point ranges, Unicode 15.1.
+ * East Asian Wide / Fullwidth (UAX #11 W and F) code point ranges: Unicode 15.1 plus
+ * the Unicode 16 reclassification of U+4DC0..4DFF. Refresh when the runtime's Unicode version moves.
  * Characters with default emoji presentation are measured by EMOJI_CELLS, not listed here.
  */
 const WIDE_RANGES: ReadonlyArray<readonly [number, number]> = [
@@ -50,8 +51,7 @@ const WIDE_RANGES: ReadonlyArray<readonly [number, number]> = [
   [0x3190, 0x31e3],
   [0x31f0, 0x321e],
   [0x3220, 0x3247],
-  [0x3250, 0x4dbf],
-  [0x4e00, 0xa48c],
+  [0x3250, 0xa48c],
   [0xa490, 0xa4c6],
   [0xa960, 0xa97c],
   [0xac00, 0xd7a3],
