@@ -8,10 +8,16 @@
 
 import { afterEach, describe, expect, it } from 'vitest';
 import { renderReceipt } from '../../../../src/main/receipts/template-engine.js';
+import {
+  COLS,
+  VALUES,
+  compact,
+  escposLines,
+  htmlLines,
+  width,
+} from './__helpers__/printed-lines.js';
 import type { ReceiptPayload } from '../../../../src/shared/receipts/types.js';
 import type { SaleId, SaleNumber, TenderLineSummary } from '../../../../src/shared/sales/types.js';
-
-const COLS = 42;
 
 const oneLine = (display_name: string): ReceiptPayload['lines'][number] => ({
   item_ref: 'i',
@@ -44,34 +50,6 @@ function payload(overrides: Partial<ReceiptPayload> = {}): ReceiptPayload {
     ...overrides,
   };
 }
-
-const width = (s: string): number => Array.from(s).length;
-
-const ENTITIES: Record<string, string> = { '&lt;': '<', '&gt;': '>', '&quot;': '"', '&amp;': '&' };
-
-function htmlLines(html: string): string[] {
-  const band = /<div class="(?:band|rule)[^"]*"[^>]*>([^<]*)<\/div>/g;
-  return Array.from(html.matchAll(band), (m) =>
-    (m[1] ?? '').replace(/&(?:lt|gt|quot|amp);/g, (e) => ENTITIES[e] ?? e),
-  );
-}
-
-function escposLines(bytes: Uint8Array): string[] {
-  const text = new TextDecoder().decode(bytes);
-  return text
-    .replace(/\u001b@/g, '')
-    .replace(/\u001b[aE]./g, '')
-    .replace(/\u001dV\u0000/g, '')
-    .split('\n');
-}
-
-const compact = (lines: string[]): string => lines.join('').replace(/\s+/g, '');
-
-const VALUES: ReadonlyArray<readonly [string, string]> = [
-  ['ASCII', 'A'.repeat(120)],
-  ['emoji', '😀'.repeat(120)],
-  ['Arabic', 'م'.repeat(120)],
-];
 
 function tenderWith(
   tender_type: TenderLineSummary['tender_type'],
