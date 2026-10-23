@@ -11,7 +11,9 @@ import { renderReceipt } from '../../../../src/main/receipts/template-engine.js'
 import {
   COLS,
   VALUES,
+  WIDE_VALUES,
   compact,
+  expectFitsRoll,
   escposLines,
   htmlLines,
   width,
@@ -104,6 +106,36 @@ describe('RT-204 — an unbroken 120-character value wraps in every dynamic fiel
     );
     for (const line of htmlLines(out.html)) expect(width(line)).toBeLessThanOrEqual(COLS);
     expect(compact(htmlLines(out.html))).toContain(value);
+  });
+});
+
+describe('RT-829 — wide, emoji and combining values wrap by display width in every dynamic field', () => {
+  for (const [field, build] of FIELDS) {
+    for (const [kind, value] of WIDE_VALUES) {
+      it(`${field} (${kind}): every line ≤ ${String(COLS)} display columns, full value, no split cluster, HTML and ESC/POS`, () => {
+        const out = renderReceipt(payload(build(value)));
+        for (const lines of [htmlLines(out.html), escposLines(out.escpos)]) {
+          expectFitsRoll(lines, value);
+        }
+      });
+    }
+  }
+});
+
+describe('RT-829 — internal spacing survives a wrap', () => {
+  it('keeps a double space inside a line and drops the gap at the break', () => {
+    const out = renderReceipt(
+      payload({ branch_address: `${'ab'.repeat(10)}  ${'cd'.repeat(10)}  ${'ef'.repeat(10)}` }),
+    );
+    for (const lines of [htmlLines(out.html), escposLines(out.escpos)]) {
+      expect(lines).toContain(`${'ab'.repeat(10)}  ${'cd'.repeat(10)}`);
+      expect(lines).toContain(`    ${'ef'.repeat(10)}`);
+    }
+  });
+
+  it('prints a value that fits verbatim, a value that wraps keeps the same spacing', () => {
+    const fits = renderReceipt(payload({ terminal_label: 'a   b' }));
+    expect(fits.html).toContain('>Terminal: a   b<');
   });
 });
 

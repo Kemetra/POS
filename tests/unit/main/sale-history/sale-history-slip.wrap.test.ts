@@ -10,7 +10,9 @@ import { describe, expect, it } from 'vitest';
 import {
   COLS,
   VALUES,
+  WIDE_VALUES,
   compact,
+  expectFitsRoll,
   escposLines,
   htmlLines,
   width,
@@ -145,6 +147,22 @@ describe('RT-828 — an unbroken 120-character value wraps in every dynamic fiel
           expect(compact(lines)).toContain(value);
           if (/returns[- ]block/.test(field)) {
             expect(compact(fromReturnsHeader(lines))).toContain(value);
+          }
+        }
+      });
+    }
+  }
+});
+
+describe('RT-829 — wide, emoji and combining values wrap by display width in every dynamic field', () => {
+  for (const [field, build] of FIELDS) {
+    for (const [kind, value] of WIDE_VALUES) {
+      it(`${field} (${kind}): every line ≤ ${String(COLS)} display columns, full value, no split cluster, HTML and ESC/POS`, () => {
+        const out = renderBands(build(value));
+        for (const lines of [htmlLines(out.html), escposLines(out.escpos)]) {
+          expectFitsRoll(lines, value);
+          if (/returns[- ]block/.test(field)) {
+            expect(compact(fromReturnsHeader(lines))).toContain(value.replace(/\s+/g, ''));
           }
         }
       });
