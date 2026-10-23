@@ -84,8 +84,8 @@ const WIDE_RANGES: ReadonlyArray<readonly [number, number]> = [
 ];
 const isWide = (cp: number): boolean => WIDE_RANGES.some(([from, to]) => cp >= from && cp <= to);
 
-/** Presents as an emoji (two cells): default emoji presentation, or forced by VS16 (U+FE0F). */
-const EMOJI_CELLS = /\p{Emoji_Presentation}|\uFE0F/u;
+/** Presents as an emoji (two cells): default emoji presentation, or forced by VS16 (U+FE0F) or the keycap mark (U+20E3). */
+const EMOJI_CELLS = /\p{Emoji_Presentation}|[\uFE0F\u20E3]/u;
 
 /** Cells one grapheme cluster takes: wide and emoji clusters 2, a base with its marks 1. */
 function clusterWidth(cluster: string): number {

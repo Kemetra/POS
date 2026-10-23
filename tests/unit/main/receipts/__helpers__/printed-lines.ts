@@ -8,8 +8,8 @@ const segmenter = new Intl.Segmenter(undefined, { granularity: 'grapheme' });
 
 // The test's own East Asian Wide / Fullwidth ranges: an oracle independent of the production table.
 const WIDE =
-  /[ᄀ-ᅟ⺀-〾ぁ-㏿㐀-䶿一-鿿가-힣豈-﫿︰-﹯＀-｠￠-￦\u{1B000}-\u{1B2FB}\u{20000}-\u{3FFFD}]/u;
-const EMOJI_CELLS = /\p{Emoji_Presentation}|️/u;
+  /[\u1100-\u115F\u2329\u232A\u2E80-\u303E\u3041-\u33FF\u3400-\u4DBF\u4E00-\u9FFF\uAC00-\uD7A3\uF900-\uFAFF\uFE30-\uFE6F\uFF00-\uFF60\uFFE0-\uFFE6\u{1B000}-\u{1B2FB}\u{20000}-\u{3FFFD}]/u;
+const EMOJI_CELLS = /\p{Emoji_Presentation}|[\uFE0F\u20E3]/u;
 /** Marks, joiners and variation selectors: they never open a printed line. */
 const CLUSTER_TAIL = /^(?:[\p{Mn}\p{Me}]|\u200D)/u;
 
@@ -67,6 +67,7 @@ export const WIDE_VALUES: ReadonlyArray<readonly [string, string]> = [
   ['ZWJ family emoji', '\u{1F468}‍\u{1F469}‍\u{1F467}'.repeat(20)],
   ['flag pairs', '\u{1F1EA}\u{1F1EC}'.repeat(30)],
   ['VS16 heart', '❤️'.repeat(40)],
+  ['keycap without VS16', '1\u20E3'.repeat(30)],
   ['keycap', '1️⃣'.repeat(30)],
 ];
 
