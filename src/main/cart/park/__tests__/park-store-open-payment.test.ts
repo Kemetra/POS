@@ -43,10 +43,10 @@ function insert(table: string, overrides: Record<string, string | number | null>
     string | null,
   ][];
   const row: Record<string, string | number | null> = { ...overrides };
-  for (const [, name, type, notnull, dflt] of columns) {
-    if (!(name in row) && notnull === 1 && dflt === null) {
-      row[name] = /INT|REAL|NUM/i.test(type) ? 0 : FILLER_UUID;
-    }
+  const needsFiller = (name: string, notnull: number, dflt: string | null): boolean =>
+    !(name in row) && notnull === 1 && dflt === null;
+  for (const [, name, type] of columns.filter(([, n, , nn, d]) => needsFiller(n, nn, d))) {
+    row[name] = /INT|REAL|NUM/i.test(type) ? 0 : FILLER_UUID;
   }
   const names = Object.keys(row);
   db.run(
