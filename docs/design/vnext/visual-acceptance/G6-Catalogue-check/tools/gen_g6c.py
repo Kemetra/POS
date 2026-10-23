@@ -59,6 +59,8 @@ class Hit:
 
 
 # Name search «بنادول»: five hits. The first row is the dev seed product (dev-seed-catalogue.ts).
+# The barcode query in BarcodeQuery matches it only on read-down data, where D-BARCODE puts every
+# aliases[] entry (barcodes included) into alias_fold; the dev seed folds its aliases only.
 PANADOL = [
     Hit("بنادول إكسترا", "×20 أقراص", "PARA-500", 1500),
     Hit("بنادول أدفانس", "×24 قرص", "PARA-ADV-500", 4250),
@@ -190,15 +192,13 @@ class Search:
     status: str = ""
     hits: tuple[Hit, ...] = ()
     truncated: bool = False
-    ltr_query: bool = False
 
 
 def search_panel(s: Search) -> str:
-    q_dir = ' dir="ltr"' if s.ltr_query else ""
     body = (
         '<div class="panel-body">'
         f'<div class="field"><label for="cat-q">{SEARCH_LABEL}</label>'
-        f'<input id="cat-q" class="input focus" type="search" autocomplete="off"{q_dir} value="{s.query}"></div>'
+        f'<input id="cat-q" class="input focus" type="search" autocomplete="off" value="{s.query}"></div>'
         f'<p role="status">{s.status}</p>'
     )
     if s.hits:
@@ -234,7 +234,7 @@ STATES: list[tuple[str, str, Search]] = [
     (
         "BarcodeQuery",
         "باركود مكتوب في البحث",
-        Search("6221000000011", plural_results(1), (PANADOL[0],), ltr_query=True),
+        Search("6221000000011", plural_results(1), (PANADOL[0],)),
     ),
     ("Long", "أول 20 نتيجة", Search("فيتامين", plural_results(20), tuple(VITAMINS), truncated=True)),
     ("Empty", "لا توجد نتائج", Search("زنجبيل", NONE)),

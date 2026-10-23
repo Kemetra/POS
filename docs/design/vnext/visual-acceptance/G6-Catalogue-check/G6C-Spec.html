@@ -44,6 +44,7 @@ ul{margin:0 0 12px;padding-left:20px}li{margin-bottom:6px}
 <tr><td><code>display_name_en</code>, flags, <code>tax_category</code>, <code>product_id</code></td><td>Some of them</td><td>No. They are not needed to confirm a product at the till.</td><td>—</td></tr>
 </tbody></table>
 <p><b>Correction to comment 13689.</b> That comment says the barcode is filled "only for a barcode hit" and does not list <code>sku</code>. On main, the Diagnostics check calls <code>search</code> only (<code>DiagnosticsBridge</code>, <code>src/renderer/routes/app/CatalogueDiagnostics.tsx:57</code>). A search row always carries <code>sku</code> and never carries <code>selling_barcode</code>. A typed barcode still finds its product. On read-down data, each <code>aliases[]</code> entry, barcodes included, goes into <code>aliases_json</code> (<code>read-down/map-sellable-row.ts:25</code>, <code>:169</code>) and so into <code>alias_fold</code> (<code>read-down/read-down-writer.ts:146</code>). Search substring-matches <code>alias_fold</code> (<code>search.ts:52</code>). The row that comes back has a name, SKU and price, but no barcode. This is frame <a href="#barcode">C2</a>.</p>
+<p><b>On read-down data only.</b> The dev seed (<code>dev-seed-catalogue.ts</code>) keeps its barcodes in <code>product_barcodes</code> and folds only its name aliases into <code>alias_fold</code>. On the dev seed, the C2 query returns <code>not_found</code> («لا توجد نتائج»). Test C2 against a terminal with a real read-down, or with fixture data that puts the barcode in <code>aliases</code>.</p>
 <p class="ev">Other limits on main: at most <span class="num">20</span> rows (<code>search.ts:21</code> <code>SEARCH_CAP</code>; <code>product-repo.ts:196</code>). Fewer than 2 normalized characters gives <code>too_short</code> in main (<code>catalogue-bridge.ts:46</code>, <code>:163</code>). The renderer already blanks the result for a trimmed query under 2 characters, before it calls (<code>CatalogueDiagnostics.tsx:151–152</code>). The line text comes from <code>searchMessage</code> (<code>diagnostics-model.ts:61–72</code>), which shows refused, <code>too_short</code> and <code>catalogue_unavailable</code> all as «غير متاح».</p>
 
 <h2>2 · Layout and row</h2>
@@ -60,7 +61,7 @@ ul{margin:0 0 12px;padding-left:20px}li{margin-bottom:6px}
 <thead><tr><th>Frame</th><th>Query</th><th>Bridge result</th><th>What shows</th></tr></thead>
 <tbody>
 <tr><td><a href="#results">C1 Results</a></td><td lang="ar">بنادول</td><td><code>results</code>, 5 items, <code>truncated:false</code></td><td><span lang="ar">«5 نتائج»</span> and 5 rows. Row 5 has a long name and sits below the fold.</td></tr>
-<tr><td><a href="#barcode">C2 Barcode typed</a></td><td class="num">6221000000011</td><td><code>results</code>, 1 item, matched through the alias bag</td><td><span lang="ar">«نتيجة واحدة»</span> and one row with name, pack, SKU and price. <b>No barcode on the row.</b></td></tr>
+<tr><td><a href="#barcode">C2 Barcode typed</a></td><td class="num">6221000000011</td><td><code>results</code>, 1 item, matched through the alias bag (read-down data only; the dev seed returns <code>not_found</code>)</td><td><span lang="ar">«نتيجة واحدة»</span> and one row with name, pack, SKU and price. <b>No barcode on the row.</b></td></tr>
 <tr><td><a href="#long">C3 Long list</a></td><td lang="ar">فيتامين</td><td><code>results</code>, 20 items, <code>truncated:true</code></td><td><span lang="ar">«20 نتيجة»</span>, 20 rows that scroll, and under the list <span lang="ar">«النتائج محدودة؛ عدّل البحث لتضييقها.»</span></td></tr>
 <tr><td><a href="#empty">C4 Empty</a></td><td lang="ar">زنجبيل</td><td><code>not_found</code></td><td><span lang="ar">«لا توجد نتائج»</span>, and no list</td></tr>
 <tr><td><a href="#short">C5 Short query</a></td><td lang="ar">ب</td><td>(no call: the renderer blanks it)</td><td>Nothing under the field, as on main</td></tr>
@@ -127,7 +128,7 @@ ul{margin:0 0 12px;padding-left:20px}li{margin-bottom:6px}
 <tr><td lang="ar">نتائج البحث</td><td>The list's accessible name (not visible)</td><td><b>Sale search</b>: <code>LiveSearchResults.tsx:101</code></td></tr>
 <tr><td lang="ar">النتائج محدودة؛ عدّل البحث لتضييقها.</td><td>C3, under the list when <code>truncated</code></td><td><b>Sale search</b>: <code>LiveSearchResults.tsx:115</code></td></tr>
 </tbody></table>
-<p class="ev">Product names, pack labels, SKUs and prices are sample data. The first row (بنادول إكسترا, <span class="num">PARA-500</span>, <span class="num">15.00 EGP</span>) and the barcode typed in C2 come from <code>src/main/catalogue/dev-seed-catalogue.ts</code>.</p>
+<p class="ev">Product names, pack labels, SKUs and prices are sample data. The first row (بنادول إكسترا, <span class="num">PARA-500</span>, <span class="num">15.00 EGP</span>) and the barcode typed in C2 are the dev seed's values (<code>src/main/catalogue/dev-seed-catalogue.ts</code>). C2 assumes they arrived by read-down, as noted in section 1. The search field keeps the shipped direction (no <code>dir</code>), so typed digits sit as they do on main.</p>
 
 <h2>5 · Owner decisions to sign off</h2>
 <table>
