@@ -20,6 +20,7 @@
 import { parseWholeQuantity } from '../returns/returns-money.js';
 import { slipLineName } from '../returns/returns-slip.js';
 import { deriveReceiptPayload } from '../receipts/receipts-payload.js';
+import { receiptLines as wrapValue } from '../receipts/receipt-text.js';
 import {
   composeReceiptBands,
   storeStamp,
@@ -50,6 +51,11 @@ class SlipBuilder {
 
   text(value: string, align: BandAlign, emphasis = false): void {
     this.bands.push({ kind: 'text', text: value, align, emphasis });
+  }
+
+  /** A dynamic value (RT-828): wrapped to the 42-column roll, one band per printed line. */
+  value(value: string, align: BandAlign, emphasis = false): void {
+    for (const line of wrapValue(value)) this.text(line, align, emphasis);
   }
 
   rule(char: '=' | '-' | '#'): void {
@@ -228,7 +234,7 @@ function returnsBands(slip: SlipBuilder, detail: SaleHistoryDetail): void {
   for (const entry of detail.returns) {
     slip.text(`Returned: ${storeStamp(entry.recorded_at)}`, 'ltr');
     for (const line of entry.lines) {
-      slip.text(`${line.quantity}× ${names.get(line.line_ref) ?? NOT_RECORDED}`, 'rtl');
+      slip.value(`${line.quantity}× ${names.get(line.line_ref) ?? NOT_RECORDED}`, 'rtl');
       slip.text(egp(line.line_minor), 'ltr');
     }
     slip.text(`Return total: ${egp(entry.total_minor)}`, 'ltr');
@@ -258,14 +264,14 @@ function recordHeader(slip: SlipBuilder, ctx: SlipContext): void {
   slip.text(`Copy # ${String(ctx.copyNumber)}`, 'center', true);
   slip.rule('#');
   const header = detail.receipt_header;
-  slip.text(header === null ? `Branch: ${NOT_RECORDED}` : lineName(header.branch_name), 'rtl');
+  slip.value(header === null ? `Branch: ${NOT_RECORDED}` : lineName(header.branch_name), 'rtl');
   slip.rule('-');
-  slip.text(`Sale # ${clean(detail.summary.sale_number) ?? NOT_RECORDED}`, 'ltr', true);
-  slip.text(
+  slip.value(`Sale # ${clean(detail.summary.sale_number) ?? NOT_RECORDED}`, 'ltr', true);
+  slip.value(
     `Terminal: ${named(detail.summary.device_label, detail.summary.device_label_source)}`,
     'ltr',
   );
-  slip.text(
+  slip.value(
     `Cashier: ${named(detail.summary.operator_display_name, detail.summary.operator_name_source)}`,
     'rtl',
   );
@@ -279,7 +285,7 @@ function recordItems(slip: SlipBuilder, detail: SaleHistoryDetail): void {
   if (detail.line_order === 'not_recorded') slip.text(`Line order: ${NOT_RECORDED}`, 'ltr');
   slip.rule('-');
   for (const line of detail.lines) {
-    slip.text(`${line.quantity}× ${lineName(line.name)}`, 'rtl');
+    slip.value(`${line.quantity}× ${lineName(line.name)}`, 'rtl');
     slip.text(egp(line.line_minor), 'ltr');
   }
   slip.rule('-');
