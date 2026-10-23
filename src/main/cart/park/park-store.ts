@@ -70,14 +70,20 @@ type Run = { run(...params: unknown[]): { changes: number } };
 const CART_COLUMNS = `cart_id, tenant_id, branch_id, terminal_id, owning_operator_id,
   operator_session_id, state, cart_subtotal_minor, parked_at`;
 
-/** A started attempt, or tender still live on any attempt (RT-116 M7). */
+/**
+ * A started attempt, or tender still moving on any attempt (RT-116 M7). An `applied`
+ * line is final money, not live payment: under a `started` attempt the attempt itself
+ * is the open payment, and under a terminal one (settled, cancelled, failed,
+ * force_failed) it is a finished sale or a closed attempt (RT-836). Only `applying` /
+ * `reversal_pending` stay live after the attempt ended, as in safe-point-inputs.
+ */
 const OPEN_PAYMENT = `EXISTS (
     SELECT 1 FROM payment_attempts a
      WHERE a.envelope_cart_id = carts.cart_id
        AND (a.state = 'started' OR EXISTS (
              SELECT 1 FROM payment_tender_lines l
               WHERE l.payment_attempt_id = a.payment_attempt_id
-                AND l.state IN ('applying', 'applied', 'reversal_pending'))))`;
+                AND l.state IN ('applying', 'reversal_pending'))))`;
 
 const ACTIVE_LINES = `(SELECT COUNT(*) FROM cart_lines l
     WHERE l.cart_id = carts.cart_id AND l.removed_at IS NULL)`;
