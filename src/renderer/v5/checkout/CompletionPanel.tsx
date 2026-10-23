@@ -1,4 +1,5 @@
 import { useEffect, useRef, type JSX, type KeyboardEvent, type ReactNode } from 'react';
+import { focusVisibly } from '../foundation/focus-visibly';
 import { Notice } from '../foundation/Notice';
 import { formatHumanMoney } from '../../ui/format/human-format';
 import { ProofList, type ProofItem } from './ProofList';
@@ -75,8 +76,10 @@ export function CompletionPanel({
 
   // Freeze 15 §3.2: «بيع جديد» owns focus on Completion. The settle commit that
   // led here has just unmounted, so focus would otherwise fall to the body.
+  // RT-840: the confirm is often a pointer click, after which a plain focus()
+  // does not match :focus-visible and no ring is drawn; ask for it.
   useEffect(() => {
-    newSaleRef.current?.focus();
+    focusVisibly(newSaleRef.current);
     focusedAtRef.current = Date.now();
   }, []);
 

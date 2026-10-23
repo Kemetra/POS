@@ -165,6 +165,15 @@ describe('RT-243 completion — «بيع جديد» focus and the held-Enter gua
     expect(screen.getByTestId(IDS.newSale)).toHaveAccessibleName('بيع جديد');
   });
 
+  it('asks for the visible focus ring (RT-840: no ring after a pointer confirm)', () => {
+    const spy = vi.spyOn(HTMLElement.prototype, 'focus');
+    renderPanel();
+    const button = screen.getByTestId(IDS.newSale);
+    const call = spy.mock.calls.findIndex((_, i) => spy.mock.contexts[i] === button);
+    expect(spy.mock.calls[call]?.[0]).toEqual({ focusVisible: true });
+    spy.mockRestore();
+  });
+
   it('swallows an Enter inside the arm window and a key repeat', () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2026-10-09T09:00:00.000Z'));

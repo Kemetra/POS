@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useRef, type JSX, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
+import { focusVisibly } from '../../v5/foundation/focus-visibly';
 
 /**
  * RT-238 (VNext A3) — the Checkout action bar and its two fixed slots.
@@ -105,7 +106,7 @@ export function FocusWhen(props: {
     if (!active) return;
     const target = findRef.current();
     if (target === null) return;
-    target.focus();
+    focusVisibly(target); // RT-840: ring even after a pointer click
     onFocusedRef.current?.();
   }, [active]);
   return null;
