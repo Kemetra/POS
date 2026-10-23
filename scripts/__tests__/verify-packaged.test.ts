@@ -92,26 +92,25 @@ describe('compareFuses', () => {
     });
   });
 
-  it('names a declared fuse that was not flipped', () => {
+  it.each([
+    {
+      case: 'a declared fuse that was not flipped',
+      index: 0,
+      problem: 'runAsNode: packaged enabled, expected disabled (declared in electron-builder.yml)',
+    },
+    {
+      case: 'an undeclared fuse that drifted from the stock default',
+      index: 1,
+      problem:
+        'enableCookieEncryption: packaged enabled, expected disabled (stock Electron default)',
+    },
+  ])('names $case', ({ index, problem }) => {
     const { problems } = compareFuses({
-      declared: declared,
-      packaged: { ...matching, 0: ENABLE },
+      declared,
+      packaged: { ...matching, [index]: ENABLE },
       stock,
     });
-    expect(problems).toEqual([
-      'runAsNode: packaged enabled, expected disabled (declared in electron-builder.yml)',
-    ]);
-  });
-
-  it('names an undeclared fuse that drifted from the stock default', () => {
-    const { problems } = compareFuses({
-      declared: declared,
-      packaged: { ...matching, 1: ENABLE },
-      stock,
-    });
-    expect(problems).toEqual([
-      'enableCookieEncryption: packaged enabled, expected disabled (stock Electron default)',
-    ]);
+    expect(problems).toEqual([problem]);
   });
 
   it('flags a fuse missing from the packaged wire and a declared key the wire lacks', () => {
@@ -132,7 +131,7 @@ describe('compareFuses', () => {
 
   it('flags an extra packaged fuse the stock wire does not have', () => {
     const { problems } = compareFuses({
-      declared: declared,
+      declared,
       packaged: { ...matching, 9: ENABLE },
       stock,
     });
