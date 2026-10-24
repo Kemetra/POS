@@ -225,6 +225,7 @@ import { createSecretStore } from './secrets/index.js';
 import { createLogger, waitForLogDrain } from './logging/logger.js';
 import { initSentryMain, mainIntegrations } from './observability/sentry-main.js';
 import { createRendererErrorReporter } from './observability/renderer-error-report.js';
+import { loadBuildIdentity, withBuildIdentity } from './observability/build-identity.js';
 import { withRequestId } from './observability/request-id.js';
 import { registerReportErrorHandler } from './ipc/report-error.js';
 import { bindPairingStoreDb, createPairingStore } from './pairing/store.js';
@@ -741,9 +742,23 @@ singleInstanceReady
     // and status. ONE wrapper on the base fetch; all Backend-Core clients
     // below are built on it. The identity provider exchanger (Clerk or
     // Descope, resolveClerkExchanger) is not wrapped.
-    const backendBaseFetch = withRequestId(globalThis.fetch.bind(globalThis), {
-      logger: mainLogger,
-    });
+    // RT-719 — the build identity (`X-POS-Build-Commit`, `X-POS-Contract-Pin`) rides
+    // the same shared fetch: added only on the device-token requests of the thirteen
+    // reporting operations, omitted whenever the build has no honest identity.
+    const buildIdentity = loadBuildIdentity(
+      path.join(app.getAppPath(), 'dist', 'build-identity.json'),
+    );
+    mainLogger.info({ build_identity_known: buildIdentity !== null }, 'build_identity:loaded');
+    const backendBaseFetch = withBuildIdentity(
+      withRequestId(globalThis.fetch.bind(globalThis), {
+        logger: mainLogger,
+      }),
+      {
+        baseUrl: resolveApiBaseUrl(),
+        identity: () => buildIdentity,
+        readDeviceToken: readSendableDeviceToken,
+      },
+    );
     const pairingNetwork = createNetwork({
       fetch: backendBaseFetch,
       baseUrl: resolveApiBaseUrl(),

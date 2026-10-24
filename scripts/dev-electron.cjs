@@ -93,6 +93,9 @@ waitOn(
     runLocalBin('vite', 'vite', ['build', '--config', 'vite.config.preload.ts']);
     console.log('[dev-electron] Compiling main process (ESM)...');
     runLocalBin('typescript', 'tsc', ['-p', 'tsconfig.main.json']);
+    // RT-719 — a dev session reports an UNKNOWN build identity: Vite serves a live-edited
+    // renderer, so no stamp could stay true. Drop one left by an earlier `npm run build`.
+    fs.rmSync(path.join(ROOT, 'dist', 'build-identity.json'), { force: true });
 
     console.log('[dev-electron] Launching Electron...');
     const electronBin = require('electron');

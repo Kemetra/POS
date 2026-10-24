@@ -54,12 +54,13 @@ describe('main/index.ts wires RT-215 (device revoked + pairing recovery)', () =>
   });
 
   it('RT-601: backendFetch is the reachability seam only, never the device-401 detector', () => {
-    // RT-634: the base fetch carries X-Request-Id; the observation layers sit above it.
+    // RT-634: the base fetch carries X-Request-Id; RT-719 adds the build identity headers
+    // (device-token reporting requests only); the observation layers sit above both.
     expect(source).toMatch(
       /const backendFetch = terminalStatus\.observeFetch\(backendBaseFetch\);/,
     );
     expect(source).toMatch(
-      /const backendBaseFetch = withRequestId\(globalThis\.fetch\.bind\(globalThis\), \{\s*logger: mainLogger,\s*\}\);/,
+      /const backendBaseFetch = withBuildIdentity\(\s*withRequestId\(globalThis\.fetch\.bind\(globalThis\), \{\s*logger: mainLogger,\s*\}\),\s*\{\s*baseUrl: resolveApiBaseUrl\(\),\s*identity: \(\) => buildIdentity,\s*readDeviceToken: readSendableDeviceToken,\s*\},?\s*\);/,
     );
   });
 
