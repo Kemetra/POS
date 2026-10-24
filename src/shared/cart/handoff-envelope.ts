@@ -28,9 +28,33 @@ export interface PaymentIntentEnvelope {
   readonly terminal_id: string;
   readonly lines: readonly LineSnapshot[];
   readonly discount_placeholders: readonly DiscountPlaceholderSnapshot[];
+  /** Σ line gross (`line_subtotal_minor`). Its v1 meaning is unchanged. */
   readonly subtotal_minor: number;
+  /**
+   * RT-854 (doc 28 §3.3) — v1 extension fields (FR-036), written on every
+   * envelope built from RT-854 on: Σ manual line discounts, and
+   * `subtotal_minor − discount_total_minor`, the amount the payment must
+   * cover. Absent on an envelope frozen before the upgrade: read them through
+   * `envelopeAmountDue`.
+   */
+  readonly discount_total_minor?: number;
+  readonly total_due_minor?: number;
   readonly created_at: string;
   readonly handoff_action_id: string;
+}
+
+/**
+ * The amount a payment must cover: `total_due_minor`, or `subtotal_minor` on
+ * an envelope frozen before RT-854 (no discount math then). Null when the
+ * field present is not a safe non-negative integer (fail closed).
+ */
+export function envelopeAmountDue(envelope: {
+  readonly subtotal_minor?: unknown;
+  readonly total_due_minor?: unknown;
+}): number | null {
+  const due =
+    envelope.total_due_minor === undefined ? envelope.subtotal_minor : envelope.total_due_minor;
+  return typeof due === 'number' && Number.isSafeInteger(due) && due >= 0 ? due : null;
 }
 
 /**

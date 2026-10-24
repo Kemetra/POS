@@ -5,6 +5,10 @@
  * computes subtotal_minor as the integer sum of non-removed line_subtotal_minor
  * values, and returns a frozen PaymentIntentEnvelope v1.
  *
+ * RT-854 (doc 28 §3.3): also `discount_total_minor` (Σ manual line discounts,
+ * from the shared pure function) and `total_due_minor`, as v1 extension
+ * fields. A discount that cannot be honoured fails the build.
+ *
  * SECURITY:
  * - No session credentials, PINs, or sensitive payload fragments are written
  *   into the envelope.
@@ -19,6 +23,7 @@ import {
   type LineSnapshot,
   type DiscountPlaceholderSnapshot,
 } from '../../shared/cart/handoff-envelope.js';
+import { envelopeDiscountTotals } from '../../shared/cart/manual-discount.js';
 
 export interface BuildEnvelopeParams {
   cart_id: string;
@@ -40,7 +45,32 @@ export interface BuildEnvelopeResult {
 
 export type BuildEnvelopeFailure =
   | { readonly kind: 'empty_cart' }
-  | { readonly kind: 'subtotal_unsafe' };
+  | { readonly kind: 'subtotal_unsafe' }
+  | { readonly kind: 'discount_invalid' };
+
+function lineSnapshot(line: CartLineRow): LineSnapshot {
+  return {
+    line_id: line.line_id,
+    item_ref: line.item_ref,
+    display_name: line.display_name,
+    quantity: line.quantity,
+    unit_price_minor: line.unit_price_minor,
+    line_subtotal_minor: line.line_subtotal_minor,
+    note: line.note,
+    version: line.version,
+    last_action_id: line.last_action_id,
+  };
+}
+
+function placeholderSnapshot(ph: DiscountPlaceholderRow): DiscountPlaceholderSnapshot {
+  return {
+    placeholder_id: ph.placeholder_id,
+    line_id: ph.line_id,
+    placeholder_kind: ph.placeholder_kind,
+    requires_manager_attribution: ph.requires_manager_attribution !== 0,
+    attribution_operator_id: ph.attribution_operator_id,
+  };
+}
 
 /**
  * Builds and freezes a PaymentIntentEnvelope v1 from the current cart state.
@@ -48,6 +78,8 @@ export type BuildEnvelopeFailure =
  * Returns a failure discriminant if:
  * - No non-removed lines exist (empty_cart)
  * - subtotal_minor overflows Number.isSafeInteger (subtotal_unsafe)
+ * - a manual discount cannot be honoured (discount_invalid): a non-canonical
+ *   token, a second discount on a line, or an amount above its line's gross
  *
  * The caller is responsible for providing only non-removed lines (via store
  * query); this function re-filters to be defensive.
@@ -81,32 +113,15 @@ export function buildPaymentIntentEnvelope(
     return { kind: 'subtotal_unsafe' };
   }
 
-  // Build line snapshots.
-  const lines: LineSnapshot[] = allLines.map(
-    (line: CartLineRow): LineSnapshot => ({
-      line_id: line.line_id,
-      item_ref: line.item_ref,
-      display_name: line.display_name,
-      quantity: line.quantity,
-      unit_price_minor: line.unit_price_minor,
-      line_subtotal_minor: line.line_subtotal_minor,
-      note: line.note,
-      version: line.version,
-      last_action_id: line.last_action_id,
-    }),
-  );
+  const lines = allLines.map(lineSnapshot);
+  const discount_placeholders = store
+    .getDiscountPlaceholdersForCart(cart_id)
+    .map(placeholderSnapshot);
 
-  // Collect discount placeholders for this cart.
-  const rawPlaceholders = store.getDiscountPlaceholdersForCart(cart_id);
-  const discount_placeholders: DiscountPlaceholderSnapshot[] = rawPlaceholders.map(
-    (ph: DiscountPlaceholderRow): DiscountPlaceholderSnapshot => ({
-      placeholder_id: ph.placeholder_id,
-      line_id: ph.line_id,
-      placeholder_kind: ph.placeholder_kind,
-      requires_manager_attribution: ph.requires_manager_attribution !== 0,
-      attribution_operator_id: ph.attribution_operator_id,
-    }),
-  );
+  const totals = envelopeDiscountTotals(lines, discount_placeholders);
+  if (totals === null) {
+    return { kind: 'discount_invalid' };
+  }
 
   const envelope: PaymentIntentEnvelope = {
     envelope_version: 'v1',
@@ -119,6 +134,8 @@ export function buildPaymentIntentEnvelope(
     lines,
     discount_placeholders,
     subtotal_minor: subtotal,
+    discount_total_minor: totals.discount_total_minor,
+    total_due_minor: totals.total_due_minor,
     created_at,
     handoff_action_id,
   };

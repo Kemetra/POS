@@ -7,8 +7,8 @@
  *
  *   • resolver: the requesting session's own mutable cart and live line; the
  *     version binds cart, line, `placeholder_kind`, line version and scope;
- *     amount null (O1); null for anyone else's cart, a frozen cart or a
- *     missing / removed line;
+ *     RT-854: the amount is the computed discount (O1's null retired); null
+ *     for anyone else's cart, a frozen cart or a missing / removed line;
  *   • add: no threshold. A cashier needs an approval for ANY discount, even
  *     1%; a valid one is consumed exactly once, in the add's own transaction,
  *     and recorded as the approver; every mismatch refuses and writes
@@ -156,7 +156,7 @@ function managerRef(): string {
   return pins.list({ scope: SCOPE, now: T0 })[0]?.managerRef ?? '';
 }
 
-function subjectRef(line = lineId, kind = 'percent_1', cart_id = cartId): string {
+function subjectRef(line = lineId, kind = 'manual_pct_1', cart_id = cartId): string {
   return discountApprovalSubjectRef({ cart_id, line_id: line, placeholder_kind: kind });
 }
 
@@ -164,7 +164,7 @@ function ask(over: Partial<ManagerApprovalRequest> = {}) {
   return service.request({
     action_kind: 'cart.discount.manual',
     subject_ref: subjectRef(),
-    reason_code: 'loyal_customer',
+    reason_code: 'loyal_or_contract_customer',
     approver_ref: managerRef(),
     pin: MANAGER.pin,
     ...over,
@@ -181,7 +181,7 @@ function add(over: Record<string, unknown> = {}) {
   return cart.discountPlaceholdersAdd({
     cart_id: cartId,
     line_id: lineId,
-    placeholder_kind: 'percent_1',
+    placeholder_kind: 'manual_pct_1',
     idempotency_key: 'dp-add-1',
     ...over,
   });
@@ -219,11 +219,11 @@ function expectNothingWritten(): void {
 
 describe('discount approval subject ref', () => {
   it('round-trips cart, line and kind', () => {
-    const ref = subjectRef(lineId, 'percent_15');
+    const ref = subjectRef(lineId, 'manual_pct_15');
     expect(parseDiscountApprovalSubjectRef(ref)).toEqual({
       cart_id: cartId,
       line_id: lineId,
-      placeholder_kind: 'percent_15',
+      placeholder_kind: 'manual_pct_15',
     });
   });
 
@@ -243,15 +243,16 @@ describe('cart.discount.manual resolver', () => {
     return subject.version;
   };
 
-  it('binds cart, line, kind, line version and scope, with no amount (O1)', () => {
-    expect(resolve(subjectRef())).toMatchObject({ amountMinor: null });
+  it('binds cart, line, kind, line version and scope, and (RT-854) the computed amount', () => {
+    // 1% of 150 is 1.5, rounded half up to 2.
+    expect(resolve(subjectRef())).toMatchObject({ amountMinor: 2 });
     const version = versionOf(subjectRef());
-    for (const part of [cartId, lineId, 'percent_1', SCOPE.tenantId, SCOPE.branchId]) {
+    for (const part of [cartId, lineId, 'manual_pct_1', SCOPE.tenantId, SCOPE.branchId]) {
       expect(version).toContain(part);
     }
     // Another line or kind is another subject.
     expect(versionOf(subjectRef(line2Id))).not.toBe(version);
-    expect(versionOf(subjectRef(lineId, 'percent_2'))).not.toBe(version);
+    expect(versionOf(subjectRef(lineId, 'manual_pct_2'))).not.toBe(version);
   });
 
   it('moves with the line version', async () => {
@@ -300,7 +301,7 @@ describe('cart.discount.manual resolver', () => {
 
 describe('cart.discountPlaceholders.add — cashier session', () => {
   it('refuses ANY discount without an approval, even 1% (no threshold)', async () => {
-    for (const kind of ['percent_1', 'percent_10', 'percent_50', 'fixed_note']) {
+    for (const kind of ['manual_pct_1', 'manual_pct_10', 'manual_pct_50', 'fixed_note']) {
       await expect(add({ placeholder_kind: kind, idempotency_key: `k-${kind}` })).resolves.toEqual({
         kind: 'refused',
         reason: 'manager_attribution_required',
@@ -323,7 +324,7 @@ describe('cart.discountPlaceholders.add — cashier session', () => {
         placeholder_id: 'dp-add-1',
         cart_id: cartId,
         line_id: lineId,
-        placeholder_kind: 'percent_1',
+        placeholder_kind: 'manual_pct_1',
         requires_manager_attribution: 1,
         attribution_operator_id: MANAGER.userId,
       }),
@@ -343,15 +344,18 @@ describe('cart.discountPlaceholders.add — cashier session', () => {
           cart_line_id: lineId,
           placeholder_id: 'dp-add-1',
           approval_id: id,
-          reason_code: 'loyal_customer',
+          reason_code: 'loyal_or_contract_customer',
+          kind: 'percent',
+          value: 1,
+          amount_minor: 2,
         },
       }),
     ]);
   });
 
   it('never emits the historical above_threshold category, and no PIN anywhere', async () => {
-    const id = await approved({ subject_ref: subjectRef(lineId, 'percent_50') });
-    await add({ placeholder_kind: 'percent_50', approval_id: id });
+    const id = await approved({ subject_ref: subjectRef(lineId, 'manual_pct_50') });
+    await add({ placeholder_kind: 'manual_pct_50', approval_id: id });
     expect(audit.map((e) => e.action_category)).not.toContain('cart.discount.above_threshold');
     const dump = JSON.stringify([
       audit,
@@ -387,11 +391,18 @@ describe('cart.discountPlaceholders.add — cashier session', () => {
   it('an approval is used once', async () => {
     const id = await approved();
     await add({ approval_id: id });
+    // RT-854: a second discount on the line is refused before any approval is
+    // read, so free the line first; the spent approval still does not apply.
+    await cart.discountPlaceholdersRemove({
+      cart_id: cartId,
+      placeholder_id: 'dp-add-1',
+      idempotency_key: 'dp-rm-1',
+    });
     await expect(add({ approval_id: id, idempotency_key: 'dp-add-2' })).resolves.toEqual({
       kind: 'refused',
       reason: 'approval_invalid',
     });
-    expect(placeholders()).toHaveLength(1);
+    expect(placeholders()).toHaveLength(0);
   });
 
   it('an unknown approval_id refuses approval_invalid', async () => {
@@ -429,7 +440,7 @@ describe('cart.discountPlaceholders.add — cashier session', () => {
     ['another line', (): Record<string, unknown> => ({ line_id: line2Id })],
     [
       'another placeholder_kind',
-      (): Record<string, unknown> => ({ placeholder_kind: 'percent_2' }),
+      (): Record<string, unknown> => ({ placeholder_kind: 'manual_pct_2' }),
     ],
   ])('an approval spent on %s refuses approval_invalid', async (_l, over) => {
     const id = await approved();
@@ -527,7 +538,7 @@ describe('cart.discountPlaceholders.add — cashier session', () => {
       kind: 'refused',
       reason: 'idempotency_payload_mismatch',
     });
-    await expect(add({ placeholder_kind: 'percent_2' })).resolves.toEqual({
+    await expect(add({ placeholder_kind: 'manual_pct_2' })).resolves.toEqual({
       kind: 'refused',
       reason: 'idempotency_payload_mismatch',
     });
@@ -551,7 +562,7 @@ describe('cart.discountPlaceholders.add — manager / admin session (D2)', () =>
     'a %s applies directly and is recorded as the approver',
     async (role) => {
       current = { ...session(role, 'sess-m'), manager_user_id: MANAGER.userId.toUpperCase() };
-      await expect(add()).resolves.toEqual({
+      await expect(add({ reason_code: 'promotion' })).resolves.toEqual({
         kind: 'ok',
         placeholder_id: 'dp-add-1',
         requires_manager_attribution: true,
@@ -565,7 +576,16 @@ describe('cart.discountPlaceholders.add — manager / admin session (D2)', () =>
           action_category: 'cart.discount.manager_authorized',
           acting_operator_id: 'op-sess-m',
           approving_supervisor_id: MANAGER.userId,
-          payload: { cart_id: cartId, cart_line_id: lineId, placeholder_id: 'dp-add-1' },
+          payload: {
+            cart_id: cartId,
+            cart_line_id: lineId,
+            placeholder_id: 'dp-add-1',
+            reason_code: 'promotion',
+            kind: 'percent',
+            value: 1,
+            amount_minor: 2,
+            approver_role: role,
+          },
         }),
       ]);
     },
@@ -573,7 +593,7 @@ describe('cart.discountPlaceholders.add — manager / admin session (D2)', () =>
 
   it('a spoofed approver id is ignored: the session is the approver', async () => {
     current = session('manager', 'sess-m');
-    await add({ attribution_operator_id: 'someone-else' });
+    await add({ attribution_operator_id: 'someone-else', reason_code: 'promotion' });
     expect(placeholders()[0]?.['attribution_operator_id']).toBe('op-sess-m');
     expect(discountAudit()[0]?.approving_supervisor_id).toBe('op-sess-m');
   });

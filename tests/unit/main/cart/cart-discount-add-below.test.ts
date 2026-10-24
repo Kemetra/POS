@@ -123,7 +123,8 @@ describe('cart.discountPlaceholders.add — gate layer (S2 live)', () => {
     const res = await handlers.discountPlaceholdersAdd({
       cart_id: 'cart-x',
       line_id: 'line-x',
-      placeholder_kind: 'percent_5',
+      placeholder_kind: 'manual_pct_5',
+      reason_code: 'promotion',
       idempotency_key: 'dp-no-sess',
     });
     expect(res.kind).toBe('refused');
@@ -142,7 +143,8 @@ describe('cart.discountPlaceholders.add — gate layer (S2 live)', () => {
     const res = await handlers.discountPlaceholdersAdd({
       cart_id: 'nonexistent',
       line_id: 'line-x',
-      placeholder_kind: 'percent_5',
+      placeholder_kind: 'manual_pct_5',
+      reason_code: 'promotion',
       idempotency_key: 'dp-no-cart',
     });
     expect(res.kind).toBe('refused');
@@ -158,13 +160,14 @@ describe('cart.discountPlaceholders.add — no threshold (RT-608)', () => {
     f = await newCartWithLine();
   });
 
-  it.each([['percent_5'], ['percent_1']])(
+  it.each([['manual_pct_5'], ['manual_pct_1']])(
     'refuses a cashier %s with no approval: manager_attribution_required',
     async (kind) => {
       const res = await f.handlers.discountPlaceholdersAdd({
         cart_id: f.cart_id,
         line_id: f.line_id,
         placeholder_kind: kind,
+        reason_code: 'promotion',
         idempotency_key: 'dp-t059-a',
       });
       expect(res).toEqual({ kind: 'refused', reason: 'manager_attribution_required' });
@@ -175,7 +178,8 @@ describe('cart.discountPlaceholders.add — no threshold (RT-608)', () => {
     await f.handlers.discountPlaceholdersAdd({
       cart_id: f.cart_id,
       line_id: f.line_id,
-      placeholder_kind: 'percent_5',
+      placeholder_kind: 'manual_pct_5',
+      reason_code: 'promotion',
       idempotency_key: 'dp-t059-b',
     });
     expect(readDiscountPlaceholders(f.db, f.cart_id)).toHaveLength(0);
@@ -187,7 +191,8 @@ describe('cart.discountPlaceholders.add — no threshold (RT-608)', () => {
     const res = await m.handlers.discountPlaceholdersAdd({
       cart_id: m.cart_id,
       line_id: m.line_id,
-      placeholder_kind: 'percent_5',
+      placeholder_kind: 'manual_pct_5',
+      reason_code: 'promotion',
       idempotency_key: 'dp-t059-c',
     });
     expect(res).toMatchObject({ kind: 'ok', requires_manager_attribution: true });

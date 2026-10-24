@@ -87,6 +87,14 @@ export default defineConfig({
           functions: 95,
           statements: 95,
         },
+        // RT-854 (doc 28 §3.2) — the manual line discount math is money math:
+        // the same ≥95% gate as money.ts.
+        'src/shared/cart/manual-discount.ts': {
+          lines: 95,
+          branches: 95,
+          functions: 95,
+          statements: 95,
+        },
         // T004 — 003-pos-ui-shell: additive per-module threshold at ≥90%
         // line + branch for the shared UI paths. Scoped to the exact subtree;
         // does NOT redefine the root 80% threshold or the money.ts 95% gate.

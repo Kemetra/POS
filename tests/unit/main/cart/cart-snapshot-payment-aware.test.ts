@@ -95,7 +95,7 @@ function seedManagerDiscount(db: SqlJsDatabase, cartId: string, lineId: string):
     `INSERT INTO cart_line_discount_placeholders
        (placeholder_id, cart_id, line_id, placeholder_kind, requires_manager_attribution,
         attribution_operator_id, created_at)
-     VALUES ('dp-1', ?, ?, 'percent_above_threshold', 1, ?, '2026-09-25T10:00:30.000Z')`,
+     VALUES ('dp-1', ?, ?, 'manual_pct_20', 1, ?, '2026-09-25T10:00:30.000Z')`,
     [cartId, lineId, MANAGER_SECRET],
   );
   seedManagerAuthorizedDiscount(db, {

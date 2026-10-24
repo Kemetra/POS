@@ -10,6 +10,10 @@
  * RT-614 (RT-28 step 3b): an unpaid frozen envelope holding a manual-discount
  * placeholder that no `cart.discount.manager_authorized` audit row names is
  * refused `unauthorized_discount`; the recovery is the manager post-handoff cancel.
+ *
+ * RT-854 (doc 28 §3.3): the request's amount must equal the envelope's net
+ * `total_due_minor` (`subtotal_minor` on a pre-RT-854 envelope), and a
+ * placeholder whose kind is not a canonical token is untrusted.
  */
 
 import { describe, it, expect, beforeAll, beforeEach } from 'vitest';
@@ -201,7 +205,7 @@ describe('bindCartPaymentEligibility', () => {
     const PLACEHOLDER = {
       placeholder_id: 'dp-1',
       line_id: 'line-1',
-      placeholder_kind: 'percent_1',
+      placeholder_kind: 'manual_pct_1',
       requires_manager_attribution: true,
       attribution_operator_id: 'mgr-1',
     };
@@ -265,11 +269,65 @@ describe('bindCartPaymentEligibility', () => {
 
     it.each([
       ['not an array', { oops: true }],
-      ['an entry without ids', [{ placeholder_kind: 'percent_1' }]],
+      ['an entry without ids', [{ placeholder_kind: 'manual_pct_1' }]],
     ])('refuses when discount_placeholders is %s', (_label, placeholders) => {
       seedCart('frozen_handed_off', { ...ENVELOPE, discount_placeholders: placeholders });
       authorize();
       expect(check()).toEqual({ kind: 'refused', reason: 'unauthorized_discount' });
+    });
+
+    it.each([['percent_1'], ['STAFF_10PCT'], [undefined]])(
+      'RT-854: refuses an authorised placeholder whose kind %j is not a canonical token',
+      (kind) => {
+        seedWithPlaceholders([{ ...PLACEHOLDER, placeholder_kind: kind }]);
+        authorize();
+        expect(check()).toEqual({ kind: 'refused', reason: 'unauthorized_discount' });
+      },
+    );
+  });
+
+  describe('RT-854: the amount due is the net (doc 28 §3.3)', () => {
+    const DISCOUNTED = { ...ENVELOPE, discount_total_minor: 550, total_due_minor: 4950 };
+
+    it('admits a request for the net total_due_minor', () => {
+      seedCart('frozen_handed_off', DISCOUNTED);
+      expect(check({ envelope_subtotal_minor: 4950 })).toEqual({ kind: 'ok' });
+    });
+
+    it('refuses stale_handoff for the gross subtotal once a discount applies', () => {
+      seedCart('frozen_handed_off', DISCOUNTED);
+      expect(check({ envelope_subtotal_minor: 5500 })).toEqual({
+        kind: 'refused',
+        reason: 'stale_handoff',
+      });
+    });
+
+    it('admits a zero-total envelope for 0 (OZ-1 = Z-A)', () => {
+      seedCart('frozen_handed_off', {
+        ...ENVELOPE,
+        discount_total_minor: 5500,
+        total_due_minor: 0,
+      });
+      expect(check({ envelope_subtotal_minor: 0 })).toEqual({ kind: 'ok' });
+    });
+
+    it('a pre-RT-854 envelope (no total_due_minor) is due its subtotal', () => {
+      seedCart('frozen_handed_off');
+      expect(check({ envelope_subtotal_minor: 5500 })).toEqual({ kind: 'ok' });
+    });
+
+    it.each([
+      ['-1', -1],
+      ['a string', '4950'],
+      ['a fraction', 49.5],
+      ['null', null],
+    ])('refuses stale_handoff when total_due_minor is %s', (_label, due) => {
+      seedCart('frozen_handed_off', { ...ENVELOPE, total_due_minor: due });
+      // Never falls back to the gross subtotal: a present but malformed field fails closed.
+      expect(check({ envelope_subtotal_minor: 5500 })).toEqual({
+        kind: 'refused',
+        reason: 'stale_handoff',
+      });
     });
   });
 });

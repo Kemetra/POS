@@ -9,7 +9,9 @@
  *   2. C6: a manager / admin session performs manager-allowed actions
  *      directly, so it asks for nothing (`not_applicable`), except the manager
  *      self-unlock (MA-4);
- *   3. a resolver for the kind (`not_applicable` until its consumer lands);
+ *   3. a reason the kind allows (`invalid_input`; RT-854: `cart.discount.manual`
+ *      takes only its closed list); a resolver for the kind (`not_applicable`
+ *      until its consumer lands);
  *      the subject as main sees it now (`approval_invalid` when it does not
  *      exist or is not in an approvable state for this session);
  *   4. the PIN against that approver's record, with the kind's credential
@@ -39,6 +41,7 @@ import type {
   ManagerApprovalRequest,
   ManagerApprover,
 } from '../../shared/operator/manager-approval.js';
+import { isManualDiscountReasonCode } from '../../shared/cart/manual-discount.js';
 import { credentialPolicyFor } from './manager-approval-policy.js';
 import type { ManagerPinScope, ManagerPinStore } from './manager-pin-store.js';
 import type { OperatorSessionRecord } from './session-manager.js';
@@ -184,6 +187,19 @@ function requesterUserIdOf(session: OperatorSessionRecord): string | null {
   return (session.user_id ?? session.manager_user_id ?? null)?.toLowerCase() ?? null;
 }
 
+/**
+ * RT-854 (doc 28 §4.1, §11.2) — kinds whose reason is a closed list. The
+ * approval record keeps the reason, so the approval binds it; any other kind
+ * keeps the bridge's general reason-code pattern.
+ */
+const REASON_RULES: Partial<Record<ManagerActionKind, (code: string) => boolean>> = {
+  'cart.discount.manual': isManualDiscountReasonCode,
+};
+
+function reasonAllowed(kind: ManagerActionKind, code: string): boolean {
+  return REASON_RULES[kind]?.(code) ?? true;
+}
+
 /** RT-441 (RT-116 §5.2) — the manager recovery kinds. */
 const RECOVERY_KINDS: ReadonlySet<ManagerActionKind> = new Set([
   'recovery.complete_attempt',
@@ -323,6 +339,7 @@ export function createManagerApprovalService(
       const admitted = admit(kind);
       if (admitted.kind !== 'ok') return admitted;
       const { session, scope } = admitted;
+      if (!reasonAllowed(kind, input.reason_code)) return refused('invalid_input');
       if (deps.resolvers[kind] === undefined) return refused('not_applicable');
       const before = resolve(kind, input.subject_ref, session);
       if (before === null) return refused('approval_invalid');

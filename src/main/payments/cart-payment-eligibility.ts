@@ -1,5 +1,7 @@
 import type { DatabaseHandle } from '../db/client.js';
 import type { RefusalReason } from '../../shared/payments/types.js';
+import { envelopeAmountDue } from '../../shared/cart/handoff-envelope.js';
+import { parseManualDiscountToken } from '../../shared/cart/manual-discount.js';
 import {
   bindDiscountPlaceholderTrust,
   type IsDiscountPlaceholderTrusted,
@@ -38,7 +40,8 @@ export type CheckCartForPayment = (req: CartPaymentEligibilityRequest) => CartPa
 
 interface PersistedHandoff {
   handoff_action_id: unknown;
-  subtotal_minor: unknown;
+  /** RT-854: `total_due_minor`, or `subtotal_minor` on a pre-RT-854 envelope. */
+  amount_due_minor: number | null;
   discount_placeholders: unknown;
 }
 
@@ -50,7 +53,7 @@ function persistedHandoff(json: string | null): PersistedHandoff | null {
     const env = parsed as Record<string, unknown>;
     return {
       handoff_action_id: env['handoff_action_id'],
-      subtotal_minor: env['subtotal_minor'],
+      amount_due_minor: envelopeAmountDue(env),
       discount_placeholders: env['discount_placeholders'],
     };
   } catch {
@@ -70,14 +73,20 @@ function isHandedOffInScope(
   );
 }
 
-/** The request names exactly the persisted handoff (action and subtotal). */
+/**
+ * The request names exactly the persisted handoff: its action, and the amount
+ * due. RT-854 (doc 28 §3.3): the request's `envelope_subtotal_minor` is the
+ * amount the payment covers, the envelope's net `total_due_minor`; with no
+ * discount (or on a pre-RT-854 envelope) that is `subtotal_minor`.
+ */
 function matchesPersistedHandoff(
   handoff: PersistedHandoff | null,
   req: CartPaymentEligibilityRequest,
 ): handoff is PersistedHandoff {
   return (
     handoff?.handoff_action_id === req.envelope_handoff_action_id &&
-    handoff.subtotal_minor === req.envelope_subtotal_minor
+    handoff.amount_due_minor !== null &&
+    handoff.amount_due_minor === req.envelope_subtotal_minor
   );
 }
 
@@ -105,6 +114,9 @@ function envelopeDiscountsTrusted(
     const placeholderId = stringField(placeholder, 'placeholder_id');
     const lineId = stringField(placeholder, 'line_id');
     if (placeholderId === null || lineId === null) return false;
+    // RT-854 (doc 28 §3.1): a kind that is not a canonical token has no value.
+    const kind = stringField(placeholder, 'placeholder_kind');
+    if (kind === null || parseManualDiscountToken(kind) === null) return false;
     return isTrusted({
       tenant_id: cart.tenant_id,
       branch_id: cart.branch_id,
@@ -125,11 +137,13 @@ function envelopeDiscountsTrusted(
  *   - `cart_lost`        — unknown cart, not `frozen_handed_off` (cancelled,
  *                          editing, …), or outside the session's tenant/branch.
  *   - `stale_handoff`    — the request does not match the persisted envelope
- *                          (handoff action or subtotal), or it is unreadable.
+ *                          (handoff action or amount due — RT-854: the net
+ *                          `total_due_minor`), or it is unreadable.
  *   - `unauthorized_discount` — RT-614 (RT-28 step 3b): the persisted envelope
  *                          holds a manual-discount placeholder no
  *                          `cart.discount.manager_authorized` audit row names
- *                          (e.g. frozen before the upgrade). Recovery is the
+ *                          (e.g. frozen before the upgrade), or (RT-854) one
+ *                          whose kind is not a canonical token. Recovery is the
  *                          manager post-handoff cancel (005 FR-033).
  *   - `attempt_terminal` — the cart already has a settled payment, or a
  *                          force-failed attempt that still holds live tender

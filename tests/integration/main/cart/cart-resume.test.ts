@@ -298,7 +298,7 @@ describe('cart.resume — price changes and unavailable lines need acceptance', 
       w.raw.run(
         `INSERT INTO cart_line_discount_placeholders (placeholder_id, cart_id, line_id,
            placeholder_kind, requires_manager_attribution, attribution_operator_id, created_at)
-         VALUES (?, ?, ?, 'percent_5', 0, NULL, ?)`,
+         VALUES (?, ?, ?, 'manual_pct_5', 0, NULL, ?)`,
         [id ?? '', cart, line ?? '', T0],
       );
       // RT-614: the audit row RT-608's add writes makes the placeholder trusted.
