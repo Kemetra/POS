@@ -3,12 +3,14 @@
  * running POS can report it to Backend-Core (`X-POS-Build-Commit`,
  * `X-POS-Contract-Pin`; `src/main/observability/build-identity.ts`).
  *
- *   tsx scripts/stamp-build-identity.ts           write the stamp (build:main, dev-electron)
+ *   tsx scripts/stamp-build-identity.ts           write the stamp (build:main)
  *   tsx scripts/stamp-build-identity.ts --check   before package:dir: drop a stale stamp, never add one
  *
- * Run at the end of `npm run build:main` and by `npm run dev` (the unpackaged
- * lab build), so the packaged exe (`dist/**` is in the asar) and `electron .`
- * carry the same file. `dist/` is git-ignored: the stamp is never committed.
+ * Run at the end of `npm run build:main`, so the packaged exe (`dist/**` is in the asar)
+ * and `electron .` after `npm run build` carry the same file. `dist/` is git-ignored:
+ * the stamp is never committed. `npm run dev` does NOT stamp: its renderer is served by
+ * Vite with live reload, so no startup stamp could stay true, and the dev POS reports
+ * unknown (scripts/dev-electron.cjs removes a stale stamp).
  *
  * Honesty rule: the stamp is written only when it is true. A tracked file that
  * differs from HEAD, an untracked file under src/, migrations/ or contracts/, or no
