@@ -25,6 +25,8 @@ import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const STAMP_FILE = path.join(ROOT, 'dist', 'build-identity.json');
 const GIT_COMMIT = /^[0-9a-f]{40}$/;
 const PIN_COMMIT_LINE = /^commit:[ \t]+([0-9a-f]{40})[ \t]*$/m;
 
@@ -81,10 +83,10 @@ export function writeBuildIdentityStamp(file: string, stamp: BuildIdentityStamp 
   writeFileSync(file, `${JSON.stringify(stamp)}\n`);
 }
 
-function run(cmd: string, args: readonly string[], cwd: string): string | null {
+function run(cmd: string, args: readonly string[]): string | null {
   try {
     return execFileSync(cmd, [...args], {
-      cwd,
+      cwd: ROOT,
       encoding: 'utf8',
       stdio: ['ignore', 'pipe', 'ignore'],
     });
@@ -93,14 +95,14 @@ function run(cmd: string, args: readonly string[], cwd: string): string | null {
   }
 }
 
-const git = (root: string, args: readonly string[]): string | null => run('git', args, root);
+const git = (args: readonly string[]): string | null => run('git', args);
 
 /** Git output that lists any change; unreadable output (null) counts as a change, so no stamp. */
 const hasChanges = (output: string | null): boolean => output === null || output.trim() !== '';
 
-function readPin(root: string): string | null {
+function readPin(): string | null {
   try {
-    return readFileSync(path.join(root, 'contracts', 'backend-core', 'PIN'), 'utf8');
+    return readFileSync(path.join(ROOT, 'contracts', 'backend-core', 'PIN'), 'utf8');
   } catch {
     return null;
   }
@@ -111,13 +113,13 @@ interface TreeFacts {
   readonly dirty: boolean;
 }
 
-function treeFacts(root: string): TreeFacts {
-  const head = git(root, ['rev-parse', 'HEAD'])?.trim() ?? null;
+function treeFacts(): TreeFacts {
+  const head = git(['rev-parse', 'HEAD'])?.trim() ?? null;
   // `--untracked-files=no`: dist/ and other ignored output never make a build "dirty";
   // an unreadable status is treated as dirty (no stamp).
-  const status = git(root, ['status', '--porcelain', '--untracked-files=no']);
+  const status = git(['status', '--porcelain', '--untracked-files=no']);
   // A new source file compiled into dist/ is untracked, so look for those in the built trees.
-  const untracked = git(root, [
+  const untracked = git([
     'ls-files',
     '--others',
     '--exclude-standard',
@@ -129,9 +131,9 @@ function treeFacts(root: string): TreeFacts {
   return { head, dirty: hasChanges(status) || hasChanges(untracked) };
 }
 
-function readStamp(file: string): BuildIdentityStamp | null {
+function readStamp(): BuildIdentityStamp | null {
   try {
-    const raw: unknown = JSON.parse(readFileSync(file, 'utf8'));
+    const raw: unknown = JSON.parse(readFileSync(STAMP_FILE, 'utf8'));
     const commit = (raw as { commit?: unknown } | null)?.commit;
     return typeof commit === 'string' ? { commit } : null;
   } catch {
@@ -140,9 +142,9 @@ function readStamp(file: string): BuildIdentityStamp | null {
 }
 
 /** `--check`: before packaging, keep the build's stamp only if it still names this tree. */
-function check(root: string, file: string): number {
-  const kept = stampStillTrue(readStamp(file), treeFacts(root));
-  if (!kept) writeBuildIdentityStamp(file, null);
+function check(): number {
+  const kept = stampStillTrue(readStamp(), treeFacts());
+  if (!kept) writeBuildIdentityStamp(STAMP_FILE, null);
   console.log(
     kept
       ? '[stamp-build-identity] stamp matches this tree: kept'
@@ -152,11 +154,9 @@ function check(root: string, file: string): number {
 }
 
 function main(): number {
-  const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-  const file = path.join(root, 'dist', 'build-identity.json');
-  if (process.argv.includes('--check')) return check(root, file);
-  const stamp = buildIdentityStamp({ ...treeFacts(root), pinText: readPin(root) });
-  writeBuildIdentityStamp(file, stamp);
+  if (process.argv.includes('--check')) return check();
+  const stamp = buildIdentityStamp({ ...treeFacts(), pinText: readPin() });
+  writeBuildIdentityStamp(STAMP_FILE, stamp);
   console.log(
     stamp === null
       ? '[stamp-build-identity] no honest build identity (dirty tree or no git): no stamp written'
