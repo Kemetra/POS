@@ -308,6 +308,12 @@ export const TRANSPORT_DECORATORS: ReadonlyArray<{
       'RT-602 trackInFlight wraps the same observed fetch and only counts the request as in flight (no liveness probe meanwhile); request and response pass through untouched.',
   },
   {
+    module: 'src/main/observability/build-identity.ts',
+    fetchCallSites: 1,
+    reason:
+      'RT-719 withBuildIdentity wraps the same base fetch and, only on the device-token requests of the thirteen reporting operations, adds the optional X-POS-Build-Commit and X-POS-Contract-Pin headers (pos-terminal-pairing.openapi.yaml "Build identity report"; a header never fails or changes a request); every other request, and the body and response, pass through untouched.',
+  },
+  {
     module: 'src/main/observability/request-id.ts',
     fetchCallSites: 1,
     reason:

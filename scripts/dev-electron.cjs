@@ -93,6 +93,9 @@ waitOn(
     runLocalBin('vite', 'vite', ['build', '--config', 'vite.config.preload.ts']);
     console.log('[dev-electron] Compiling main process (ESM)...');
     runLocalBin('typescript', 'tsc', ['-p', 'tsconfig.main.json']);
+    // RT-719 — the unpackaged lab build reports the same build identity as the packaged one.
+    console.log('[dev-electron] Stamping build identity...');
+    runLocalBin('tsx', 'tsx', ['scripts/stamp-build-identity.ts']);
 
     console.log('[dev-electron] Launching Electron...');
     const electronBin = require('electron');
