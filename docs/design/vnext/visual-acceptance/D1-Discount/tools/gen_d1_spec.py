@@ -1,5 +1,5 @@
 """Generate D1-Spec.html (RT-853, RT-699 slice D1): the states, the copy table, the refusal map,
-the open owner decisions and the checks. Visual DRAFT, awaiting owner sign-off.
+the owner decisions and the checks. Visual APPROVED 2026-10-24 under owner delegation (RT-853 comment 13740).
 
 Usage: python -I gen_d1_spec.py   (writes into this script's parent folder, D1-Discount/)
 """
@@ -14,7 +14,7 @@ sys.dont_write_bytecode = True
 
 SHIPPED = "مأخوذ (شُحن)"
 OWNER = "مأخوذ (قرار المالك)"
-NEW = "<b>جديد — للاعتماد</b>"
+NEW = "<b>جديد — معتمد</b>"
 
 
 def load_gen(tools: Path):
@@ -181,8 +181,8 @@ def build(g) -> str:
         section(f"الحالات ({len(states)} حالة × 1024×768 و1280×800)", states_body),
         section("ما رُسم وما التزم به", f"<ul>{DRAWN}</ul>"),
         section("خريطة الرفض (الوثيقة 28 §7)", table(["الحالة في العقد", "الإطار"], [row(a, b) for a, b in REFUSALS])),
-        section("النصوص — كل نص «جديد» يحتاج اعتماد المالك", table(["المكان", "النص", "الأساس", "الحالة"], [row(*c) for c in copy_table(g)])),
-        section("قرارات مطلوبة من المالك", table(["#", "النقطة", "المقترح"], [row(a, b, c) for a, b, c in DECISIONS])),
+        section("النصوص — النصوص «الجديدة» معتمدة كما رُسمت (OD-2)", table(["المكان", "النص", "الأساس", "الحالة"], [row(*c) for c in copy_table(g)])),
+        section("قرارات المالك (معتمدة كما رُسمت، 2026-10-24، بتفويض)", table(["#", "النقطة", "المقترح"], [row(a, b, c) for a, b, c in DECISIONS])),
         section("التباين العالي", f"<ul>{FORCED_NOTES}</ul>"),
         section("الفحوص المنفّذة على الملفات", CHECKS),
     ]
