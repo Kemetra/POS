@@ -177,9 +177,16 @@ in `editing` and no envelope is constructed (US3-AS5).
 >   covers** (the net). `payment_attempts.envelope_subtotal_minor` stores that net, so tender
 >   sufficiency, settle and finalize run against the net with no code change, and with no
 >   migration (no `amount_due_minor` column).
-> - A placeholder on a removed line discounts nothing. A placeholder whose kind is not a
->   canonical token, or a second discount on one line, refuses handoff with
->   `unauthorized_discount`, as an untrusted one does (step 3a).
+> - A placeholder on a removed line discounts nothing.
+> - Handoff refuses with `unauthorized_discount`, as it does for an untrusted placeholder
+>   (step 3a), when:
+>   - a placeholder's kind is not a canonical token;
+>   - one line carries a second discount;
+>   - a placeholder's amount on its line now is not the `amount_minor` its
+>     `cart.discount.manager_authorized` audit row approved. This happens, for example, when
+>     an accepted resume price change moved the line's gross. The cashier removes the discount
+>     and adds it again with authority, so the approved amount stays the applied one
+>     (OD-28-7).
 > - A zero total (`total_due_minor = 0`) settles with no tender line (OZ-1 = Z-A, doc 28
 >   §11.3).
 

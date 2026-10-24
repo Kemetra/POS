@@ -621,6 +621,28 @@ describe('handoff envelope totals (doc 28 §3.3, v1 extension)', () => {
     });
   });
 
+  it('a line whose gross moved since the approval (resume re-price) refuses unauthorized_discount until the discount is re-added', async () => {
+    asManager();
+    await add({ reason_code: 'promotion' });
+    // What an accepted resume price change does (`park-store.ts` reprice): the
+    // gross moves, the placeholder stays. 10% of 9000 was approved as 900.
+    raw.run(
+      `UPDATE cart_lines SET unit_price_minor = 5000, line_subtotal_minor = 10000 WHERE line_id = ?`,
+      [lineId],
+    );
+    await expect(handoff()).resolves.toEqual({ kind: 'refused', reason: 'unauthorized_discount' });
+    await cart.discountPlaceholdersRemove({
+      cart_id: cartId,
+      placeholder_id: 'dp-add-1',
+      idempotency_key: 'dp-rm-1',
+    });
+    await add({ idempotency_key: 'dp-add-2', reason_code: 'promotion' });
+    await expect(handoff('handoff-2')).resolves.toMatchObject({
+      kind: 'ok',
+      envelope: { discount_total_minor: 1000 },
+    });
+  });
+
   it('a trusted placeholder with a non-canonical kind refuses unauthorized_discount', async () => {
     asManager();
     await add({ reason_code: 'promotion' });

@@ -55,6 +55,7 @@ import {
 } from './manual-discount-policy.js';
 import {
   isManualDiscountReasonCode,
+  lineDiscountMinor,
   parseManualDiscountToken,
 } from '../../shared/cart/manual-discount.js';
 import { discountApprovalSubjectRef } from '../../shared/cart/discount-approval.js';
@@ -447,7 +448,8 @@ function returnToSaleRefusal(
  * RT-614 — does the cart hold a discount placeholder that no
  * `cart.discount.manager_authorized` audit row names? The same placeholder
  * set the envelope builder snapshots. RT-854 (doc 28 §3.1): a placeholder
- * whose kind is not a canonical token has no value, so it is untrusted too.
+ * whose kind is not a canonical token has no value, so it is untrusted too;
+ * and on a live line its amount now must be the one the audit row approved.
  */
 function hasUntrustedDiscountPlaceholder(store: CartStore, cart: StoredCart): boolean {
   return store.getDiscountPlaceholdersForCart(cart.cart_id).some(
@@ -459,8 +461,25 @@ function hasUntrustedDiscountPlaceholder(store: CartStore, cart: StoredCart): bo
         cart_id: cart.cart_id,
         line_id: placeholder.line_id,
         placeholder_id: placeholder.placeholder_id,
+        ...currentAmount(store, cart.cart_id, placeholder),
       }),
   );
+}
+
+/**
+ * RT-854: the amount a placeholder gives on its live line now. A removed line
+ * discounts nothing, and an amount the line cannot take (`null`) fails the
+ * envelope build instead, so neither is checked here.
+ */
+function currentAmount(
+  store: CartStore,
+  cartId: string,
+  placeholder: { line_id: string; placeholder_kind: string },
+): { amount_minor?: number } {
+  const line = store.getLine(cartId, placeholder.line_id);
+  if (line === undefined || line.removed_at !== null) return {};
+  const amount = lineDiscountMinor(line.line_subtotal_minor, placeholder.placeholder_kind);
+  return amount === null ? {} : { amount_minor: amount };
 }
 
 function refuse(reason: CartRefusalReason): { kind: 'refused'; reason: CartRefusalReason } {

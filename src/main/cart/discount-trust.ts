@@ -9,6 +9,12 @@
  * any other path (pre-RT-28, a direct insert) has none, whatever its
  * `attribution_operator_id` says. No schema change: the audit row is the
  * provenance marker.
+ *
+ * RT-854 (doc 28 §3.1, OD-28-7): when the caller passes the amount the
+ * placeholder gives on its line now, the audit row must have recorded that
+ * same `amount_minor`. A line whose gross moved since the approval (an
+ * accepted resume price change) no longer matches, so the discount must be
+ * removed and authorised again: the approved amount stays the applied one.
  */
 import type { DatabaseHandle } from '../db/client.js';
 
@@ -19,6 +25,8 @@ export interface DiscountPlaceholderRef {
   readonly cart_id: string;
   readonly line_id: string;
   readonly placeholder_id: string;
+  /** RT-854: the discount amount on the line as it stands; omitted, the amount is not checked. */
+  readonly amount_minor?: number;
 }
 
 export type IsDiscountPlaceholderTrusted = (ref: DiscountPlaceholderRef) => boolean;
@@ -33,6 +41,7 @@ const MANAGER_AUTHORIZED_SQL = `SELECT 1 AS ok FROM audit_events
       AND json_extract(payload, '$.placeholder_id') = ?
       AND json_extract(payload, '$.cart_id') = ?
       AND json_extract(payload, '$.cart_line_id') = ?
+      AND (? IS NULL OR json_extract(payload, '$.amount_minor') = ?)
     LIMIT 1`;
 
 /**
@@ -43,9 +52,17 @@ export function bindDiscountPlaceholderTrust(db: DatabaseHandle): IsDiscountPlac
   let stmt: PrepareGet<{ ok: number }> | null = null;
   return (ref) => {
     stmt ??= db.prepare(MANAGER_AUTHORIZED_SQL) as PrepareGet<{ ok: number }>;
+    const amount = ref.amount_minor ?? null;
     return (
-      stmt.get(ref.tenant_id, ref.branch_id, ref.placeholder_id, ref.cart_id, ref.line_id) !==
-      undefined
+      stmt.get(
+        ref.tenant_id,
+        ref.branch_id,
+        ref.placeholder_id,
+        ref.cart_id,
+        ref.line_id,
+        amount,
+        amount,
+      ) !== undefined
     );
   };
 }
