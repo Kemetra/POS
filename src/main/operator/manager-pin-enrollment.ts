@@ -41,7 +41,13 @@
  */
 import { MANAGER_PIN_PATTERN } from '../../shared/shift-cashup/types.js';
 import type { Role } from '../../shared/operator/role.js';
-import type { CredentialActor, ManagerPinScope, ManagerPinStore } from './manager-pin-store.js';
+import {
+  managerRoleOf,
+  type CredentialActor,
+  type ManagerPinScope,
+  type ManagerPinStore,
+  type ManagerRole,
+} from './manager-pin-store.js';
 import type { OperatorSessionRecord } from './session-manager.js';
 
 /** Enrolment is allowed this long after the manager's online sign-in. */
@@ -91,6 +97,12 @@ export interface ManagerIdentity {
 /** The audit actor of an admitted manager's credential operation. */
 function actorOf(manager: ManagerIdentity): CredentialActor {
   return { operatorId: manager.operatorId, sessionId: manager.operatorSessionId };
+}
+
+/** RT-861: the session's role as a store field, when it is a manager's. */
+function roleOf(role: Role): { role?: ManagerRole } {
+  const managerRole = managerRoleOf(role);
+  return managerRole === undefined ? {} : { role: managerRole };
 }
 
 /** `ManagerIdentity` of the live session, or null without one. */
@@ -261,6 +273,7 @@ export function createManagerPinEnrollment(deps: ManagerPinEnrollmentDeps): Mana
         now: deps.now(),
         onlineAt: admitted.signedInAt,
         actor: actorOf(admitted.manager),
+        ...roleOf(admitted.manager.role),
         guard,
       });
       if (outcome.kind !== 'enrolled') refuse(STORE_REFUSALS[outcome.kind]);
@@ -299,6 +312,7 @@ export interface ManagerOnlineRefreshDeps {
  * Round 1 P2-1 — a session-start listener: an online manager / admin sign-in
  * (a session with a captured `users.id`) refreshes that manager's record on
  * the current terminal. Other sessions, or an unpaired terminal, touch nothing.
+ * RT-861: the refresh carries the session's role, so the record follows it.
  */
 export function createManagerOnlineRefresh(
   deps: ManagerOnlineRefreshDeps,
@@ -312,6 +326,7 @@ export function createManagerOnlineRefresh(
       scope: { tenantId: record.tenant_id, branchId: record.branch_id, terminalId },
       userId,
       at,
+      ...roleOf(record.role),
     });
   };
 }
