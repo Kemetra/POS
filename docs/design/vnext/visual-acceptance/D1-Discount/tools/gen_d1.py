@@ -137,6 +137,13 @@ def fmt(minor: int) -> str:
     return f"{sign}{m // 100:,}.{m % 100:02d}"
 
 
+def parse_minor(raw: str) -> int:
+    """A typed amount such as "5.00" to minor units, integer arithmetic only (no float for money)."""
+    whole, _, frac = raw.partition(".")
+    assert len(frac) <= 2 and (whole + frac).isdigit()
+    return int(whole or "0") * 100 + int(frac.ljust(2, "0"))
+
+
 def money(minor: int, cls: str = "money") -> str:
     return f'<span class="{cls}">{fmt(minor)} EGP</span>'
 
@@ -318,11 +325,20 @@ def money_column(cart: Cart, notice: str | None) -> str:
     )
 
 
-def sale_screen(cart: Cart, *, inert: bool, discount_enabled: bool = True, qty_disabled: bool = False,
-                notice: str | None = None) -> str:
+@dataclass(frozen=True)
+class CartUi:
+    """What the sale screen shows around the cart: the «خصم» action, the steppers, a refusal."""
+
+    discount_enabled: bool = True
+    qty_disabled: bool = False
+    notice: str | None = None
+
+
+def sale_screen(cart: Cart, inert: bool, ui: CartUi) -> str:
     return (
         f'<main class="screen sale"{" inert" if inert else ""}><h1 class="vh">نقطة البيع</h1>'
-        f"{command(inert)}{cart_section(cart, discount_enabled, qty_disabled)}{money_column(cart, notice)}</main>"
+        f"{command(inert)}{cart_section(cart, ui.discount_enabled, ui.qty_disabled)}"
+        f"{money_column(cart, ui.notice)}</main>"
     )
 
 
@@ -344,7 +360,7 @@ def sheet_dialog(s: Sheet) -> str:
     elif s.kind == "pct":
         amount = Discount("pct", int(s.raw_value), "promotion", "").amount(gross)
     else:
-        amount = Discount("amt", int(round(float(s.raw_value) * 100)), "promotion", "").amount(gross)
+        amount = Discount("amt", parse_minor(s.raw_value), "promotion", "").amount(gross)
 
     def kind_choice(key: str, label: str) -> str:
         on = s.kind == key
@@ -571,9 +587,9 @@ def manager_cart() -> Cart:
     return Cart(list(LINES), {0: D_PCT, 2: D_AMT}, 2)
 
 
-def frame_sale(role: str, cart: Cart, dialog: str = "", **kw: object) -> str:
+def frame_sale(role: str, cart: Cart, dialog: str = "", **ui: object) -> str:
     inert = bool(dialog)
-    return sale_screen(cart, inert=inert, **kw) + nav(role, "نقطة البيع", inert) + dialog
+    return sale_screen(cart, inert, CartUi(**ui)) + nav(role, "نقطة البيع", inert) + dialog
 
 
 SHEET_PCT = Sheet(PANADOL, "pct", "10", "promotion", "cashier")

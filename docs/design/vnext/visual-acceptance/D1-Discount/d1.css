@@ -154,7 +154,7 @@
   min-block-size: 0;
   margin: 0;
   padding: 0;
-  overflow: hidden;
+  overflow-y: auto;
   list-style: none;
 }
 .lines > li {
@@ -171,6 +171,7 @@
 .line .nm {
   display: grid;
   min-inline-size: 0;
+  overflow-wrap: anywhere;
   font-weight: 600;
   line-height: 1.35;
 }

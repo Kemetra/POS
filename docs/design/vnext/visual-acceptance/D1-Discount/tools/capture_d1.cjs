@@ -8,6 +8,8 @@ captureRefs({
   packDir: path.resolve(__dirname, '..'),
   prefix: 'D1',
   selectors: ['.cart', '.money-col', '.command', '.nav', '.operator', '.dialog', '.ledger', '.order', '.proofs'],
+  // The cart uses the shipped Direction B names: each line and discount row spills-checked, each product name clip-checked.
+  parts: { row: '.line, .disc', list: '.lines', name: '.nm' },
 }).catch((e) => {
   console.error(e);
   process.exit(1);
