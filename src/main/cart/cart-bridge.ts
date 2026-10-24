@@ -1215,15 +1215,16 @@ export class CartBridgeHandlers {
     if (gated.kind !== 'ok') return gated;
     const { session, store, cart } = gated;
 
+    const isManager = session.role === 'manager' || session.role === 'admin';
     // Idempotency: the idempotency_key doubles as placeholder_id.
     const replay = store.getOutboxRow(req.idempotency_key);
     if (replay !== undefined) {
-      return isSameDiscountAddReplay(replay, store.getDiscountPlaceholder(req.idempotency_key), req)
+      const placeholder = store.getDiscountPlaceholder(req.idempotency_key);
+      return isSameDiscountAddReplay(replay, placeholder, req, isManager)
         ? discountAdded(req.idempotency_key)
         : refuse('idempotency_payload_mismatch');
     }
 
-    const isManager = session.role === 'manager' || session.role === 'admin';
     if (!isManager && (this.deps.approvals === undefined || req.approval_id === undefined)) {
       return refuse('manager_attribution_required');
     }

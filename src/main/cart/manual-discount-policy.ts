@@ -97,21 +97,25 @@ function parsedPayload(json: string): Record<string, unknown> | null {
 
 /**
  * A key already used is an exact replay only when it was this add: the same
- * cart, line and token, and — when the retry states a reason — the same
- * reason. A row written before RT-854 has no token in its payload; the
- * placeholder (while it exists) stands in for it, as it did under RT-608.
+ * cart, line and token, and the same reason. Only a cashier's retry may omit
+ * the reason (its approval carries it); a manager / admin retry must state it,
+ * as the direct path requires (§4.2). A row written before RT-854 has no token
+ * in its payload; the placeholder (while it exists) stands in for it, as it
+ * did under RT-608.
  */
 export function isSameDiscountAddReplay(
   replay: OutboxRow,
   placeholder: DiscountPlaceholderRow | undefined,
   req: CartDiscountPlaceholdersAddRequest,
+  isManager: boolean,
 ): boolean {
   if (replay.action_kind !== 'cart.discount_placeholder.add') return false;
   if (replay.cart_id !== req.cart_id || replay.line_id !== req.line_id) return false;
   const payload = parsedPayload(replay.payload_json) ?? {};
   const token = payload['placeholder_kind'] ?? placeholder?.placeholder_kind;
   if (token !== undefined && token !== req.placeholder_kind) return false;
-  return req.reason_code === undefined || payload['reason_code'] === req.reason_code;
+  if (req.reason_code === undefined) return !isManager;
+  return payload['reason_code'] === req.reason_code;
 }
 
 /** The add's outbox payload: ids, the token and the resolved reason. No amount, no approver. */

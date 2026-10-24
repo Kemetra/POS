@@ -506,6 +506,16 @@ describe('replay identity carries the token and the reason (§4.1 step 5)', () =
     });
   });
 
+  it('a manager replay that omits the reason is idempotency_payload_mismatch (the direct path needs one)', async () => {
+    asManager();
+    await add({ reason_code: 'promotion' });
+    await expect(add()).resolves.toEqual({
+      kind: 'refused',
+      reason: 'idempotency_payload_mismatch',
+    });
+    expect(discountAudit()).toHaveLength(1);
+  });
+
   it('a cashier replay without restating the reason still replays', async () => {
     const id = await approved();
     const first = await add({ approval_id: id });
