@@ -48,12 +48,18 @@
  *   • `onEvent` reports enrolled / revoked / locked_out / disabled to the
  *     composition root, which audits them. Ids only, never a PIN or a hash.
  *
+ * RT-861 (migration 0056): the record keeps its manager's role (`manager` |
+ * `admin`), set by the enrolling session and refreshed by `refreshRole` at
+ * each online manager / admin sign-in. `verify` answers it with the user id;
+ * a record without one (enrolled before 0056) answers no role, never a guess.
+ *
  * No logger: the PIN and the hashes cannot reach a log from this module
  * (PR-1). Nothing here is ever sent to the renderer.
  */
 import { randomUUID } from 'node:crypto';
 
 import type { DatabaseHandle } from '../db/client.js';
+import type { Role } from '../../shared/operator/role.js';
 import type { SafeStorageLike } from '../secrets/safe-storage.js';
 import { hashPin, type PinRow, type PinVerifyResult } from './pin-credential.js';
 import { verifyPinWithWindow } from './pin-lockout.js';
@@ -100,8 +106,17 @@ export interface ManagerPinScope {
   terminalId: string;
 }
 
+/** RT-861: the roles a manager PIN record can hold. */
+export type ManagerRole = Exclude<Role, 'cashier'>;
+
+/** RT-861: `manager` or `admin`; anything else (a cashier, NULL, a stray value) is undefined. */
+export function managerRoleOf(value: unknown): ManagerRole | undefined {
+  return value === 'manager' || value === 'admin' ? value : undefined;
+}
+
 export type ManagerPinVerdict =
-  | { kind: 'verified'; userId: string }
+  // RT-861: `role` is absent when the record has none (enrolled before 0056).
+  | { kind: 'verified'; userId: string; role?: ManagerRole }
   | { kind: 'invalid' }
   | { kind: 'locked' }
   | { kind: 'expired' }
@@ -128,6 +143,8 @@ export interface EnrolManagerPinInput {
   onlineAt: string;
   /** The session enrolling, for the audit. */
   actor?: CredentialActor;
+  /** RT-861: the enrolling session's role; omitted, the record has none. */
+  role?: ManagerRole;
   /** Runs synchronously right before the write; a throw writes nothing. */
   guard: () => void;
 }
@@ -188,6 +205,11 @@ export interface ManagerPinStore {
   revoke(input: RevokeManagerPinInput): Promise<RevokeManagerPinOutcome>;
   /** An online manager / admin sign-in on this terminal at `at`. */
   touchOnline(input: { scope: ManagerPinScope; userId: string; at: string }): void;
+  /**
+   * RT-861: an online manager / admin sign-in's role replaces the record's
+   * (no record, no change). Nothing else on the record moves.
+   */
+  refreshRole(input: { scope: ManagerPinScope; userId: string; role: ManagerRole }): void;
 }
 
 export interface ManagerPinStoreDeps {
@@ -210,6 +232,7 @@ interface StoredRow {
   lockout_count: number;
   disabled_at: string | null;
   revoked_at: string | null;
+  role: string | null;
 }
 
 type Run = { run(...params: unknown[]): { changes: number } };
@@ -227,7 +250,7 @@ interface Attempt {
 
 const COLUMNS = `user_id, manager_ref, display_name, pin_hash, pin_salt,
                  failed_attempt_count, lockout_until, enrolled_at, last_online_at,
-                 lockout_count, disabled_at, revoked_at`;
+                 lockout_count, disabled_at, revoked_at, role`;
 const IN_SCOPE = 'tenant_id = ? AND branch_id = ? AND terminal_id = ?';
 
 const SELECT_BY_REF = `SELECT ${COLUMNS} FROM manager_pin_records
@@ -240,8 +263,8 @@ const SELECT_SCOPE = `SELECT ${COLUMNS} FROM manager_pin_records
 const UPSERT = `
   INSERT INTO manager_pin_records
     (tenant_id, branch_id, terminal_id, user_id, manager_ref, display_name, pin_hash, pin_salt,
-     failed_attempt_count, lockout_until, enrolled_at, last_online_at)
-  VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, NULL, ?, ?)
+     failed_attempt_count, lockout_until, enrolled_at, last_online_at, role)
+  VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, NULL, ?, ?, ?)
   ON CONFLICT (tenant_id, branch_id, terminal_id, user_id) DO UPDATE SET
     display_name = excluded.display_name,
     pin_hash = excluded.pin_hash,
@@ -253,7 +276,8 @@ const UPSERT = `
     lockout_count = 0,
     disabled_at = NULL,
     revoked_at = NULL,
-    revoke_reason = NULL`;
+    revoke_reason = NULL,
+    role = excluded.role`;
 
 /** Nit 7: only on the secret the attempt checked. RT-438: with the lockout count. */
 const SET_LOCKOUT = `
@@ -267,6 +291,9 @@ const REVOKE = `UPDATE manager_pin_records SET revoked_at = ?, revoke_reason = ?
                    AND revoked_at IS NULL AND disabled_at IS NULL`;
 
 const TOUCH_ONLINE = `UPDATE manager_pin_records SET last_online_at = ?
+                       WHERE ${IN_SCOPE} AND user_id = ?`;
+
+const REFRESH_ROLE = `UPDATE manager_pin_records SET role = ?
                        WHERE ${IN_SCOPE} AND user_id = ?`;
 
 const CURRENT_PIN_REFUSAL = {
@@ -300,7 +327,10 @@ function isActive(row: StoredRow): boolean {
 }
 
 function verdictOf(row: StoredRow, result: PinVerifyResult | null): ManagerPinVerdict {
-  if (result?.kind === 'match') return { kind: 'verified', userId: row.user_id };
+  if (result?.kind === 'match') {
+    const role = managerRoleOf(row.role);
+    return { kind: 'verified', userId: row.user_id, ...(role === undefined ? {} : { role }) };
+  }
   return result?.kind === 'locked_out' ? { kind: 'locked' } : { kind: 'invalid' };
 }
 
@@ -473,6 +503,7 @@ export function createManagerPinStore(deps: ManagerPinStoreDeps): ManagerPinStor
       input.sealed.pin_salt,
       input.now,
       input.onlineAt,
+      input.role ?? null,
     );
     const enrolled = (db.prepare(SELECT_BY_USER) as Get).get(...scopeParams(scope), userId);
     if (enrolled !== undefined) {
@@ -538,6 +569,14 @@ export function createManagerPinStore(deps: ManagerPinStoreDeps): ManagerPinStor
     touchOnline(input) {
       (db.prepare(TOUCH_ONLINE) as Run).run(
         input.at,
+        ...scopeParams(input.scope),
+        input.userId.toLowerCase(),
+      );
+    },
+
+    refreshRole(input) {
+      (db.prepare(REFRESH_ROLE) as Run).run(
+        input.role,
         ...scopeParams(input.scope),
         input.userId.toLowerCase(),
       );

@@ -331,7 +331,8 @@ interface DiscountAuthority {
   approver: string;
   approvalId?: string;
   reasonCode: ManualDiscountReasonCode | undefined;
-  approverRole?: 'manager' | 'admin';
+  /** The direct path's session role, or (RT-861) the cashier approval's; undefined when it holds none. */
+  approverRole?: 'manager' | 'admin' | undefined;
 }
 
 /** RT-854: the add on a live line of the cart (`wrong_owner` otherwise), resolved. */
@@ -1335,7 +1336,8 @@ export class CartBridgeHandlers {
    * approver (D2), by `users.id` when known, with its role and the reason it
    * stated. A cashier's approval is consumed against the cart, line and
    * computed amount as read now, inside the transaction; the reason is the
-   * approval's, and a restated one must equal it.
+   * approval's, and a restated one must equal it; the role (RT-861) is the
+   * approval's, when it holds one.
    */
   private discountAuthority(ctx: {
     store: CartStore;
@@ -1384,7 +1386,13 @@ export class CartBridgeHandlers {
     if (!approvedReasonHolds(reasonCode, resolved.reasonCode)) {
       throw new ApprovalRefused('approval_invalid');
     }
-    return { approver: consumed.approverUserId, approvalId, reasonCode };
+    return {
+      approver: consumed.approverUserId,
+      approvalId,
+      reasonCode,
+      // RT-861: the approver's role as the approval recorded it.
+      approverRole: consumed.approverRole,
+    };
   }
 
   // eslint-disable-next-line @typescript-eslint/require-await

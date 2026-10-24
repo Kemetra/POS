@@ -26,7 +26,8 @@ export interface DiscountHarnessInput {
   db: DatabaseHandle;
   terminalId: string;
   scope: { tenantId: string; branchId: string; terminalId: string };
-  manager: { userId: string; pin: string; displayName: string };
+  /** RT-861: `role` is the enrolling session's; omitted, the record has none (pre-0056). */
+  manager: { userId: string; pin: string; displayName: string; role?: 'manager' | 'admin' };
   enrolledAt: string;
   unitPriceMinor: number;
   getSession: () => OperatorSessionRecord | null;
@@ -57,6 +58,7 @@ export async function bootDiscountHarness(input: DiscountHarnessInput): Promise<
     sealed: await pins.seal(manager.pin),
     now: input.enrolledAt,
     onlineAt: input.enrolledAt,
+    ...(manager.role === undefined ? {} : { role: manager.role }),
     guard: () => undefined,
   });
   const store = bindCartStore(db);

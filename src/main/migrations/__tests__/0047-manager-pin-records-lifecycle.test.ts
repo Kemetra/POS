@@ -81,8 +81,14 @@ describe('0047 — manager PIN record lifecycle (RT-438, [GATED])', () => {
 
   it("appends exactly four columns after 0044's twelve", () => {
     const all = columns('manager_pin_records');
-    expect(all).toHaveLength(16);
-    expect(all.slice(12)).toEqual(['lockout_count', 'disabled_at', 'revoked_at', 'revoke_reason']);
+    // RT-861: 0056 appends `role` after them.
+    expect(all.slice(12, 16)).toEqual([
+      'lockout_count',
+      'disabled_at',
+      'revoked_at',
+      'revoke_reason',
+    ]);
+    expect(all.slice(16)).toEqual(['role']);
   });
 
   it('a row written before 0047 reads as active', () => {

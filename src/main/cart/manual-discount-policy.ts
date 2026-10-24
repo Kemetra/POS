@@ -140,9 +140,10 @@ export function discountOutboxPayload(
  * The `cart.discount.manager_authorized` payload (doc 28 §7): ids, the
  * approval (cashier path), the reason, the value and the computed amount, and
  * the approver's role when main has a durable source for it — the session's
- * own role on the direct path. A cashier approval's approver role has none
- * today (`manager_approvals` and `manager_pin_records` hold no role), so it is
- * omitted rather than guessed.
+ * own role on the direct path, the consumed approval's `approver_role` on the
+ * cashier path (RT-861, migration 0056). An approval without one (granted
+ * before 0056, or by a PIN record that has none yet) omits it rather than
+ * guessing.
  */
 export function discountAuditPayload(input: {
   req: CartDiscountPlaceholdersAddRequest;

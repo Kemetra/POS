@@ -41,7 +41,13 @@
  */
 import { MANAGER_PIN_PATTERN } from '../../shared/shift-cashup/types.js';
 import type { Role } from '../../shared/operator/role.js';
-import type { CredentialActor, ManagerPinScope, ManagerPinStore } from './manager-pin-store.js';
+import {
+  managerRoleOf,
+  type CredentialActor,
+  type ManagerPinScope,
+  type ManagerPinStore,
+  type ManagerRole,
+} from './manager-pin-store.js';
 import type { OperatorSessionRecord } from './session-manager.js';
 
 /** Enrolment is allowed this long after the manager's online sign-in. */
@@ -91,6 +97,12 @@ export interface ManagerIdentity {
 /** The audit actor of an admitted manager's credential operation. */
 function actorOf(manager: ManagerIdentity): CredentialActor {
   return { operatorId: manager.operatorId, sessionId: manager.operatorSessionId };
+}
+
+/** RT-861: the session's role as a store field, when it is a manager's. */
+function roleOf(role: Role): { role?: ManagerRole } {
+  const managerRole = managerRoleOf(role);
+  return managerRole === undefined ? {} : { role: managerRole };
 }
 
 /** `ManagerIdentity` of the live session, or null without one. */
@@ -261,6 +273,7 @@ export function createManagerPinEnrollment(deps: ManagerPinEnrollmentDeps): Mana
         now: deps.now(),
         onlineAt: admitted.signedInAt,
         actor: actorOf(admitted.manager),
+        ...roleOf(admitted.manager.role),
         guard,
       });
       if (outcome.kind !== 'enrolled') refuse(STORE_REFUSALS[outcome.kind]);
@@ -314,4 +327,49 @@ export function createManagerOnlineRefresh(
       at,
     });
   };
+}
+
+export interface ManagerRoleRefreshDeps {
+  store: Pick<ManagerPinStore, 'refreshRole'>;
+  /** The current pairing's terminal; null while unpaired. */
+  currentTerminalId: () => string | null;
+}
+
+/**
+ * RT-861 — a session-start listener: an online manager / admin sign-in (a
+ * session with a captured `users.id`) writes its role onto that manager's
+ * record on the current terminal, so a record enrolled before 0056 gains it
+ * and a promotion or demotion follows. Other sessions, or an unpaired
+ * terminal, touch nothing. Unlike the `last_online_at` refresh it does not
+ * extend the record's validity.
+ */
+export function createManagerRoleRefresh(
+  deps: ManagerRoleRefreshDeps,
+): (record: OperatorSessionRecord) => void {
+  return (record) => {
+    const { role } = roleOf(record.role);
+    if (role === undefined) return;
+    const userId = record.manager_user_id;
+    if (userId === undefined) return;
+    const terminalId = deps.currentTerminalId();
+    if (terminalId === null) return;
+    deps.store.refreshRole({
+      scope: { tenantId: record.tenant_id, branchId: record.branch_id, terminalId },
+      userId,
+      role,
+    });
+  };
+}
+
+/**
+ * RT-861 (Codex P1 on PR #826) — registered by the composition root next to
+ * the manager PIN store and the approval service, which exist whatever
+ * `POS_PULSE_FEATURE_SHIFT_CASHUP` says; the shift cash-up IPC is not.
+ */
+export function registerManagerRoleRefresh(
+  deps: ManagerRoleRefreshDeps & {
+    onSessionStarted: (listener: (record: OperatorSessionRecord) => void) => void;
+  },
+): void {
+  deps.onSessionStarted(createManagerRoleRefresh(deps));
 }

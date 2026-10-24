@@ -322,7 +322,8 @@ export interface CartReturnToSalePayload {
  * RT-854 (doc 28 §7; Backend-Core RT-740 DEP-2 closed key set): every event
  * from RT-854 on also carries the value — `kind`, `value`, `amount_minor` —
  * and the reason; `approver_role` is set on the manager / admin direct path
- * (a cashier approval's approver role has no durable source yet). The value
+ * and, RT-861, on the cashier path from the consumed approval (absent when
+ * the approval holds no role, e.g. one granted before migration 0056). The value
  * fields are optional here only so rows recorded before RT-854 keep their
  * type; the producer (`discountAuditPayload`) always writes them.
  */
@@ -343,7 +344,7 @@ export interface CartDiscountManagerAuthorizedPayload {
   value?: number;
   /** RT-854: the discount main computed on the line gross, in minor units. */
   amount_minor?: number;
-  /** RT-854: the direct path's session role. */
+  /** RT-854: the direct path's session role; RT-861: the cashier approval's, when recorded. */
   approver_role?: 'manager' | 'admin';
 }
 

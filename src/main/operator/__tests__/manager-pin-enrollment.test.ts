@@ -161,7 +161,12 @@ describe('a signed-in manager enrols a PIN', () => {
     expect(records()).toEqual([
       ['t1', 'b1', 'term-1', MANAGER_USER, 'Mona Manager', 0, null, NOW, SIGNED_IN_AT],
     ]);
-    await expect(verify(PIN)).resolves.toEqual({ kind: 'verified', userId: MANAGER_USER });
+    // RT-861: with the enrolling session's role.
+    await expect(verify(PIN)).resolves.toEqual({
+      kind: 'verified',
+      userId: MANAGER_USER,
+      role: 'manager',
+    });
   });
 
   it('lets an admin enrol too', async () => {
