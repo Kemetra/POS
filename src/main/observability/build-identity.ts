@@ -50,6 +50,10 @@ function validCommit(value: unknown): string | null {
   return typeof value === 'string' && GIT_COMMIT.test(value) ? value : null;
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
 /**
  * The identity a build stamp (`dist/build-identity.json`, written by
  * `scripts/stamp-build-identity.ts`) carries, or null (unknown) without a valid
@@ -62,8 +66,8 @@ export function parseBuildIdentity(text: string): BuildIdentity | null {
   } catch {
     return null;
   }
-  if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) return null;
-  const fields = raw as Record<string, unknown>;
+  if (!isRecord(raw)) return null;
+  const fields = raw;
   const commit = validCommit(fields['commit']);
   if (commit === null) return null;
   return { commit, contractPin: validCommit(fields['contractPin']) };
@@ -166,6 +170,11 @@ async function boundedTokenRead(read: () => Promise<string | null>): Promise<str
   }
 }
 
+/** True when the request's bearer is exactly the terminal's current device token. */
+function isDeviceBearer(headers: Headers, token: string | null): boolean {
+  return token !== null && token !== '' && headers.get('authorization') === `Bearer ${token}`;
+}
+
 async function reportingHeaders(
   base: URL,
   opts: WithBuildIdentityOptions,
@@ -178,9 +187,7 @@ async function reportingHeaders(
   if (identity === null) return null;
   const headers = sourceHeaders(input, init);
   const token = await boundedTokenRead(opts.readDeviceToken);
-  if (token === null || token === '' || headers.get('authorization') !== `Bearer ${token}`) {
-    return null;
-  }
+  if (!isDeviceBearer(headers, token)) return null;
   headers.set(COMMIT_HEADER, identity.commit);
   if (identity.contractPin !== null) headers.set(CONTRACT_PIN_HEADER, identity.contractPin);
   else headers.delete(CONTRACT_PIN_HEADER);

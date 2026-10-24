@@ -41,13 +41,20 @@ export interface StampInputs {
   readonly pinText: string | null;
 }
 
+const isCommit = (value: string | null): value is string =>
+  value !== null && GIT_COMMIT.test(value);
+
+/** The `commit:` line of the PIN file, or null when the file is missing or has none. */
+function pinCommit(pinText: string | null): string | null {
+  return pinText === null ? null : (PIN_COMMIT_LINE.exec(pinText)?.[1] ?? null);
+}
+
 /** The stamp these facts support, or null when none is honest. */
 export function buildIdentityStamp(inputs: StampInputs): BuildIdentityStamp | null {
-  if (inputs.dirty || inputs.head === null || !GIT_COMMIT.test(inputs.head)) return null;
-  const pin = inputs.pinText === null ? null : PIN_COMMIT_LINE.exec(inputs.pinText)?.[1];
-  return pin === undefined || pin === null
-    ? { commit: inputs.head }
-    : { commit: inputs.head, contractPin: pin };
+  const head = inputs.head;
+  if (inputs.dirty || !isCommit(head)) return null;
+  const pin = pinCommit(inputs.pinText);
+  return pin === null ? { commit: head } : { commit: head, contractPin: pin };
 }
 
 /** Writes the stamp, or removes a stale one when there is none (null). */
@@ -60,10 +67,10 @@ export function writeBuildIdentityStamp(file: string, stamp: BuildIdentityStamp 
   writeFileSync(file, `${JSON.stringify(stamp)}\n`);
 }
 
-function git(root: string, args: readonly string[]): string | null {
+function run(cmd: string, args: readonly string[], cwd: string): string | null {
   try {
-    return execFileSync('git', [...args], {
-      cwd: root,
+    return execFileSync(cmd, [...args], {
+      cwd,
       encoding: 'utf8',
       stdio: ['ignore', 'pipe', 'ignore'],
     });
@@ -71,6 +78,11 @@ function git(root: string, args: readonly string[]): string | null {
     return null;
   }
 }
+
+const git = (root: string, args: readonly string[]): string | null => run('git', args, root);
+
+/** Git output that lists any change; unreadable output (null) counts as a change, so no stamp. */
+const hasChanges = (output: string | null): boolean => output === null || output.trim() !== '';
 
 function readPin(root: string): string | null {
   try {
@@ -98,7 +110,7 @@ function main(): number {
   ]);
   const stamp = buildIdentityStamp({
     head,
-    dirty: status === null || status.trim() !== '' || untracked === null || untracked.trim() !== '',
+    dirty: hasChanges(status) || hasChanges(untracked),
     pinText: readPin(root),
   });
   writeBuildIdentityStamp(path.join(root, 'dist', 'build-identity.json'), stamp);
