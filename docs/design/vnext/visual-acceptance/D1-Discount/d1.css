@@ -1,0 +1,732 @@
+/*
+ * RT-853 — RT-699 slice D1: manual line discount references (visual DRAFT, pending owner sign-off).
+ * The frozen, owner-approved G-6 sheet is imported unchanged: tokens, frame, nav, panels, buttons,
+ * inputs, choices, notices and the dialog are the shared G-6 controls (the RT-114 approval prompt
+ * is drawn exactly as G2-CloseApproval draws it). This file adds only what the discount needs:
+ * the Direction B sale workspace as shipped (src/renderer/v5/sale/sale-direction-b.css: command
+ * bar, cart table, the 320 / 280px money column), the discount row under a line, the «خصم» sheet,
+ * and the zero-total Checkout and Completion (src/renderer/v5/checkout/checkout.css,
+ * completion.css). Money is the money family (RT-814): the UI sans with tabular lining numerals.
+ */
+@import url('../G6-Manager/g6.css');
+
+:root {
+  --font-money: var(--font);
+  --money-col: 320px;
+  --cart-row: 60px;
+  --cart-cols: 24px minmax(0, 1fr) 128px 96px 112px 112px;
+}
+.w1024 {
+  --money-col: 280px;
+  --cart-row: 52px;
+  --cart-cols: 20px minmax(0, 1fr) 128px 84px 100px 104px;
+}
+
+.vh {
+  position: absolute;
+  inline-size: 1px;
+  block-size: 1px;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.money,
+.num {
+  direction: ltr;
+  unicode-bidi: isolate;
+  font-family: var(--font-money);
+  font-variant-numeric: tabular-nums lining-nums;
+  white-space: nowrap;
+}
+.money {
+  font-weight: 600;
+}
+
+/* ── Sale workspace (Direction B) ─────────────────────────────── */
+.screen.sale {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) var(--money-col);
+  grid-template-rows: auto minmax(0, 1fr);
+  grid-template-areas:
+    'command money'
+    'cart money';
+  gap: var(--gutter);
+  padding: var(--gutter);
+}
+.command {
+  grid-area: command;
+  display: grid;
+  gap: 6px;
+}
+.command-fields {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(200px, 40%);
+  gap: 8px;
+}
+.cmd-field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-block-size: 56px;
+  padding-inline: 12px;
+  border: 1px solid var(--border-strong);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--text-muted);
+}
+.cmd-field.scan {
+  border: 2px solid var(--primary);
+  color: var(--primary);
+  font-weight: 600;
+}
+.command-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-block-size: 32px;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+.command-status b {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.cart {
+  grid-area: cart;
+  display: flex;
+  flex-direction: column;
+  min-block-size: 0;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+}
+.cart-head {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 12px;
+  min-block-size: 56px;
+  padding: 6px 12px;
+  border-block-end: 1px solid var(--border);
+}
+.cart-head h2 {
+  font-size: 16px;
+  font-weight: 700;
+}
+.cart-head .count {
+  color: var(--text-muted);
+  font-size: 13px;
+}
+.cart-head .grow {
+  flex: 1;
+}
+/* An unavailable action is sunken with muted ink (DESIGN.md), as .btn-primary:disabled. */
+.cart-head .btn:disabled {
+  border-color: var(--border);
+  background: var(--surface-sunken);
+  color: var(--text-muted);
+}
+.cols,
+.line,
+.disc {
+  display: grid;
+  grid-template-columns: var(--cart-cols);
+  align-items: center;
+  gap: 8px;
+  padding-inline: 12px;
+}
+.cols {
+  min-block-size: 32px;
+  border-block-end: 1px solid var(--border-soft);
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 600;
+}
+.cols span:nth-child(n + 3) {
+  text-align: center;
+}
+.lines {
+  flex: 1 1 auto;
+  min-block-size: 0;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+.lines > li {
+  border-block-end: 1px solid var(--border-soft);
+}
+.line {
+  min-block-size: var(--cart-row);
+  padding-block: 4px;
+}
+.line .idx {
+  color: var(--text-muted);
+  font-size: 13px;
+}
+.line .nm {
+  display: grid;
+  min-inline-size: 0;
+  overflow-wrap: anywhere;
+  font-weight: 600;
+  line-height: 1.35;
+}
+.line .nm .en {
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 400;
+}
+.line .unit,
+.line .total {
+  text-align: center;
+}
+/* The selected line: the shipped last-added bar (inset on the inline start) plus a soft tint. */
+.lines > li.selected {
+  background: var(--primary-soft);
+  box-shadow: inset -4px 0 0 var(--primary);
+}
+.stepper {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) 44px;
+  align-items: center;
+  justify-items: center;
+}
+.stepper button,
+.row-acts button {
+  min-block-size: 44px;
+  min-inline-size: 44px;
+  padding-inline: 8px;
+  border: 1px solid var(--border-strong);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+}
+.stepper button:disabled {
+  border-color: var(--border);
+  background: var(--surface-sunken);
+  color: var(--text-muted);
+}
+.row-acts {
+  display: flex;
+  justify-content: flex-end;
+  gap: 4px;
+}
+.row-acts .rm {
+  color: var(--danger);
+}
+
+/* The discount row under a line: indented, the same grid, the amount in the line-total column. */
+.disc {
+  min-block-size: 48px;
+  padding-block: 2px 6px;
+}
+.disc .what {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px 10px;
+  grid-column: 2 / 5;
+  padding-inline-start: 16px;
+  border-inline-start: 2px solid var(--primary);
+  font-size: 13px;
+}
+.disc .what b {
+  color: var(--primary-emphasis);
+  font-weight: 700;
+}
+.disc .what .by,
+.disc .what .reason {
+  color: var(--text-muted);
+}
+.disc .total {
+  color: var(--primary-emphasis);
+  text-align: center;
+}
+.disc .row-acts button {
+  padding-inline: 6px;
+}
+.disc-note {
+  grid-column: 2 / 7;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+/* ── Money column ─────────────────────────────────────────────── */
+.money-col {
+  grid-area: money;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-block-size: 0;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+}
+.money-col h2 {
+  color: var(--text-muted);
+  font-size: 13px;
+  font-weight: 700;
+}
+.counts {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+}
+.counts > div,
+.totals > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-block-size: 30px;
+}
+.counts dt,
+.totals dt {
+  color: var(--text-muted);
+}
+.counts dd,
+.totals dd {
+  margin: 0;
+}
+.commit {
+  display: grid;
+  gap: 8px;
+  margin-block-start: auto;
+}
+.totals {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+}
+.totals .disc-total dd {
+  color: var(--primary-emphasis);
+}
+.totals .tax dd {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+.grand {
+  display: grid;
+  gap: 2px;
+  padding-block-start: 8px;
+  border-block-start: 1px solid var(--border);
+}
+.grand span {
+  font-weight: 600;
+}
+.grand .money {
+  justify-self: end;
+  font-size: 30px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+.w1024 .grand .money {
+  font-size: 26px;
+}
+.btn-commit {
+  min-block-size: 56px;
+  font-size: 17px;
+}
+.secondary {
+  display: flex;
+  gap: 8px;
+  padding-block-start: 12px;
+  border-block-start: 1px solid var(--border);
+}
+.secondary .btn {
+  flex: 1;
+}
+.btn-void {
+  border-color: var(--danger);
+  color: var(--danger);
+}
+.notice-inline {
+  margin: 0;
+}
+
+/* ── «خصم» sheet ──────────────────────────────────────────────── */
+.dialog.sheet {
+  inline-size: 680px;
+  gap: 14px;
+}
+.w1024 .dialog.sheet {
+  inline-size: 640px;
+}
+.sheet-head {
+  display: grid;
+  gap: 2px;
+}
+.sheet-line {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  color: var(--text-muted);
+}
+.sheet-line b {
+  color: var(--text);
+}
+.sheet-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+.kind {
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.kind legend {
+  grid-column: 1 / -1;
+}
+.value-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.value-row .input {
+  flex: 1;
+  min-inline-size: 0;
+  direction: ltr;
+  text-align: left;
+  font-family: var(--font-money);
+  font-size: 20px;
+  font-variant-numeric: tabular-nums lining-nums;
+}
+.unit-tag {
+  min-inline-size: 44px;
+  color: var(--text-muted);
+  font-weight: 600;
+  text-align: center;
+}
+.field .help {
+  color: var(--text-muted);
+  font-size: 13px;
+}
+.field .err {
+  color: var(--warning);
+  font-size: 13px;
+  font-weight: 600;
+}
+.preview {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface-elevated);
+}
+.preview > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  min-block-size: 28px;
+  align-items: center;
+}
+.preview dt {
+  color: var(--text-muted);
+}
+.preview dd {
+  margin: 0;
+}
+.preview .net {
+  margin-block-start: 4px;
+  padding-block-start: 6px;
+  border-block-start: 1px solid var(--border);
+}
+.preview .net dt {
+  color: var(--text);
+  font-weight: 700;
+}
+.preview .net .money {
+  font-size: 20px;
+  font-weight: 700;
+}
+.preview-cap {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+.reasons .choice {
+  min-block-size: 44px;
+}
+.req {
+  color: var(--text-muted);
+  font-weight: 400;
+  font-size: 13px;
+}
+
+/* The approval summary inside the RT-114 prompt: what the manager is approving. */
+.approve-what {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface-elevated);
+}
+.approve-what > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  min-block-size: 26px;
+}
+.approve-what dt {
+  color: var(--text-muted);
+}
+.approve-what dd {
+  margin: 0;
+  font-weight: 600;
+  text-align: end;
+}
+
+/* ── Zero-total Checkout and Completion ───────────────────────── */
+.screen.flow {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  padding: 0;
+}
+.titlebar {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 12px;
+  min-block-size: 48px;
+  padding-inline: 16px;
+  border-block-end: 1px solid var(--border);
+  background: var(--surface);
+}
+.titlebar h1 {
+  font-size: 18px;
+  font-weight: 700;
+}
+.checkout {
+  display: grid;
+  flex: 1;
+  grid-template-columns: 280px minmax(0, 1fr) var(--money-col);
+  gap: var(--gutter);
+  min-block-size: 0;
+  padding: var(--gutter);
+}
+.w1024 .checkout {
+  grid-template-columns: minmax(0, 1fr) 296px;
+  grid-template-rows: auto minmax(0, 1fr);
+}
+.order {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-block-size: 0;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+}
+.w1024 .order {
+  grid-column: 1 / -1;
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 16px;
+  padding: 8px 14px;
+}
+.order h2 {
+  font-size: 15px;
+  font-weight: 700;
+}
+.order .meta {
+  color: var(--text-muted);
+  font-size: 13px;
+}
+.order ol {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.order li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 2px 8px;
+  padding-block: 6px;
+  border-block-end: 1px solid var(--border-soft);
+  font-size: 13px;
+}
+.order li .d {
+  grid-column: 1 / -1;
+  display: flex;
+  justify-content: space-between;
+  color: var(--primary-emphasis);
+  padding-inline-start: 12px;
+}
+.order .sums {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  margin-block-start: auto;
+}
+.order .sums > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+.order .sums dt {
+  color: var(--text-muted);
+}
+.order .sums dd {
+  margin: 0;
+}
+.w1024 .order .sums {
+  display: flex;
+  gap: 16px;
+  margin: 0;
+  margin-inline-start: auto;
+}
+.w1024 .order .sums > div {
+  gap: 6px;
+}
+.tender-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-block-size: 0;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+}
+.tender-panel h2 {
+  color: var(--text-muted);
+  font-size: 13px;
+  font-weight: 700;
+}
+.ledger {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-block-size: 0;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+}
+.due {
+  display: grid;
+  gap: 2px;
+}
+.due > span:first-child {
+  color: var(--text-muted);
+  font-weight: 600;
+}
+.due .money {
+  justify-self: end;
+  font-size: 40px;
+  font-weight: 700;
+  line-height: 1.15;
+}
+.ledger .actions-col {
+  display: grid;
+  gap: 8px;
+  margin-block-start: auto;
+}
+
+.completion {
+  display: grid;
+  flex: 1;
+  align-content: start;
+  justify-items: center;
+  gap: 16px;
+  padding: 32px var(--pad);
+}
+.proofs {
+  display: grid;
+  gap: 4px;
+  inline-size: min(560px, 100%);
+  margin: 0;
+  padding: 20px 24px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  list-style: none;
+}
+.proof {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  min-block-size: 44px;
+}
+.proof .glyph {
+  display: grid;
+  place-items: center;
+  inline-size: 24px;
+  block-size: 24px;
+  border-radius: 999px;
+}
+.proof.ok .glyph {
+  background: var(--success-soft);
+  color: var(--success);
+}
+.proof.info .glyph {
+  background: var(--surface-sunken);
+  color: var(--text-muted);
+}
+.proof .glyph .icon {
+  inline-size: 16px;
+  block-size: 16px;
+}
+.proof.hero .money {
+  font-size: 34px;
+  font-weight: 700;
+}
+.completion .btn-commit {
+  inline-size: min(560px, 100%);
+}
+
+/* ── Receipt preview: slip discount rows (screen preview only) ── */
+.slip .band.disc-row {
+  padding-inline-start: 3ch;
+}
+
+@media (forced-colors: active) {
+  .cart,
+  .money-col,
+  .cmd-field,
+  .order,
+  .tender-panel,
+  .ledger,
+  .proofs,
+  .preview,
+  .approve-what,
+  .stepper button,
+  .row-acts button {
+    border: 1px solid CanvasText;
+  }
+  .cmd-field.scan {
+    border: 2px solid CanvasText;
+  }
+  .lines > li.selected {
+    outline: 3px solid Highlight;
+    outline-offset: -3px;
+    box-shadow: none;
+  }
+  .disc .what {
+    border-inline-start: 2px solid CanvasText;
+  }
+  .stepper button:disabled {
+    border-color: GrayText;
+    color: GrayText;
+  }
+  .btn-void {
+    border-color: ButtonText;
+  }
+}

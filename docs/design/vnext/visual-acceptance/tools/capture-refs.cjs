@@ -13,7 +13,7 @@ const AXE_PATH = require.resolve('axe-core/axe.min.js', { paths: [__dirname] });
 const SIZES = { 1024: 768, 1280: 800 };
 
 /** Runs in the page: fit, type and target floors, clipped names, focus behind a dialog. */
-function pageChecks(selectors) {
+function pageChecks({ selectors, parts }) {
   const rt = document.querySelector('.rt').getBoundingClientRect();
   const out = [];
   for (const sel of selectors) {
@@ -24,8 +24,8 @@ function pageChecks(selectors) {
     });
   }
   // Every row's actions and status stay inside the row (no horizontal spill).
-  const spill = [...document.querySelectorAll('.row')].filter((r) => r.scrollWidth > r.clientWidth + 1).length;
-  const list = document.querySelector('.rows');
+  const spill = [...document.querySelectorAll(parts.row)].filter((r) => r.scrollWidth > r.clientWidth + 1).length;
+  const list = document.querySelector(parts.list);
   const scroll = list ? list.scrollHeight > list.clientHeight : false;
   const small = [...document.querySelectorAll('.rt *')].filter((n) => {
     if (!n.childNodes.length || ![...n.childNodes].some((c) => c.nodeType === 3 && c.textContent.trim())) return false;
@@ -38,7 +38,7 @@ function pageChecks(selectors) {
     return r.width > 0 && (r.height < 44 || r.width < 44);
   }).length;
   // A name that wraps is information; a name that is cut (clamp or ellipsis) is a failure.
-  const names = [...document.querySelectorAll('.name')];
+  const names = [...document.querySelectorAll(parts.name)];
   const wrapped = names.filter((n) => n.clientHeight > parseFloat(getComputedStyle(n).lineHeight) * 1.5).length;
   const clipped = names.filter((n) => n.scrollHeight > n.clientHeight + 3 || n.scrollWidth > n.clientWidth + 1).length;
   // Behind a dialog, nothing outside it may take focus, and the dialog itself must not be inert.
@@ -85,7 +85,7 @@ async function captureOne(browser, file, mode, opts) {
     const el = await page.$('.rt');
     await el.screenshot({ path: path.join(opts.packDir, 'captures', file.replace('.html', `-${mode}.png`)) });
     if (mode !== 'light') return null;
-    const fit = await page.evaluate(pageChecks, opts.selectors);
+    const fit = await page.evaluate(pageChecks, { selectors: opts.selectors, parts: opts.parts });
     const axe = await runAxe(page);
     return { line: `${file}: ${JSON.stringify({ ...fit, axe })}`, failed: failuresOf(fit, axe) };
   } finally {
@@ -93,11 +93,14 @@ async function captureOne(browser, file, mode, opts) {
   }
 }
 
+/** The row, list and name classes the spill, scroll and clipped-name checks read; a pack may rename them. */
+const DEFAULT_PARTS = { row: '.row', list: '.rows', name: '.name' };
+
 /**
  * Captures every `<prefix>-*-(1024|1280).html` in packDir (light + forced colours) into
  * packDir/captures and prints one check line per file, then a [FAIL] line per failing file.
  */
-async function captureRefs({ packDir, prefix, selectors }) {
+async function captureRefs({ packDir, prefix, selectors, parts = DEFAULT_PARTS }) {
   fs.mkdirSync(path.join(packDir, 'captures'), { recursive: true });
   const pattern = new RegExp(`^${prefix}-.*-(1024|1280)\\.html$`);
   const files = fs.readdirSync(packDir).filter((f) => pattern.test(f)).sort();
@@ -107,7 +110,7 @@ async function captureRefs({ packDir, prefix, selectors }) {
   try {
     for (const file of files) {
       for (const mode of ['light', 'forced']) {
-        const result = await captureOne(browser, file, mode, { packDir, selectors });
+        const result = await captureOne(browser, file, mode, { packDir, selectors, parts });
         if (result === null) continue;
         report.push(result.line);
         if (result.failed.length) failures.push(`${file}: ${result.failed.join('; ')}`);
