@@ -64,7 +64,10 @@ async function freshCartWithLine(): Promise<{
     resolveItemRef: resolver,
     clock: () => new Date('2026-05-14T10:00:00.000Z'),
     // RT-608: a cashier's discount needs a consumed manager approval.
-    approvals: { consume: () => ({ kind: 'consumed', approverUserId: 'mgr-approver' }) as const },
+    approvals: {
+      consume: () =>
+        ({ kind: 'consumed', approverUserId: 'mgr-approver', reasonCode: 'promotion' }) as const,
+    },
   });
   const c = await handlers.create({ idempotency_key: 'c-1' });
   if (c.kind !== 'ok') throw new Error('create failed');
@@ -591,7 +594,8 @@ describe('S2 stub handlers still gate before refusing not_implemented', () => {
     const r = await f.handlers.discountPlaceholdersAdd({
       cart_id: f.cart_id,
       line_id: f.line_id,
-      placeholder_kind: 'percent_5',
+      placeholder_kind: 'manual_pct_5',
+      reason_code: 'promotion',
       approval_id: 'appr-1',
       idempotency_key: 'd-1',
     });

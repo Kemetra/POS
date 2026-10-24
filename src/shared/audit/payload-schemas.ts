@@ -19,6 +19,7 @@ import type { SessionEndCause } from '../operator/session-end-cause.js';
 import type { ActionCategory } from './event-shape.js';
 import type { SaleFinalizationRefusalReason } from '../sales/types.js';
 import type { DeviceRevokedSource } from '../pairing-types.js';
+import type { ManualDiscountKind, ManualDiscountReasonCode } from '../cart/manual-discount.js';
 
 // ─── shift.open ────────────────────────────────────────────────────────────
 
@@ -317,6 +318,13 @@ export interface CartReturnToSalePayload {
  * `acting_operator_id`, the approver its `approving_supervisor_id` (a consumed
  * approval's `users.id`, or the manager / admin session itself under D2).
  * Ids and the closed reason code only: never a PIN, hash or approver name.
+ *
+ * RT-854 (doc 28 §7; Backend-Core RT-740 DEP-2 closed key set): every event
+ * from RT-854 on also carries the value — `kind`, `value`, `amount_minor` —
+ * and the reason; `approver_role` is set on the manager / admin direct path
+ * (a cashier approval's approver role has no durable source yet). The value
+ * fields are optional here only so rows recorded before RT-854 keep their
+ * type; the producer (`discountAuditPayload`) always writes them.
  */
 export interface CartDiscountManagerAuthorizedPayload {
   /** FK into carts table. */
@@ -327,8 +335,16 @@ export interface CartDiscountManagerAuthorizedPayload {
   placeholder_id: string;
   /** The consumed `cart.discount.manual` approval; absent when a manager applied directly. */
   approval_id?: string;
-  /** The approval's reason code; absent when a manager applied directly. */
-  reason_code?: string;
+  /** The closed reason (§11.2): the approval's, or the direct add's. */
+  reason_code?: ManualDiscountReasonCode;
+  /** RT-854: percent or amount. */
+  kind?: ManualDiscountKind;
+  /** RT-854: a whole percent 1–100, or the amount in minor units (= `amount_minor`). */
+  value?: number;
+  /** RT-854: the discount main computed on the line gross, in minor units. */
+  amount_minor?: number;
+  /** RT-854: the direct path's session role. */
+  approver_role?: 'manager' | 'admin';
 }
 
 /**

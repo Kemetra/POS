@@ -152,6 +152,54 @@ describe('buildPaymentIntentEnvelope subtotal_unsafe path', () => {
 
     expect(result.kind).toBe('subtotal_unsafe');
   });
+
+  it('RT-854: returns discount_invalid for a discount the line cannot take', () => {
+    const line = {
+      line_id: 'line-1',
+      cart_id: 'cart-cov',
+      item_ref: 'SKU-X',
+      display_name: 'Item',
+      quantity: 1,
+      unit_price_minor: 100,
+      line_subtotal_minor: 100,
+      note: null,
+      version: 1,
+      last_action_id: 'act-1',
+      created_at: '2026-05-17T10:00:00.000Z',
+      updated_at: '2026-05-17T10:00:00.000Z',
+      removed_at: null,
+    };
+    const placeholder = (placeholder_id: string, placeholder_kind: string) => ({
+      placeholder_id,
+      cart_id: 'cart-cov',
+      line_id: 'line-1',
+      placeholder_kind,
+      requires_manager_attribution: 1,
+      attribution_operator_id: 'mgr-1',
+      created_at: '2026-05-17T10:00:00.000Z',
+    });
+    for (const placeholders of [
+      [placeholder('dp-1', 'manual_amt_101')],
+      [placeholder('dp-1', 'percent_10')],
+      [placeholder('dp-1', 'manual_pct_10'), placeholder('dp-2', 'manual_pct_5')],
+    ]) {
+      const store: Pick<CartStore, 'getActiveLines' | 'getDiscountPlaceholdersForCart'> = {
+        getActiveLines: () => [line],
+        getDiscountPlaceholdersForCart: () => placeholders,
+      };
+      const result = buildPaymentIntentEnvelope({
+        cart_id: 'cart-cov',
+        handoff_action_id: 'act-h',
+        session: makeSession(),
+        terminal_id: 'term-1',
+        tenant_id: 'tenant-cov',
+        branch_id: 'branch-cov',
+        created_at: '2026-05-17T10:00:00.000Z',
+        store: store as CartStore,
+      });
+      expect(result.kind).toBe('discount_invalid');
+    }
+  });
 });
 
 // ── 3 & 4. cart-store: findLatestHandoffActionId + findDraftCartBySession ──
@@ -302,7 +350,8 @@ describe('buildPaymentIntentEnvelope with discount placeholders', () => {
     const dp = await handlers.discountPlaceholdersAdd({
       cart_id: c.cart_id,
       line_id: a.line_id,
-      placeholder_kind: 'percent_5',
+      placeholder_kind: 'manual_pct_5',
+      reason_code: 'promotion',
       idempotency_key: 'dph-dp',
     });
     if (dp.kind !== 'ok') throw new Error('discount add failed');
@@ -315,7 +364,7 @@ describe('buildPaymentIntentEnvelope with discount placeholders', () => {
     expect(res.kind).toBe('ok');
     if (res.kind === 'ok') {
       expect(res.envelope.discount_placeholders).toHaveLength(1);
-      expect(res.envelope.discount_placeholders[0]?.placeholder_kind).toBe('percent_5');
+      expect(res.envelope.discount_placeholders[0]?.placeholder_kind).toBe('manual_pct_5');
       expect(res.envelope.discount_placeholders[0]?.requires_manager_attribution).toBe(true);
     }
   });

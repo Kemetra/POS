@@ -3,8 +3,13 @@
  * as the approval service resolves it at request time and the add consumes it
  * inside its own transaction: the requesting session's own mutable cart and a
  * live line on it. The version binds cart, line, `placeholder_kind`, the
- * line's version and the cart's tenant / branch; the amount is null until
- * discount math exists (owner decision O1: intent only, no invented amount).
+ * line's version and the cart's tenant / branch.
+ *
+ * RT-854 (doc 28 §3.1): the amount is the discount the canonical token gives
+ * on the line gross (`lineDiscountMinor`), and the version carries it too.
+ * This retires O1's interim "intent only" (`amountMinor = null`), as O1
+ * anticipated. A non-canonical token, or an amount the line cannot take, is
+ * not approvable.
  */
 import type {
   ApprovalSubject,
@@ -13,6 +18,7 @@ import type {
 import type { OperatorSessionRecord } from '../operator/session-manager.js';
 import { CartState } from '../../shared/cart/cart-state.js';
 import { parseDiscountApprovalSubjectRef } from '../../shared/cart/discount-approval.js';
+import { lineDiscountMinor } from '../../shared/cart/manual-discount.js';
 import type { CartLineRow, CartRow, CartStore } from './cart-store.js';
 
 /** The session's own cart, in its scope, still editable (not frozen, not parked). */
@@ -43,6 +49,8 @@ export function manualDiscountApprovalSubject(
 ): ApprovalSubject | null {
   if (cart === undefined || line === undefined) return null;
   if (!isApprovableCart(cart, session) || !isLiveLineOf(line, cart)) return null;
+  const amountMinor = lineDiscountMinor(line.line_subtotal_minor, placeholderKind);
+  if (amountMinor === null) return null;
   return {
     version: [
       'discount',
@@ -52,8 +60,9 @@ export function manualDiscountApprovalSubject(
       line.line_id,
       placeholderKind,
       `v${String(line.version)}`,
+      `a${String(amountMinor)}`,
     ].join('|'),
-    amountMinor: null,
+    amountMinor,
   };
 }
 

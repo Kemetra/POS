@@ -158,6 +158,37 @@ in `editing` and no envelope is constructed (US3-AS5).
 > requested amount with `total_due_minor`, and with no discount the two are equal. Adding
 > fields is allowed under FR-036. RT-854 records whether they are a v1 extension or an
 > `envelope_version` bump. Nothing in the v1 field list above changes until then.
+>
+> **RT-854 decision (2026-10-24): v1 extension, no version bump.** `envelope_version` stays
+> `'v1'`. FR-036 and ratification condition 2 allow the payment side to add fields. No v1
+> field is removed, renamed or reinterpreted: `subtotal_minor` keeps its meaning, Σ gross.
+> The two fields are written on every envelope built from RT-854 on:
+>
+> ```text
+>   discount_total_minor: integer minor units    // Σ manual line discounts (doc 28 §3.2)
+>   total_due_minor: integer minor units         // subtotal_minor − discount_total_minor
+> ```
+>
+> - An envelope frozen before the upgrade has neither field. A reader treats it as discount 0
+>   and amount due = `subtotal_minor` (`envelopeAmountDue`). A field that is present but not a
+>   safe non-negative integer fails closed. It never falls back to the gross.
+> - Payment eligibility compares the `payments.start` amount with the amount due. The request
+>   field keeps the name `envelope_subtotal_minor` but now means **the amount the payment
+>   covers** (the net). `payment_attempts.envelope_subtotal_minor` stores that net, so tender
+>   sufficiency, settle and finalize run against the net with no code change, and with no
+>   migration (no `amount_due_minor` column).
+> - A placeholder on a removed line discounts nothing.
+> - Handoff refuses with `unauthorized_discount`, as it does for an untrusted placeholder
+>   (step 3a), when:
+>   - a placeholder's kind is not a canonical token;
+>   - one line carries a second discount;
+>   - a placeholder's amount on its line now is not the `amount_minor` its
+>     `cart.discount.manager_authorized` audit row approved. This happens, for example, when
+>     an accepted resume price change moved the line's gross. The cashier removes the discount
+>     and adds it again with authority, so the approved amount stays the applied one
+>     (OD-28-7).
+> - A zero total (`total_due_minor = 0`) settles with no tender line (OZ-1 = Z-A, doc 28
+>   §11.3).
 
 ## Ratification — §A4
 

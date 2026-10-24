@@ -113,6 +113,7 @@ function smuggledAdd(
     cart_id: f.cart_id,
     line_id: f.line_id,
     placeholder_kind,
+    reason_code: 'promotion',
     idempotency_key,
     attribution_operator_id: SMUGGLED_SUPERVISOR,
   } as CartDiscountPlaceholdersAddRequest;
@@ -137,7 +138,7 @@ const discountOutbox = (f: Fixture): Record<string, unknown>[] =>
   );
 
 describe('RT-183 — cashier session cannot assert a supervisor', () => {
-  it.each([['percent_20'], ['percent_5']])(
+  it.each([['manual_pct_20'], ['manual_pct_5']])(
     'refuses a %s add that names a supervisor, writing nothing (no threshold)',
     async (kind) => {
       const f = await newCartWithLine(makeSession('cashier', 'cashier-1'));
@@ -156,7 +157,7 @@ describe.each(['manager', 'admin'] as const)(
   (role) => {
     it('records the session operator, never the renderer-supplied id', async () => {
       const f = await newCartWithLine(makeSession(role, `${role}-1`));
-      const res = await f.handlers.discountPlaceholdersAdd(smuggledAdd(f, 'percent_20', 'dp-3'));
+      const res = await f.handlers.discountPlaceholdersAdd(smuggledAdd(f, 'manual_pct_20', 'dp-3'));
 
       expect(res).toEqual({
         kind: 'ok',
@@ -182,7 +183,8 @@ describe.each(['manager', 'admin'] as const)(
       const res = await f.handlers.discountPlaceholdersAdd({
         cart_id: f.cart_id,
         line_id: f.line_id,
-        placeholder_kind: 'percent_20',
+        placeholder_kind: 'manual_pct_20',
+        reason_code: 'promotion',
         idempotency_key: 'dp-4',
       });
 
@@ -192,6 +194,25 @@ describe.each(['manager', 'admin'] as const)(
     });
   },
 );
+
+/** The registered `cart.discountPlaceholders.add` IPC handler, with a spy on the bridge. */
+function registerAddHandler() {
+  const registered = new Map<string, (e: IpcMainInvokeEvent, ...a: unknown[]) => unknown>();
+  const ipcMain = {
+    handle: (channel: string, fn: (e: IpcMainInvokeEvent, ...a: unknown[]) => unknown) => {
+      registered.set(channel, fn);
+    },
+  } as unknown as IpcMain;
+  const bridge = new CartBridgeHandlers({
+    getCurrentSession: () => null,
+    getTerminalId: () => null,
+  });
+  const spy = vi.spyOn(bridge, 'discountPlaceholdersAdd');
+  registerCartHandlers(ipcMain, { handlers: bridge });
+  const handler = registered.get(CART_IPC_CHANNELS.DISCOUNT_PLACEHOLDERS_ADD);
+  if (handler === undefined) throw new Error('missing DISCOUNT_PLACEHOLDERS_ADD');
+  return { handler, spy };
+}
 
 describe('RT-183 — IPC parser drops attribution_operator_id', () => {
   it('forwards a fresh request without the renderer-supplied supervisor', async () => {
@@ -213,7 +234,7 @@ describe('RT-183 — IPC parser drops attribution_operator_id', () => {
     await handler({} as IpcMainInvokeEvent, {
       cart_id: 'c',
       line_id: 'l',
-      placeholder_kind: 'percent_20',
+      placeholder_kind: 'manual_pct_20',
       attribution_operator_id: SMUGGLED_SUPERVISOR,
       idempotency_key: 'k',
     });
@@ -223,31 +244,18 @@ describe('RT-183 — IPC parser drops attribution_operator_id', () => {
     expect(forwarded).toEqual({
       cart_id: 'c',
       line_id: 'l',
-      placeholder_kind: 'percent_20',
+      placeholder_kind: 'manual_pct_20',
       idempotency_key: 'k',
     });
     expect(forwarded).not.toHaveProperty('attribution_operator_id');
   });
 
   it('RT-608: forwards a bounded approval_id and refuses a malformed one', async () => {
-    const registered = new Map<string, (e: IpcMainInvokeEvent, ...a: unknown[]) => unknown>();
-    const ipcMain = {
-      handle: (channel: string, fn: (e: IpcMainInvokeEvent, ...a: unknown[]) => unknown) => {
-        registered.set(channel, fn);
-      },
-    } as unknown as IpcMain;
-    const bridge = new CartBridgeHandlers({
-      getCurrentSession: () => null,
-      getTerminalId: () => null,
-    });
-    const spy = vi.spyOn(bridge, 'discountPlaceholdersAdd');
-    registerCartHandlers(ipcMain, { handlers: bridge });
-    const handler = registered.get(CART_IPC_CHANNELS.DISCOUNT_PLACEHOLDERS_ADD);
-    if (handler === undefined) throw new Error('missing DISCOUNT_PLACEHOLDERS_ADD');
+    const { handler, spy } = registerAddHandler();
     const base = {
       cart_id: 'c',
       line_id: 'l',
-      placeholder_kind: 'percent_20',
+      placeholder_kind: 'manual_pct_20',
       idempotency_key: 'k',
     };
 
@@ -260,5 +268,28 @@ describe('RT-183 — IPC parser drops attribution_operator_id', () => {
       ).resolves.toMatchObject({ kind: 'refused' });
     }
     expect(spy).toHaveBeenCalledOnce();
+  });
+
+  it('RT-854: forwards a string reason_code (main validates the list) and refuses a non-string one', async () => {
+    const { handler, spy } = registerAddHandler();
+    const base = {
+      cart_id: 'c',
+      line_id: 'l',
+      placeholder_kind: 'manual_pct_10',
+      idempotency_key: 'k',
+    };
+
+    await handler({} as IpcMainInvokeEvent, { ...base, reason_code: 'promotion' });
+    expect(spy.mock.calls[0]?.[0]).toEqual({ ...base, reason_code: 'promotion' });
+    // An unknown string still reaches main, which refuses it `invalid_payload`.
+    await handler({} as IpcMainInvokeEvent, { ...base, reason_code: 'other' });
+    expect(spy.mock.calls[1]?.[0]).toEqual({ ...base, reason_code: 'other' });
+
+    for (const bad of [42, null, { code: 'promotion' }, ['promotion']]) {
+      await expect(
+        handler({} as IpcMainInvokeEvent, { ...base, reason_code: bad }),
+      ).resolves.toMatchObject({ kind: 'refused' });
+    }
+    expect(spy).toHaveBeenCalledTimes(2);
   });
 });

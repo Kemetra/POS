@@ -90,7 +90,7 @@ function insertPlaceholder(
   db.run(
     `INSERT INTO cart_line_discount_placeholders (placeholder_id, cart_id, line_id,
        placeholder_kind, requires_manager_attribution, attribution_operator_id, created_at)
-     VALUES (?, ?, ?, 'percent_1', 1, ?, ?)`,
+     VALUES (?, ?, ?, 'manual_pct_1', 1, ?, ?)`,
     [placeholder_id, cart_id, line_id, attribution, T0],
   );
 }
@@ -222,7 +222,8 @@ describe('cart.handoff refuses an untrusted discount placeholder (RT-614 step 3a
     const added = await handlers.discountPlaceholdersAdd({
       cart_id: cartId,
       line_id: lineId,
-      placeholder_kind: 'percent_1',
+      placeholder_kind: 'manual_pct_1',
+      reason_code: 'promotion',
       idempotency_key: 'dp-1',
     });
     expect(added.kind).toBe('ok');
@@ -267,7 +268,8 @@ describe('cart.handoff refuses an untrusted discount placeholder (RT-614 step 3a
     await handlers.discountPlaceholdersAdd({
       cart_id: cartId,
       line_id: lineId,
-      placeholder_kind: 'percent_1',
+      placeholder_kind: 'manual_pct_1',
+      reason_code: 'promotion',
       idempotency_key: 'dp-1',
     });
     insertPlaceholder(cartId, lineId, 'dp-legacy');

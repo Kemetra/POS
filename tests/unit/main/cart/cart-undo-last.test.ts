@@ -107,7 +107,10 @@ async function fixture(): Promise<Fixture> {
       cartPaymentStatus: () => 'none',
       clock: opts.clock ?? ((): Date => new Date('2026-10-10T10:00:00.000Z')),
       // RT-608: a cashier's discount needs a consumed manager approval.
-      approvals: { consume: () => ({ kind: 'consumed', approverUserId: 'mgr-approver' }) as const },
+      approvals: {
+        consume: () =>
+          ({ kind: 'consumed', approverUserId: 'mgr-approver', reasonCode: 'promotion' }) as const,
+      },
     });
   const handlers = make();
   const c = await handlers.create({ idempotency_key: 'c-1' });
@@ -267,7 +270,7 @@ describe('cart.undoLast — exact inverses (RT-245)', () => {
     const dp = await f.handlers.discountPlaceholdersAdd({
       cart_id: f.cart_id,
       line_id: a.line_id,
-      placeholder_kind: 'percent_5',
+      placeholder_kind: 'manual_pct_5',
       approval_id: 'appr-1',
       idempotency_key: 'd-1',
     });
@@ -527,7 +530,7 @@ describe('cart.undoLast — eligibility refusals leave no writes', () => {
     await f.handlers.discountPlaceholdersAdd({
       cart_id: f.cart_id,
       line_id: a.line_id,
-      placeholder_kind: 'percent_5',
+      placeholder_kind: 'manual_pct_5',
       approval_id: 'appr-1',
       idempotency_key: 'd-1',
     });

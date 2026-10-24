@@ -4,6 +4,8 @@
 
 > 🔁 **RT-114 amendment (2026-10-17, RT-28 comment 11979):** the cashier-session credential for `cart.discountPlaceholders.add` is the terminal-enrolled **Manager Approval PIN** (RT-114 C1, MA-1 RT-438) and a main-only, single-use **`approval_id`** bound to action kind `cart.discount.manual` (RT-114 C7 and §3, MA-2 RT-443). It replaces D1a's identifier + password through an authentication-only seam and `manager_approval_ref`, which are struck through below.
 
+> 🔁 **RT-854 amendment (2026-10-24, RT-699 I1, doc 28 §3, §4, §7):** `cart.discountPlaceholders.add` now carries a value. `placeholder_kind` must be a canonical token, `manual_pct_<P>` (whole percent 1–100) or `manual_amt_<M>` (minor units, at most the line gross). Main computes the amount on the line gross, rounded half up. The request gains an optional `reason_code` from the closed list `promotion | loyal_or_contract_customer | near_expiry_or_damaged | price_correction`. It is **required** on the manager / admin direct path. A cashier's add may restate its approval's reason, and must match it (`approval_invalid` otherwise). The reason and the token are part of the add's replay identity. New closed refusals: `invalid_payload` (bad token, amount above the gross, or a missing or unknown reason), `discount_already_applied` (one discount per line), and `line_discounted` (`cart.lines.update` with a new quantity, or a re-scan merge in `cart.lines.add`, on a discounted line; setting the quantity to 0 is a removal and is allowed). `approval.request` for `cart.discount.manual` refuses a reason outside the closed list with `invalid_input`. The approval binds the computed amount (`amount_minor`), not null. §A4 note: `docs/security-review/RT-854/a4-manual-discount-recheck.md`.
+
 
 **Feature ID:** 005-sales-cart
 **Plan:** [../plan.md](../plan.md)
@@ -304,8 +306,11 @@ no cashier-only path.
 {
   cart_id: UUID v4,
   line_id: UUID v4,
-  placeholder_kind: string,                 // opaque token (FR-024)
+  placeholder_kind: string,                 // RT-854: manual_pct_<P> (1–100) | manual_amt_<M> (minor units ≤ line gross)
   approval_id?: opaque string,              // RT-114: required on a cashier session
+  reason_code?: string,                     // RT-854: promotion | loyal_or_contract_customer |
+                                            //   near_expiry_or_damaged | price_correction;
+                                            //   required on a manager / admin session
   idempotency_key: UUID v4,
 }
 ```
@@ -331,11 +336,15 @@ discount, and an approval for one line or kind cannot be spent on another.
 How that intent maps onto MA-2's `subject_ref` / subject version / amount is
 fixed by the RT-28 Implementation issue under a §A4 bridge-security review,
 by adding a `cart.discount.manual` subject resolver. RT-114 §3 also lists the
-discount amount as bound, but the cart layer computes no discount amount
-(FR-022). **Owner decision O1 (2026-10-17, RT-28 comment 12278):** the
-approval binds the intent only, with `amount_minor = null` until discount
-math exists. No amount is invented; when discount math lands, the amount
-joins the binding.
+discount amount as bound. **RT-854 (2026-10-24):** the cart layer now computes
+it (FR-022 RT-699 amendment). The approval binds the amount the canonical token
+gives on the line gross (`amount_minor`, also carried in the subject version),
+and the add may carry a `reason_code` from the closed list (see the RT-854
+amendment at the top). At handoff the applied amount must still equal the
+approved one. *Superseded for audit history:* ~~the cart layer computes no
+discount amount (FR-022). **Owner decision O1 (2026-10-17, RT-28 comment
+12278):** the approval binds the intent only, with `amount_minor = null` until
+discount math exists.~~
 
 `cart.discountPlaceholders.add` consumes the approval inside the add's own
 SQLite transaction (C7 step 4): the consume, the placeholder row, the outbox

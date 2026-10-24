@@ -41,12 +41,24 @@ import { requireOperatorSession } from './require-operator-session.js';
 import type {
   CartRow,
   CartStore,
-  DiscountPlaceholderRow,
   DiscountPlaceholderWrite,
   InsertOutboxInput,
-  OutboxRow,
 } from './cart-store.js';
 import { manualDiscountApprovalSubject } from './discount-approval.js';
+import {
+  discountAuditPayload,
+  discountOutboxPayload,
+  isSameDiscountAddReplay,
+  lineHasDiscount,
+  resolveDiscountAdd,
+  type ResolvedDiscountAdd,
+} from './manual-discount-policy.js';
+import {
+  isManualDiscountReasonCode,
+  lineDiscountMinor,
+  parseManualDiscountToken,
+  type ManualDiscountReasonCode,
+} from '../../shared/cart/manual-discount.js';
 import { discountApprovalSubjectRef } from '../../shared/cart/discount-approval.js';
 import { AuditEmitter } from '../audit/audit-emitter.js';
 import { buildPaymentIntentEnvelope } from './handoff-envelope-builder.js';
@@ -314,24 +326,40 @@ class ApprovalRefused extends Error {
   }
 }
 
-/** RT-608: a committed discount add's outcome (also its exact replay's). */
-function discountAdded(placeholderId: string): CartDiscountPlaceholdersAddResponse {
-  return { kind: 'ok', placeholder_id: placeholderId, requires_manager_attribution: true };
+/** RT-608 / RT-854: who authorised a discount, and what its audit row records of it. */
+interface DiscountAuthority {
+  approver: string;
+  approvalId?: string;
+  reasonCode: ManualDiscountReasonCode | undefined;
+  approverRole?: 'manager' | 'admin';
+}
+
+/** RT-854: the add on a live line of the cart (`wrong_owner` otherwise), resolved. */
+function resolveOnLiveLine(
+  store: CartStore,
+  req: CartDiscountPlaceholdersAddRequest,
+  isManager: boolean,
+): ReturnType<typeof resolveDiscountAdd> {
+  const line = store.getLine(req.cart_id, req.line_id);
+  if (line?.removed_at !== null) return { refusal: 'wrong_owner' };
+  return resolveDiscountAdd({ store, req, line, isManager });
 }
 
 /**
- * RT-608: a key already used is an exact replay only when it was this add —
- * the same cart and line, and (while the placeholder still exists) the same
- * kind. A key reused for anything else never reports an add that did not happen.
+ * RT-854 (doc 28 §4.1 step 5): the approval's reason is from the closed list,
+ * and a reason the cashier's add restates is the same one.
  */
-function isSameDiscountAddReplay(
-  replay: OutboxRow,
-  placeholder: DiscountPlaceholderRow | undefined,
-  req: CartDiscountPlaceholdersAddRequest,
-): boolean {
-  if (replay.action_kind !== 'cart.discount_placeholder.add') return false;
-  if (replay.cart_id !== req.cart_id || replay.line_id !== req.line_id) return false;
-  return placeholder === undefined || placeholder.placeholder_kind === req.placeholder_kind;
+function approvedReasonHolds(
+  approved: string | undefined,
+  restated: string | undefined,
+): approved is ManualDiscountReasonCode {
+  if (!isManualDiscountReasonCode(approved)) return false;
+  return restated === undefined || restated === approved;
+}
+
+/** RT-608: a committed discount add's outcome (also its exact replay's). */
+function discountAdded(placeholderId: string): CartDiscountPlaceholdersAddResponse {
+  return { kind: 'ok', placeholder_id: placeholderId, requires_manager_attribution: true };
 }
 
 /**
@@ -423,19 +451,39 @@ function returnToSaleRefusal(
 /**
  * RT-614 — does the cart hold a discount placeholder that no
  * `cart.discount.manager_authorized` audit row names? The same placeholder
- * set the envelope builder snapshots.
+ * set the envelope builder snapshots. RT-854 (doc 28 §3.1): a placeholder
+ * whose kind is not a canonical token has no value, so it is untrusted too;
+ * and on a live line its amount now must be the one the audit row approved.
  */
 function hasUntrustedDiscountPlaceholder(store: CartStore, cart: StoredCart): boolean {
   return store.getDiscountPlaceholdersForCart(cart.cart_id).some(
     (placeholder) =>
+      parseManualDiscountToken(placeholder.placeholder_kind) === null ||
       !store.isDiscountPlaceholderTrusted({
         tenant_id: cart.tenant_id,
         branch_id: cart.branch_id,
         cart_id: cart.cart_id,
         line_id: placeholder.line_id,
         placeholder_id: placeholder.placeholder_id,
+        ...currentAmount(store, cart.cart_id, placeholder),
       }),
   );
+}
+
+/**
+ * RT-854: the amount a placeholder gives on its live line now. A removed line
+ * discounts nothing, and an amount the line cannot take (`null`) fails the
+ * envelope build instead, so neither is checked here.
+ */
+function currentAmount(
+  store: CartStore,
+  cartId: string,
+  placeholder: { line_id: string; placeholder_kind: string },
+): { amount_minor?: number } {
+  const line = store.getLine(cartId, placeholder.line_id);
+  if (line?.removed_at !== null) return {};
+  const amount = lineDiscountMinor(line.line_subtotal_minor, placeholder.placeholder_kind);
+  return amount === null ? {} : { amount_minor: amount };
 }
 
 function refuse(reason: CartRefusalReason): { kind: 'refused'; reason: CartRefusalReason } {
@@ -568,6 +616,31 @@ function computeUpdatedQuantity(
   if (abs === undefined || !Number.isInteger(abs) || abs < 0) return refuse('stale_version');
   return abs === 0 ? { kind: 'remove' } : { kind: 'ok', newQuantity: abs };
 }
+
+/**
+ * RT-854 (OD-28-7): a discounted line's quantity is frozen, so a new quantity
+ * is refused `line_discounted`; removing the line is not a quantity change.
+ */
+function guardDiscountedQuantity(
+  store: CartStore,
+  req: CartLinesUpdateRequest,
+  qty: ReturnType<typeof computeUpdatedQuantity>,
+): ReturnType<typeof computeUpdatedQuantity> {
+  if (qty.kind !== 'ok' || !lineHasDiscount(store, req.cart_id, req.line_id)) return qty;
+  return refuse('line_discounted');
+}
+
+/**
+ * Why a cart whose envelope could not be built cannot hand off. RT-854: a
+ * discount that cannot be honoured on its line is step 5a's twin.
+ */
+const ENVELOPE_BUILD_REFUSAL: Readonly<
+  Record<Exclude<ReturnType<typeof buildPaymentIntentEnvelope>['kind'], 'ok'>, CartRefusalReason>
+> = {
+  empty_cart: 'empty_cart',
+  subtotal_unsafe: 'not_implemented',
+  discount_invalid: 'unauthorized_discount',
+};
 
 /** What the RT-26 transaction needs once every gate has passed. */
 interface ReturnToSaleContext {
@@ -775,6 +848,8 @@ export class CartBridgeHandlers {
     existing: NonNullable<ReturnType<CartStore['findActiveLineByItemRef']>>,
     now: string,
   ): CartLinesAddResponse {
+    // RT-854 (OD-28-7): a re-scan would change a discounted line's quantity.
+    if (lineHasDiscount(ctx.store, req.cart_id, existing.line_id)) return refuse('line_discounted');
     const newQuantity = existing.quantity + req.quantity;
     let newSubtotal: number;
     try {
@@ -896,7 +971,7 @@ export class CartBridgeHandlers {
     if (line.removed_at !== null) return refuse('wrong_owner');
     if (line.version !== req.version) return refuse('stale_version');
 
-    const qty = computeUpdatedQuantity(req, line.quantity);
+    const qty = guardDiscountedQuantity(store, req, computeUpdatedQuantity(req, line.quantity));
     if (qty.kind === 'refused') return qty;
     if (qty.kind === 'remove') {
       // set(0) / decrement-past-zero → delegate to remove (FR-016).
@@ -1133,20 +1208,27 @@ export class CartBridgeHandlers {
   /**
    * RT-608 (RT-28, spec 005 FR-023 revised) — every manual discount needs
    * manager authority; there is no threshold and no cashier-only path.
+   * RT-854 (RT-699 I1, doc 28 §3, §4) — and it now carries a value.
    *
    * 1. The shared mutable-cart gate.
-   * 2. The idempotency replay check FIRST: an exact replay returns the
-   *    original outcome and never re-validates or re-consumes its approval.
+   * 2. The idempotency replay check FIRST: an exact replay (same line, token
+   *    and — when restated — reason) returns the original outcome and never
+   *    re-validates or re-consumes its approval.
    * 3. A manager / admin session applies directly and is the approver (D2).
    *    A cashier must carry an `approval_id` (`manager_attribution_required`
    *    otherwise); any renderer-supplied approver id is ignored (C10).
    * 4. The line must be a live line of this cart (`wrong_owner`).
-   * 5. ONE transaction: the cashier's `cart.discount.manual` approval is
-   *    consumed against the cart and line as they stand now
-   *    (`approval_invalid` / `approval_stale` roll everything back), then the
-   *    outbox row, the placeholder (`requires_manager_attribution = 1`, the
-   *    approver as `attribution_operator_id`) and the
-   *    `cart.discount.manager_authorized` audit event.
+   * 5. RT-854: the canonical token, its amount on the line gross and the
+   *    reason (`invalid_payload`); one discount per line
+   *    (`discount_already_applied`). Main computes the amount; the renderer
+   *    never sends one.
+   * 6. ONE transaction: the cashier's `cart.discount.manual` approval is
+   *    consumed against the cart, line and amount as they stand now
+   *    (`approval_invalid` / `approval_stale` roll everything back, as does a
+   *    restated reason that is not the approval's), then the outbox row, the
+   *    placeholder (`requires_manager_attribution = 1`, the approver as
+   *    `attribution_operator_id`) and the `cart.discount.manager_authorized`
+   *    audit event.
    */
   // eslint-disable-next-line @typescript-eslint/require-await
   async discountPlaceholdersAdd(
@@ -1156,24 +1238,25 @@ export class CartBridgeHandlers {
     if (gated.kind !== 'ok') return gated;
     const { session, store, cart } = gated;
 
+    const isManager = session.role === 'manager' || session.role === 'admin';
     // Idempotency: the idempotency_key doubles as placeholder_id.
     const replay = store.getOutboxRow(req.idempotency_key);
     if (replay !== undefined) {
-      return isSameDiscountAddReplay(replay, store.getDiscountPlaceholder(req.idempotency_key), req)
+      const placeholder = store.getDiscountPlaceholder(req.idempotency_key);
+      return isSameDiscountAddReplay(replay, placeholder, req, isManager)
         ? discountAdded(req.idempotency_key)
         : refuse('idempotency_payload_mismatch');
     }
 
-    const isManager = session.role === 'manager' || session.role === 'admin';
     if (!isManager && (this.deps.approvals === undefined || req.approval_id === undefined)) {
       return refuse('manager_attribution_required');
     }
-    const line = store.getLine(req.cart_id, req.line_id);
-    if (line?.removed_at !== null) return refuse('wrong_owner');
+    const resolved = resolveOnLiveLine(store, req, isManager);
+    if ('refusal' in resolved) return refuse(resolved.refusal);
 
     try {
       store.insertDiscountPlaceholderAndOutbox(() =>
-        this.authorizedDiscountWrite({ store, cart, session, req, isManager }),
+        this.authorizedDiscountWrite({ store, cart, session, req, isManager, resolved }),
       );
     } catch (err) {
       // The approval did not hold; the transaction rolled back.
@@ -1194,9 +1277,10 @@ export class CartBridgeHandlers {
     session: OperatorSessionRecord;
     req: CartDiscountPlaceholdersAddRequest;
     isManager: boolean;
+    resolved: ResolvedDiscountAdd;
   }): DiscountPlaceholderWrite {
-    const { store, cart, session, req, isManager } = ctx;
-    const authority = this.discountAuthority({ store, session, req, isManager });
+    const { store, cart, session, req, isManager, resolved } = ctx;
+    const authority = this.discountAuthority({ store, session, req, isManager, resolved });
     const now = this.clock().toISOString();
     const event_id = randomUUID();
     return {
@@ -1217,7 +1301,7 @@ export class CartBridgeHandlers {
         acting_operator_id: session.operator_id,
         attribution_operator_id: authority.approver,
         operator_session_id: session.id,
-        payload_json: JSON.stringify({ cart_id: req.cart_id, cart_line_id: req.line_id }),
+        payload_json: JSON.stringify(discountOutboxPayload(req, authority.reasonCode)),
         applied_at: now,
       },
       onInserted: () => {
@@ -1233,11 +1317,13 @@ export class CartBridgeHandlers {
           created_at: now,
           approving_supervisor_id: authority.approver,
           payload: {
-            cart_id: req.cart_id,
-            cart_line_id: req.line_id,
-            placeholder_id: req.idempotency_key,
-            ...(authority.approvalId === undefined ? {} : { approval_id: authority.approvalId }),
-            ...(authority.reasonCode === undefined ? {} : { reason_code: authority.reasonCode }),
+            ...discountAuditPayload({
+              req,
+              resolved,
+              approvalId: authority.approvalId,
+              reasonCode: authority.reasonCode,
+              approverRole: authority.approverRole,
+            }),
           },
         });
       },
@@ -1246,19 +1332,36 @@ export class CartBridgeHandlers {
 
   /**
    * Who authorises this discount. A manager / admin session is its own
-   * approver (D2), by `users.id` when known. A cashier's approval is consumed
-   * against the cart and line as read now, inside the transaction.
+   * approver (D2), by `users.id` when known, with its role and the reason it
+   * stated. A cashier's approval is consumed against the cart, line and
+   * computed amount as read now, inside the transaction; the reason is the
+   * approval's, and a restated one must equal it.
    */
   private discountAuthority(ctx: {
     store: CartStore;
     session: OperatorSessionRecord;
     req: CartDiscountPlaceholdersAddRequest;
     isManager: boolean;
-  }): { approver: string; approvalId?: string; reasonCode?: string } {
-    const { store, session, req, isManager } = ctx;
+    resolved: ResolvedDiscountAdd;
+  }): DiscountAuthority {
+    const { store, session, req, isManager, resolved } = ctx;
     if (isManager) {
-      return { approver: session.manager_user_id?.toLowerCase() ?? session.operator_id };
+      return {
+        approver: session.manager_user_id?.toLowerCase() ?? session.operator_id,
+        reasonCode: resolved.reasonCode,
+        approverRole: session.role === 'admin' ? 'admin' : 'manager',
+      };
     }
+    return this.consumeDiscountApproval(store, session, req, resolved);
+  }
+
+  /** The cashier path: the approval consumed in the add's transaction, its reason holding. */
+  private consumeDiscountApproval(
+    store: CartStore,
+    session: OperatorSessionRecord,
+    req: CartDiscountPlaceholdersAddRequest,
+    resolved: ResolvedDiscountAdd,
+  ): DiscountAuthority {
     const approvals = this.deps.approvals;
     const approvalId = req.approval_id;
     if (approvals === undefined || approvalId === undefined) {
@@ -1277,11 +1380,11 @@ export class CartBridgeHandlers {
       session,
     });
     if (consumed.kind === 'refused') throw new ApprovalRefused(consumed.reason);
-    return {
-      approver: consumed.approverUserId,
-      approvalId,
-      ...(consumed.reasonCode === undefined ? {} : { reasonCode: consumed.reasonCode }),
-    };
+    const { reasonCode } = consumed;
+    if (!approvedReasonHolds(reasonCode, resolved.reasonCode)) {
+      throw new ApprovalRefused('approval_invalid');
+    }
+    return { approver: consumed.approverUserId, approvalId, reasonCode };
   }
 
   // eslint-disable-next-line @typescript-eslint/require-await
@@ -1771,8 +1874,7 @@ export class CartBridgeHandlers {
       store,
     });
 
-    if (built.kind === 'empty_cart') return refuse('empty_cart');
-    if (built.kind === 'subtotal_unsafe') return refuse('not_implemented');
+    if (built.kind !== 'ok') return refuse(ENVELOPE_BUILD_REFUSAL[built.kind]);
 
     const { envelope } = built;
     const envelopeJson = JSON.stringify(envelope);

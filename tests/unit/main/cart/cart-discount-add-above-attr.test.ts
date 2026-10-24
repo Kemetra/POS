@@ -138,7 +138,8 @@ describe('cart.discountPlaceholders.add — above-threshold with manager attribu
     const res = await f.handlers.discountPlaceholdersAdd({
       cart_id: f.cart_id,
       line_id: f.line_id,
-      placeholder_kind: 'percent_20',
+      placeholder_kind: 'manual_pct_20',
+      reason_code: 'promotion',
       idempotency_key: 'dp-t061-a',
     });
     // RED until T069.
@@ -153,24 +154,26 @@ describe('cart.discountPlaceholders.add — above-threshold with manager attribu
     await f.handlers.discountPlaceholdersAdd({
       cart_id: f.cart_id,
       line_id: f.line_id,
-      placeholder_kind: 'percent_20',
+      placeholder_kind: 'manual_pct_20',
+      reason_code: 'promotion',
       idempotency_key: 'dp-t061-b',
     });
     // RED until T069.
     const rows = readDiscountPlaceholders(f.db, f.cart_id);
     expect(rows).toHaveLength(1);
-    expect(rows[0]?.['placeholder_kind']).toBe('percent_20');
+    expect(rows[0]?.['placeholder_kind']).toBe('manual_pct_20');
     expect(rows[0]?.['line_id']).toBe(f.line_id);
     expect(rows[0]?.['attribution_operator_id']).toBe(MANAGER_ID);
   });
 
-  it.each([['percent_20'], ['percent_1']])(
+  it.each([['manual_pct_20'], ['manual_pct_1']])(
     'emits cart.discount.manager_authorized for %s (no threshold; never above_threshold)',
     async (kind) => {
       await f.handlers.discountPlaceholdersAdd({
         cart_id: f.cart_id,
         line_id: f.line_id,
         placeholder_kind: kind,
+        reason_code: 'promotion',
         idempotency_key: 'dp-t061-c',
       });
       expect(f.emitFn).toHaveBeenCalledOnce();
@@ -183,7 +186,8 @@ describe('cart.discountPlaceholders.add — above-threshold with manager attribu
     await f.handlers.discountPlaceholdersAdd({
       cart_id: f.cart_id,
       line_id: f.line_id,
-      placeholder_kind: 'percent_20',
+      placeholder_kind: 'manual_pct_20',
+      reason_code: 'promotion',
       idempotency_key: 'dp-t061-d',
     });
     // RED until T070.
@@ -196,7 +200,8 @@ describe('cart.discountPlaceholders.add — above-threshold with manager attribu
     await f.handlers.discountPlaceholdersAdd({
       cart_id: f.cart_id,
       line_id: f.line_id,
-      placeholder_kind: 'percent_20',
+      placeholder_kind: 'manual_pct_20',
+      reason_code: 'promotion',
       idempotency_key: 'dp-t061-e',
     });
     // RED until T070.
@@ -209,7 +214,8 @@ describe('cart.discountPlaceholders.add — above-threshold with manager attribu
     await f.handlers.discountPlaceholdersAdd({
       cart_id: f.cart_id,
       line_id: f.line_id,
-      placeholder_kind: 'percent_20',
+      placeholder_kind: 'manual_pct_20',
+      reason_code: 'promotion',
       idempotency_key: 'dp-t061-f',
     });
     // RED until T070.
@@ -225,7 +231,8 @@ describe('cart.discountPlaceholders.add — above-threshold with manager attribu
     await f.handlers.discountPlaceholdersAdd({
       cart_id: f.cart_id,
       line_id: f.line_id,
-      placeholder_kind: 'percent_20',
+      placeholder_kind: 'manual_pct_20',
+      reason_code: 'promotion',
       idempotency_key: 'dp-t061-g',
     });
     // RED until T070.
@@ -240,13 +247,15 @@ describe('cart.discountPlaceholders.add — above-threshold with manager attribu
     await f.handlers.discountPlaceholdersAdd({
       cart_id: f.cart_id,
       line_id: f.line_id,
-      placeholder_kind: 'percent_20',
+      placeholder_kind: 'manual_pct_20',
+      reason_code: 'promotion',
       idempotency_key: 'dp-t061-h',
     });
     const res2 = await f.handlers.discountPlaceholdersAdd({
       cart_id: f.cart_id,
       line_id: f.line_id,
-      placeholder_kind: 'percent_20',
+      placeholder_kind: 'manual_pct_20',
+      reason_code: 'promotion',
       idempotency_key: 'dp-t061-h', // same key
     });
     // RED until T069 — idempotent replay should succeed and not emit twice.
@@ -271,7 +280,8 @@ describe('cart.discountPlaceholders.add — above-threshold with manager attribu
     const res = await f.handlers.discountPlaceholdersAdd({
       cart_id: f.cart_id,
       line_id: f.line_id,
-      placeholder_kind: 'percent_20',
+      placeholder_kind: 'manual_pct_20',
+      reason_code: 'promotion',
       idempotency_key: SHARED_KEY,
     });
     expect(res.kind).toBe('refused');

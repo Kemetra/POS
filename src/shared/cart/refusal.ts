@@ -43,7 +43,21 @@ export type CartRefusalReason =
    * `cart.discount.manager_authorized` audit row names it). Remove it, or
    * re-add it with manager authority, then hand off again.
    */
-  | 'unauthorized_discount';
+  | 'unauthorized_discount'
+  /**
+   * RT-854 (RT-699 I1, doc 28 §7) — `cart.discountPlaceholders.add`: the token
+   * is not a canonical `manual_pct_<P>` / `manual_amt_<M>`, the amount is
+   * above the line gross or unsafe, or the reason is missing on the direct
+   * path or outside the closed list. Nothing was written.
+   */
+  | 'invalid_payload'
+  /** RT-854 (OD-28-6) — the line already holds a manual discount; remove it first (D4). */
+  | 'discount_already_applied'
+  /**
+   * RT-854 (OD-28-7) — the line's quantity cannot change while it holds a
+   * manual discount (a change, a re-scan merge). Remove the discount first.
+   */
+  | 'line_discounted';
 
 export interface CartRefusal {
   readonly kind: 'refused';

@@ -164,7 +164,9 @@ function asLinesSetNoteReq(value: unknown): CartLinesSetNoteRequest | null {
  * dropped (RT-183, RT-114 C10), so the renderer can never choose the recorded
  * approving supervisor. RT-608: a cashier carries an `approval_id` from
  * `approval.request` instead, which main verifies and consumes; when present
- * it must be a bounded id.
+ * it must be a bounded id. RT-854 (doc 28 §4.2): a `reason_code`, when
+ * present, is passed through as a string (no longer dropped); main validates it
+ * against the closed list and refuses anything else `invalid_payload`.
  */
 function asDiscountAddReq(value: unknown): CartDiscountPlaceholdersAddRequest | null {
   if (typeof value !== 'object' || value === null) return null;
@@ -177,15 +179,29 @@ function asDiscountAddReq(value: unknown): CartDiscountPlaceholdersAddRequest | 
   ) {
     return null;
   }
-  const req = {
+  const optional = discountAddOptionals(v);
+  if (optional === null) return null;
+  return {
     cart_id: v['cart_id'],
     line_id: v['line_id'],
     placeholder_kind: v['placeholder_kind'],
     idempotency_key: v['idempotency_key'],
+    ...optional,
   };
+}
+
+/** The add's optional fields, each only when well formed; null when either is malformed. */
+function discountAddOptionals(
+  v: Record<string, unknown>,
+): { approval_id?: string; reason_code?: string } | null {
   const approvalId = v['approval_id'];
-  if (approvalId === undefined) return req;
-  return isBoundedId(approvalId) ? { ...req, approval_id: approvalId } : null;
+  const reasonCode = v['reason_code'];
+  if (approvalId !== undefined && !isBoundedId(approvalId)) return null;
+  if (reasonCode !== undefined && typeof reasonCode !== 'string') return null;
+  return {
+    ...(approvalId === undefined ? {} : { approval_id: approvalId }),
+    ...(reasonCode === undefined ? {} : { reason_code: reasonCode }),
+  };
 }
 
 function asDiscountRemoveReq(value: unknown): CartDiscountPlaceholdersRemoveRequest | null {

@@ -7,8 +7,8 @@
  *
  *   • resolver: the requesting session's own mutable cart and live line; the
  *     version binds cart, line, `placeholder_kind`, line version and scope;
- *     amount null (O1); null for anyone else's cart, a frozen cart or a
- *     missing / removed line;
+ *     RT-854: the amount is the computed discount (O1's null retired); null
+ *     for anyone else's cart, a frozen cart or a missing / removed line;
  *   • add: no threshold. A cashier needs an approval for ANY discount, even
  *     1%; a valid one is consumed exactly once, in the add's own transaction,
  *     and recorded as the approver; every mismatch refuses and writes
@@ -20,20 +20,14 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import type { Database as SqlJsDatabase } from 'sql.js';
 
 import {
-  aeadSafeStorage,
   freshGrantDb,
   handleFor,
   initGrantSql,
 } from '../../operator/__tests__/__helpers__/offline-grant-fixture.js';
-import { createManagerPinStore, type ManagerPinStore } from '../../operator/manager-pin-store.js';
-import {
-  APPROVAL_TTL_MS,
-  createManagerApprovalService,
-  type ManagerApprovalService,
-} from '../../operator/manager-approval-service.js';
+import { APPROVAL_TTL_MS } from '../../operator/manager-approval-service.js';
 import type { OperatorSessionRecord } from '../../operator/session-manager.js';
-import { CartBridgeHandlers, type ItemRefResolver } from '../cart-bridge.js';
-import { bindCartStore, type CartStore } from '../cart-store.js';
+import type { CartBridgeHandlers } from '../cart-bridge.js';
+import type { CartStore } from '../cart-store.js';
 import { manualDiscountApprovalResolver } from '../discount-approval.js';
 import {
   discountApprovalSubjectRef,
@@ -41,10 +35,19 @@ import {
 } from '../../../shared/cart/discount-approval.js';
 import type { AuditEvent } from '../../../shared/audit/event-shape.js';
 import type { ManagerApprovalRequest } from '../../../shared/operator/manager-approval.js';
+import {
+  bootDiscountHarness,
+  cartWithLines,
+  type DiscountHarness,
+} from './__helpers__/discount-harness.js';
 
 const TERMINAL = 'term-1';
 const SCOPE = { tenantId: 'tenant-1', branchId: 'branch-1', terminalId: TERMINAL };
-const MANAGER = { userId: '0190f5a2-3b4c-7d8e-9f01-00000000000a', pin: '246810' };
+const MANAGER = {
+  userId: '0190f5a2-3b4c-7d8e-9f01-00000000000a',
+  pin: '246810',
+  displayName: 'Mona Manager',
+};
 const CASHIER_USER = '0190f5a2-3b4c-7d8e-9f01-0000000000cc';
 const T0 = '2026-10-17T09:00:00.000Z';
 const HOUR = 3_600_000;
@@ -66,12 +69,8 @@ function session(role: OperatorSessionRecord['role'], id: string): OperatorSessi
   };
 }
 
-const resolveItem: ItemRefResolver = () =>
-  Promise.resolve({ kind: 'ok', display_name: 'Aspirin', unit_price_minor: 150 });
-
 let raw: SqlJsDatabase;
-let pins: ManagerPinStore;
-let service: ManagerApprovalService;
+let h: DiscountHarness;
 let store: CartStore;
 let cart: CartBridgeHandlers;
 let current: OperatorSessionRecord | null;
@@ -88,87 +87,42 @@ beforeAll(async () => {
 
 beforeEach(async () => {
   raw = freshGrantDb();
-  const db = handleFor(raw);
   audit = [];
   emitFails = false;
   clock = T0;
   current = session('cashier', 'sess-cashier');
-  const emitter = {
-    emit: (e: AuditEvent) => {
-      if (emitFails && e.action_category.startsWith('cart.')) throw new Error('disk full');
-      audit.push(e);
-    },
-  };
-  pins = createManagerPinStore({ db, safeStorage: aeadSafeStorage() });
-  await pins.enrol({
+  h = await bootDiscountHarness({
+    db: handleFor(raw),
+    terminalId: TERMINAL,
     scope: SCOPE,
-    userId: MANAGER.userId,
-    displayName: 'Mona Manager',
-    sealed: await pins.seal(MANAGER.pin),
-    now: T0,
-    onlineAt: T0,
-    guard: () => undefined,
-  });
-  store = bindCartStore(db);
-  service = createManagerApprovalService({
-    db,
+    manager: MANAGER,
+    enrolledAt: T0,
+    unitPriceMinor: 150,
     getSession: () => current,
-    isSessionLocked: () => false,
-    currentTerminalId: () => TERMINAL,
-    managerPins: pins,
-    resolvers: { 'cart.discount.manual': manualDiscountApprovalResolver(store) },
-    auditEmitter: emitter,
     now: () => clock,
+    audit: {
+      emit: (e) => {
+        if (emitFails && e.action_category.startsWith('cart.')) throw new Error('disk full');
+        audit.push(e);
+      },
+    },
   });
-  cart = new CartBridgeHandlers({
-    getCurrentSession: () => current,
-    getTerminalId: () => TERMINAL,
-    cartStore: store,
-    resolveItemRef: resolveItem,
-    auditEmitter: emitter as never,
-    cartPaymentStatus: () => 'none',
-    approvals: service,
-    clock: () => new Date(clock),
-  });
-  const created = await cart.create({ idempotency_key: 'create-1' });
-  if (created.kind !== 'ok') throw new Error('create failed');
-  cartId = created.cart_id;
-  lineId = await addLine('SKU-A', 'line-add-1');
-  line2Id = await addLine('SKU-B', 'line-add-2');
+  ({ store, cart } = h);
+  const built = await cartWithLines(cart, ['SKU-A', 'SKU-B'], 1);
+  cartId = built.cartId;
+  [lineId = '', line2Id = ''] = built.lineIds;
 });
 
 afterEach(() => {
   raw.close();
 });
 
-async function addLine(itemRef: string, key: string): Promise<string> {
-  const added = await cart.linesAdd({
-    cart_id: cartId,
-    item_ref: itemRef,
-    quantity: 1,
-    idempotency_key: key,
-  });
-  if (added.kind !== 'ok') throw new Error(`linesAdd failed: ${added.reason}`);
-  return added.line_id;
-}
-
-function managerRef(): string {
-  return pins.list({ scope: SCOPE, now: T0 })[0]?.managerRef ?? '';
-}
-
-function subjectRef(line = lineId, kind = 'percent_1', cart_id = cartId): string {
+function subjectRef(line = lineId, kind = 'manual_pct_1', cart_id = cartId): string {
   return discountApprovalSubjectRef({ cart_id, line_id: line, placeholder_kind: kind });
 }
 
 function ask(over: Partial<ManagerApprovalRequest> = {}) {
-  return service.request({
-    action_kind: 'cart.discount.manual',
-    subject_ref: subjectRef(),
-    reason_code: 'loyal_customer',
-    approver_ref: managerRef(),
-    pin: MANAGER.pin,
-    ...over,
-  });
+  return h.ask({ subject_ref: subjectRef(), reason_code: 'loyal_or_contract_customer', ...over });
 }
 
 async function approved(over: Partial<ManagerApprovalRequest> = {}): Promise<string> {
@@ -181,7 +135,7 @@ function add(over: Record<string, unknown> = {}) {
   return cart.discountPlaceholdersAdd({
     cart_id: cartId,
     line_id: lineId,
-    placeholder_kind: 'percent_1',
+    placeholder_kind: 'manual_pct_1',
     idempotency_key: 'dp-add-1',
     ...over,
   });
@@ -219,11 +173,11 @@ function expectNothingWritten(): void {
 
 describe('discount approval subject ref', () => {
   it('round-trips cart, line and kind', () => {
-    const ref = subjectRef(lineId, 'percent_15');
+    const ref = subjectRef(lineId, 'manual_pct_15');
     expect(parseDiscountApprovalSubjectRef(ref)).toEqual({
       cart_id: cartId,
       line_id: lineId,
-      placeholder_kind: 'percent_15',
+      placeholder_kind: 'manual_pct_15',
     });
   });
 
@@ -243,15 +197,16 @@ describe('cart.discount.manual resolver', () => {
     return subject.version;
   };
 
-  it('binds cart, line, kind, line version and scope, with no amount (O1)', () => {
-    expect(resolve(subjectRef())).toMatchObject({ amountMinor: null });
+  it('binds cart, line, kind, line version and scope, and (RT-854) the computed amount', () => {
+    // 1% of 150 is 1.5, rounded half up to 2.
+    expect(resolve(subjectRef())).toMatchObject({ amountMinor: 2 });
     const version = versionOf(subjectRef());
-    for (const part of [cartId, lineId, 'percent_1', SCOPE.tenantId, SCOPE.branchId]) {
+    for (const part of [cartId, lineId, 'manual_pct_1', SCOPE.tenantId, SCOPE.branchId]) {
       expect(version).toContain(part);
     }
     // Another line or kind is another subject.
     expect(versionOf(subjectRef(line2Id))).not.toBe(version);
-    expect(versionOf(subjectRef(lineId, 'percent_2'))).not.toBe(version);
+    expect(versionOf(subjectRef(lineId, 'manual_pct_2'))).not.toBe(version);
   });
 
   it('moves with the line version', async () => {
@@ -300,7 +255,7 @@ describe('cart.discount.manual resolver', () => {
 
 describe('cart.discountPlaceholders.add — cashier session', () => {
   it('refuses ANY discount without an approval, even 1% (no threshold)', async () => {
-    for (const kind of ['percent_1', 'percent_10', 'percent_50', 'fixed_note']) {
+    for (const kind of ['manual_pct_1', 'manual_pct_10', 'manual_pct_50', 'fixed_note']) {
       await expect(add({ placeholder_kind: kind, idempotency_key: `k-${kind}` })).resolves.toEqual({
         kind: 'refused',
         reason: 'manager_attribution_required',
@@ -323,7 +278,7 @@ describe('cart.discountPlaceholders.add — cashier session', () => {
         placeholder_id: 'dp-add-1',
         cart_id: cartId,
         line_id: lineId,
-        placeholder_kind: 'percent_1',
+        placeholder_kind: 'manual_pct_1',
         requires_manager_attribution: 1,
         attribution_operator_id: MANAGER.userId,
       }),
@@ -343,15 +298,18 @@ describe('cart.discountPlaceholders.add — cashier session', () => {
           cart_line_id: lineId,
           placeholder_id: 'dp-add-1',
           approval_id: id,
-          reason_code: 'loyal_customer',
+          reason_code: 'loyal_or_contract_customer',
+          kind: 'percent',
+          value: 1,
+          amount_minor: 2,
         },
       }),
     ]);
   });
 
   it('never emits the historical above_threshold category, and no PIN anywhere', async () => {
-    const id = await approved({ subject_ref: subjectRef(lineId, 'percent_50') });
-    await add({ placeholder_kind: 'percent_50', approval_id: id });
+    const id = await approved({ subject_ref: subjectRef(lineId, 'manual_pct_50') });
+    await add({ placeholder_kind: 'manual_pct_50', approval_id: id });
     expect(audit.map((e) => e.action_category)).not.toContain('cart.discount.above_threshold');
     const dump = JSON.stringify([
       audit,
@@ -387,11 +345,18 @@ describe('cart.discountPlaceholders.add — cashier session', () => {
   it('an approval is used once', async () => {
     const id = await approved();
     await add({ approval_id: id });
+    // RT-854: a second discount on the line is refused before any approval is
+    // read, so free the line first; the spent approval still does not apply.
+    await cart.discountPlaceholdersRemove({
+      cart_id: cartId,
+      placeholder_id: 'dp-add-1',
+      idempotency_key: 'dp-rm-1',
+    });
     await expect(add({ approval_id: id, idempotency_key: 'dp-add-2' })).resolves.toEqual({
       kind: 'refused',
       reason: 'approval_invalid',
     });
-    expect(placeholders()).toHaveLength(1);
+    expect(placeholders()).toHaveLength(0);
   });
 
   it('an unknown approval_id refuses approval_invalid', async () => {
@@ -429,7 +394,7 @@ describe('cart.discountPlaceholders.add — cashier session', () => {
     ['another line', (): Record<string, unknown> => ({ line_id: line2Id })],
     [
       'another placeholder_kind',
-      (): Record<string, unknown> => ({ placeholder_kind: 'percent_2' }),
+      (): Record<string, unknown> => ({ placeholder_kind: 'manual_pct_2' }),
     ],
   ])('an approval spent on %s refuses approval_invalid', async (_l, over) => {
     const id = await approved();
@@ -527,7 +492,7 @@ describe('cart.discountPlaceholders.add — cashier session', () => {
       kind: 'refused',
       reason: 'idempotency_payload_mismatch',
     });
-    await expect(add({ placeholder_kind: 'percent_2' })).resolves.toEqual({
+    await expect(add({ placeholder_kind: 'manual_pct_2' })).resolves.toEqual({
       kind: 'refused',
       reason: 'idempotency_payload_mismatch',
     });
@@ -551,7 +516,7 @@ describe('cart.discountPlaceholders.add — manager / admin session (D2)', () =>
     'a %s applies directly and is recorded as the approver',
     async (role) => {
       current = { ...session(role, 'sess-m'), manager_user_id: MANAGER.userId.toUpperCase() };
-      await expect(add()).resolves.toEqual({
+      await expect(add({ reason_code: 'promotion' })).resolves.toEqual({
         kind: 'ok',
         placeholder_id: 'dp-add-1',
         requires_manager_attribution: true,
@@ -565,7 +530,16 @@ describe('cart.discountPlaceholders.add — manager / admin session (D2)', () =>
           action_category: 'cart.discount.manager_authorized',
           acting_operator_id: 'op-sess-m',
           approving_supervisor_id: MANAGER.userId,
-          payload: { cart_id: cartId, cart_line_id: lineId, placeholder_id: 'dp-add-1' },
+          payload: {
+            cart_id: cartId,
+            cart_line_id: lineId,
+            placeholder_id: 'dp-add-1',
+            reason_code: 'promotion',
+            kind: 'percent',
+            value: 1,
+            amount_minor: 2,
+            approver_role: role,
+          },
         }),
       ]);
     },
@@ -573,7 +547,7 @@ describe('cart.discountPlaceholders.add — manager / admin session (D2)', () =>
 
   it('a spoofed approver id is ignored: the session is the approver', async () => {
     current = session('manager', 'sess-m');
-    await add({ attribution_operator_id: 'someone-else' });
+    await add({ attribution_operator_id: 'someone-else', reason_code: 'promotion' });
     expect(placeholders()[0]?.['attribution_operator_id']).toBe('op-sess-m');
     expect(discountAudit()[0]?.approving_supervisor_id).toBe('op-sess-m');
   });

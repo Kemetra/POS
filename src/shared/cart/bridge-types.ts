@@ -98,6 +98,12 @@ export interface CartDiscountPlaceholdersAddRequest {
    * this cart, line and kind; a manager or admin applies directly and sends none.
    */
   readonly approval_id?: string;
+  /**
+   * RT-854 (doc 28 §4) — a code from the closed list
+   * (`MANUAL_DISCOUNT_REASON_CODES`). Required on the manager / admin direct
+   * path; a cashier's add may restate its approval's reason, and must match it.
+   */
+  readonly reason_code?: string;
 }
 
 export type CartDiscountPlaceholdersAddResponse =
