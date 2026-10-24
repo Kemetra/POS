@@ -1,9 +1,9 @@
 @import 'tailwindcss';
 
-/* Tailwind v4 scans every file git does not ignore for class names, and
-   .gitignore keeps .claude/skills/impeccable/** tracked. Agent skill and
-   spec-kit docs are not UI: a word like `text-wrap` in their prose would add a
-   rule to the shipped CSS (RT-711). */
+/* Tailwind v4 scans the text files under the build's working directory that
+   git does not ignore, and .gitignore keeps .claude/skills/impeccable/**
+   tracked. Agent skill and spec-kit docs are not UI: a word like `text-wrap`
+   in their prose would add a rule to the shipped CSS (RT-711). */
 @source not '../../../.claude';
 @source not '../../../.specify';
 
