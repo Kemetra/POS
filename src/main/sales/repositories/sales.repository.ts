@@ -53,6 +53,12 @@ export interface SaleRow {
   selling_operator_id: string;
   selling_operator_display_name: string;
   selling_operator_session_id: string;
+  /**
+   * The amount charged before tax. Since RT-854 / RT-856 it is the NET:
+   * Σ line gross − Σ manual line discount, equal to the tender sum and the
+   * receipt total. The column keeps its 008 name (doc 28 §3.3); with no
+   * discount, net = gross.
+   */
   subtotal_minor: number;
   total_tax_minor: number;
   total_change_due_minor: number;
@@ -69,6 +75,9 @@ export interface SaleRow {
    * finalize time. Read back at reprint time so the slip body is
    * byte-stable regardless of later catalogue/cart drift (FR-015 / FR-016).
    * Defaults to '[]' at the SQL layer (migration 0028) for pre-T028a rows.
+   * RT-856: a discounted element also carries its frozen `discount`
+   * (`SaleLineDiscount`), a JSON shape with no DDL; `line_subtotal_minor`
+   * stays gross.
    */
   lines_json: string;
 }

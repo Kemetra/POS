@@ -75,7 +75,7 @@ sub-tables, never mutate this row.
 | `selling_operator_id` | string (Clerk-backed) | The cashier who took the payment (inherited from 006's `payment_attempts.acting_operator_id`). Stable across sessions. |
 | `selling_operator_display_name` | string | Cashier's display name at finalize time. Cached on the Sale because future-feature operator-renames must not change historical receipts. |
 | `selling_operator_session_id` | UUID / string | The 004 operator session under which the payment was taken. Inherited from 006. |
-| `subtotal_minor` | INTEGER (minor units) | Snapshotted from `envelope.subtotal_minor`. Source of truth for the totals on the slip. |
+| `subtotal_minor` | INTEGER (minor units) | ~~Snapshotted from `envelope.subtotal_minor`.~~ **RT-854 / RT-856 (doc 28 §3.3):** the amount charged before tax, taken from the settled attempt's amount due. It is the **net**: Σ line gross − Σ manual line discount (the envelope's `total_due_minor`), equal to the tender sum. The column keeps the name "subtotal" although the value is net; with no discount, net = gross. Source of truth for the totals on the slip. |
 | `total_tax_minor` | INTEGER (minor units) | The **sale-level VAT total** in minor units (Clarifications 2026-05-27). May be 0 if the tenant's tax posture has no VAT on this sale. |
 | `total_change_due_minor` | INTEGER (minor units) | Sum of `change_due_minor` across all `cash` tender lines in the settled attempt. May be 0 if no overpayment. |
 | `tender_lines_summary_json` | JSON BLOB | The per-line tender summary from 006 (per 006 plan AD-9 payload shape) cached on the Sale for fast receipt-payload regeneration without re-reading 006's `payment_tender_lines`. The shape is the FR-017-listed minimum — generic tender_type label, applied amount, change_due_minor (cash only), `external_reference` (external_card_terminal only — only if 006 OQ-PLAN-5 resolves permissively per R-13), `voucher_authority_redemption_id` (internal_voucher only — only if 006 FR-017 / OQ-PLAN-7 resolves permissively). NO voucher code, NO voucher balance, NO PAN, NO any sensitive field — Constitution §P6 / §P7 enforced at finalize-time validation. |
@@ -85,6 +85,16 @@ sub-tables, never mutate this row.
 | `branch_name` | string | The branch's display name (cached from terminal config). Printed on the receipt header. |
 | `branch_address` | string | The branch's address (cached from terminal config). Printed on the receipt header. |
 | `local_calendar_day` | string (YYYY-MM-DD) | The local trading-day used by AD-7 to allocate the sale_number. Cached so the date stamp on the slip is derivable from the Sale row alone. |
+
+**`lines_json` discount (RT-856, doc 28 §3.3).** Each `lines_json` element keeps
+its gross `line_subtotal_minor`. A line with a manual discount also carries an
+optional `discount` object, frozen at finalize from the envelope placeholder and
+its `cart.discount.manager_authorized` audit row: `kind`, `value`,
+`amount_minor`, `placeholder_id`, `reason_code`, `authority_source`
+(`cashier_approval` | `manager_session`), `approver_role` (only when the audit
+row recorded it) and `approver_operator_id`. It is a JSON shape in the existing
+TEXT column, with no DDL. The receipt reads only `kind`, `value` and
+`amount_minor`.
 
 **Invariants:**
 

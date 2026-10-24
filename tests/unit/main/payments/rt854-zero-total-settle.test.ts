@@ -62,6 +62,18 @@ beforeEach(() => {
   seedFullyDiscountedCart();
 });
 
+/** RT-856: the RT-854 add's audit payload, which finalize freezes onto the line. */
+const DISCOUNT_AUDIT_PAYLOAD = {
+  cart_id: 'cart-1',
+  cart_line_id: 'line-1',
+  placeholder_id: 'dp-1',
+  approval_id: 'appr-1',
+  reason_code: 'promotion',
+  kind: 'percent',
+  value: 100,
+  amount_minor: GROSS,
+};
+
 /** A handed-off cart whose one line carries a manager-authorised 100% discount. */
 function seedFullyDiscountedCart(): void {
   const envelope = {
@@ -117,12 +129,7 @@ function seedFullyDiscountedCart(): void {
        approving_supervisor_id, payload)
      VALUES ('evt-dp-1', ?, ?, ?, 'op-clerk-user-abc', 'sess-1', NULL,
        'cart.discount.manager_authorized', '2026-10-24T09:10:00.000Z', 'mgr-1', ?)`,
-    [
-      TENANT,
-      BRANCH,
-      TERMINAL,
-      JSON.stringify({ cart_id: 'cart-1', cart_line_id: 'line-1', placeholder_id: 'dp-1' }),
-    ],
+    [TENANT, BRANCH, TERMINAL, JSON.stringify(DISCOUNT_AUDIT_PAYLOAD)],
   );
 }
 
@@ -266,6 +273,14 @@ describe('RT-854 — a zero-total sale completes with no tender (OZ-1 = Z-A)', (
       `SELECT subtotal_minor, total_change_due_minor, tender_lines_summary_json FROM sales`,
     )[0]?.values[0];
     expect(sale).toEqual([0, 0, '[]']);
+    // RT-856: the free line keeps its gross and carries its frozen discount.
+    const [line] = JSON.parse(
+      String(db.exec(`SELECT lines_json FROM sales`)[0]?.values[0]?.[0]),
+    ) as Array<Record<string, unknown>>;
+    expect(line).toMatchObject({
+      line_subtotal_minor: GROSS,
+      discount: { kind: 'percent', value: 100, amount_minor: GROSS },
+    });
 
     const sources = createShiftCashupSources(makeSqlJsHandle(db));
     const sales = sources.salesIn({
