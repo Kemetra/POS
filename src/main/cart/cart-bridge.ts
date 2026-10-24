@@ -481,7 +481,7 @@ function currentAmount(
   placeholder: { line_id: string; placeholder_kind: string },
 ): { amount_minor?: number } {
   const line = store.getLine(cartId, placeholder.line_id);
-  if (line === undefined || line.removed_at !== null) return {};
+  if (line?.removed_at !== null) return {};
   const amount = lineDiscountMinor(line.line_subtotal_minor, placeholder.placeholder_kind);
   return amount === null ? {} : { amount_minor: amount };
 }

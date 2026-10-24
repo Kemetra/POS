@@ -50,7 +50,7 @@ export function isManualDiscountReasonCode(value: unknown): value is ManualDisco
 const PERCENT_PREFIX = 'manual_pct_';
 const AMOUNT_PREFIX = 'manual_amt_';
 /** A positive integer written canonically: no sign, no leading zero. */
-const CANONICAL_POSITIVE = /^[1-9][0-9]*$/;
+const CANONICAL_POSITIVE = /^[1-9]\d*$/;
 const MAX_PERCENT = 100;
 const HALF = 50;
 
