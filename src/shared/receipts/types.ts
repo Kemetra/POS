@@ -20,6 +20,7 @@
  */
 
 import type { SaleId, SaleNumber, TenderLineSummary } from '../sales/types.js';
+import type { ReceiptLineDiscount } from '../sales/sale-line-discount.js';
 
 // ── Template variant (closed-set) ────────────────────────────────────────────
 
@@ -59,8 +60,15 @@ export interface ReceiptLineItem {
   display_name: string;
   quantity: number;
   unit_price_minor: number;
+  /** The line GROSS (`quantity × unit_price_minor`). */
   line_subtotal_minor: number;
   note: string | null;
+  /**
+   * RT-856 (OD-28-11): the line's manual discount, from the frozen
+   * `lines_json`. Only kind, value and amount: no placeholder, reason or
+   * approver reaches the slip or the preview bridge. Absent when undiscounted.
+   */
+  discount?: ReceiptLineDiscount;
 }
 
 // ── ReceiptPayload (FR-017 canonical fields) ─────────────────────────────────
@@ -106,6 +114,7 @@ export interface ReceiptPayload {
   selling_operator_display_name: string;
 
   // ── Monetary totals (INTEGER minor units; Constitution §II) ────────────
+  /** The Sale's `subtotal_minor`: the NET charged before tax since RT-854 / RT-856. */
   subtotal_minor: number;
   total_tax_minor: number;
   total_change_due_minor: number;

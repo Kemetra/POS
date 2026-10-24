@@ -57,6 +57,11 @@
  *          episode (re-armed by any device-path answer that is not a 401).
  *          Revoking the device is NOT the drain's call (RT-215's detector owns it).
  *
+ * Hold (RT-856): while `discountCaptureSupported` is off, a sale whose
+ * `lines_json` carries a line `discount` is left out of the due list: no POST,
+ * no state write, no attempt, never dead-lettered. It stays pending and drains
+ * on the first tick after the switch is turned on (RT-858).
+ *
  * Shutdown (RT-198, as the shift sync engine and the returns resolver): once
  * `isStopped()` is true a tick reads and writes nothing more. It is checked before
  * the tick's first read and again when every await resumes, so a send in flight at
@@ -84,6 +89,7 @@ import {
 import type { SaleRow } from '../sales/repositories/sales.repository.js';
 import type { SaleRoute, SellingUserIdResolver } from './selling-user-id.js';
 import { settledWithin } from './settled-within.js';
+import { saleHasLineDiscount } from './discount-hold.js';
 import {
   buildCapturePayload,
   TenderNotSendableError,
@@ -244,6 +250,12 @@ export interface SaleSyncEngineDeps {
   onPauseTransition?: (event: SaleSyncPauseTransition) => void;
   /** RT-198: true once the worker is stopping (app shutdown); default never. */
   isStopped?: () => boolean;
+  /**
+   * RT-856: whether the capture path can send a discounted sale. Off (the
+   * default, `SALE_DISCOUNT_CAPTURE_SUPPORTED` until RT-858): a sale with a line
+   * `discount` is held — skipped untouched, still pending, never dead-lettered.
+   */
+  discountCaptureSupported?: boolean;
 }
 
 export type TickAdmission =
@@ -621,12 +633,21 @@ export function createSaleSyncEngine(deps: SaleSyncEngineDeps): SaleSyncEngine {
     return resolver.resolve(sales, terminalId);
   }
 
-  /** The current terminal's due sales with their durable Sale (defensive skip). */
+  /**
+   * The current terminal's due sales with their durable Sale (defensive skip).
+   * RT-856: a held (discounted) sale is left out here, before routing, so it is
+   * never sent, never resolved, and never keeps the envelope pause visible.
+   */
   function dueSales(terminalId: string): SaleRow[] {
     return stateRepo
       .eligible({ tenantId, branchId, terminalId }, now())
       .map((due) => readSale(due.sale_id))
-      .filter((sale): sale is SaleRow => sale !== null);
+      .filter((sale): sale is SaleRow => sale !== null && !isHeld(sale));
+  }
+
+  /** RT-856: held from sync while discount capture is off. */
+  function isHeld(sale: SaleRow): boolean {
+    return deps.discountCaptureSupported !== true && saleHasLineDiscount(sale);
   }
 
   /** One durable Sale; a failing read skips that sale only (it stays queued). */

@@ -125,6 +125,7 @@ import {
   SALE_SYNC_BACKOFF_POLICY,
 } from './sales-sync/sale-sync-engine.js';
 import { createSaleSyncStatusReader } from './sales-sync/sale-sync-status-reader.js';
+import { SALE_DISCOUNT_CAPTURE_SUPPORTED } from './sales-sync/discount-hold.js';
 import { composeTerminalStatus } from './terminal-status/compose-terminal-status.js';
 import { createTerminalStatusPublisher } from './terminal-status/terminal-status-publisher.js';
 import { createTerminalSyncAggregateReader } from './terminal-status/sync-aggregate.js';
@@ -2444,6 +2445,9 @@ singleInstanceReady
             logSaleSyncPauseTransition(mainLogger, event);
           },
           isStopped: () => saleSyncStopped,
+          // RT-856: discounted sales are held (pending, never dead-lettered) until
+          // RT-858 ships the capture rule and flips this constant. Not an env var.
+          discountCaptureSupported: SALE_DISCOUNT_CAPTURE_SUPPORTED,
         });
 
         // Read-only status surface for the renderer (counts + last-success + the
@@ -2456,6 +2460,7 @@ singleInstanceReady
             branchId: pairingStatus.branch_id,
             resolveTerminalId: resolveSaleSyncTerminalId,
             pausedReason: () => saleSyncEngine.pausedReason(),
+            discountCaptureSupported: SALE_DISCOUNT_CAPTURE_SUPPORTED,
           }),
         });
         // RT-603 — the terminal status sync axis reads the same queue (sales only,

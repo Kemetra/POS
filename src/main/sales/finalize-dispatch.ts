@@ -21,6 +21,13 @@
  *      fields (branch_name, branch_address, tenant_tax_registration_id).
  *   5. `carts.handoff_envelope_json` — the frozen `LineSnapshot[]` for
  *      byte-stable reprints (FR-015/FR-016).
+ *   6. RT-856 — `audit_events` (`cart.discount.manager_authorized`) — the
+ *      attribution of each manual line discount, frozen onto its line
+ *      (`freeze-line-discounts.ts`).
+ *
+ * `subtotal_minor` is the attempt's `envelope_subtotal_minor`: the amount the
+ * payment covered, which is the NET since RT-854 (doc 28 §3.3). The name says
+ * "subtotal"; the value is Σ gross − Σ line discount, before tax.
  *
  * `total_tax_minor` is hardcoded to 0 for 008 v1 (Egyptian VAT is a §A5
  * production-readiness item — see coordination.md §"Slice 1 closeout gap").
@@ -30,9 +37,17 @@
  */
 
 import type { DatabaseHandle } from '../db/client.js';
-import type { LineSnapshot } from '../../shared/cart/handoff-envelope.js';
+import type {
+  DiscountPlaceholderSnapshot,
+  LineSnapshot,
+} from '../../shared/cart/handoff-envelope.js';
 import type { SalesTenderType } from '../../shared/sales/types.js';
 import type { FinalizeInput, FinalizeTenderLineSummary } from './finalize-transaction.js';
+import {
+  freezeLineDiscounts,
+  type FreezeLineDiscountsResult,
+  type FreezeRefusalReason,
+} from './freeze-line-discounts.js';
 
 // ── Narrow better-sqlite3 surfaces (sql.js-compatible at test time) ─────────
 
@@ -51,7 +66,9 @@ export type DispatchRefusalReason =
   | 'attempt_not_found'
   | 'terminal_assignment_not_found'
   | 'cart_envelope_not_found'
-  | 'malformed_settled_payload';
+  | 'malformed_settled_payload'
+  // RT-856: a discount the dispatch cannot attribute, or a total that disagrees.
+  | FreezeRefusalReason;
 
 export type BuildFinalizeInputResult =
   | { kind: 'ok'; input: FinalizeInput }
@@ -115,6 +132,55 @@ function finalizableEnvelopeJson(row: CartEnvelopeRow | undefined): string | nul
 
 function isObject(v: unknown): v is Record<string, unknown> {
   return v !== null && typeof v === 'object';
+}
+
+/** The frozen envelope's lines and placeholders (absent placeholders on an old envelope → none). */
+function readEnvelope(json: string): {
+  lines: readonly LineSnapshot[];
+  placeholders: readonly DiscountPlaceholderSnapshot[];
+} | null {
+  let envelope: unknown;
+  try {
+    envelope = JSON.parse(json);
+    /* c8 ignore start — stored envelopes are always valid JSON from
+       JSON.stringify at handoff; the parse-throw arm is defence-in-depth. */
+  } catch {
+    return null;
+  }
+  /* c8 ignore stop */
+  if (!isObject(envelope) || !Array.isArray(envelope.lines)) return null;
+  const placeholders = envelope.discount_placeholders;
+  return {
+    lines: envelope.lines as LineSnapshot[],
+    placeholders: Array.isArray(placeholders)
+      ? (placeholders as DiscountPlaceholderSnapshot[])
+      : [],
+  };
+}
+
+type SaleLinesResult =
+  | FreezeLineDiscountsResult
+  | { kind: 'refused'; reason: 'cart_envelope_not_found' };
+
+/**
+ * Steps 5 and 6: the still-handed-off cart's frozen lines, and RT-856 — each
+ * manual line discount frozen onto its line (doc 28 §3.3).
+ */
+function saleLines(db: DatabaseHandle, cart_id: string, attempt: AttemptRow): SaleLinesResult {
+  const cartStmt = db.prepare(
+    `SELECT state, handoff_envelope_json FROM carts WHERE cart_id = ?`,
+  ) as PrepareGet<CartEnvelopeRow>;
+  const envelopeJson = finalizableEnvelopeJson(cartStmt.get(cart_id));
+  const envelope = envelopeJson === null ? null : readEnvelope(envelopeJson);
+  if (envelope === null) return { kind: 'refused', reason: 'cart_envelope_not_found' };
+  return freezeLineDiscounts(db, {
+    tenant_id: attempt.tenant_id,
+    branch_id: attempt.branch_id,
+    cart_id,
+    lines: envelope.lines,
+    placeholders: envelope.placeholders,
+    amount_due_minor: attempt.envelope_subtotal_minor,
+  });
 }
 
 export function buildFinalizeInput(deps: BuildFinalizeInputDeps): BuildFinalizeInputResult {
@@ -217,27 +283,10 @@ export function buildFinalizeInput(deps: BuildFinalizeInputDeps): BuildFinalizeI
     return { kind: 'refused', reason: 'terminal_assignment_not_found' };
   }
 
-  // 5 — the frozen cart envelope → lines snapshot.
-  const cartStmt = db.prepare(
-    `SELECT state, handoff_envelope_json FROM carts WHERE cart_id = ?`,
-  ) as PrepareGet<CartEnvelopeRow>;
-  const envelopeJson = finalizableEnvelopeJson(cartStmt.get(cart_id));
-  if (envelopeJson === null) {
-    return { kind: 'refused', reason: 'cart_envelope_not_found' };
-  }
-  let lines: readonly LineSnapshot[];
-  try {
-    const envelope: unknown = JSON.parse(envelopeJson);
-    if (!isObject(envelope) || !Array.isArray(envelope.lines)) {
-      return { kind: 'refused', reason: 'cart_envelope_not_found' };
-    }
-    lines = envelope.lines as LineSnapshot[];
-    /* c8 ignore start — stored envelopes are always valid JSON from
-       JSON.stringify at handoff; the parse-throw arm is defence-in-depth. */
-  } catch {
-    return { kind: 'refused', reason: 'cart_envelope_not_found' };
-  }
-  /* c8 ignore stop */
+  // 5 + 6 — the frozen envelope's lines, with each manual discount frozen on (RT-856).
+  const sold = saleLines(db, cart_id, attempt);
+  if (sold.kind === 'refused') return sold;
+  const lines = sold.lines;
 
   const input: FinalizeInput = {
     envelope_handoff_action_id: handoff_action_id,

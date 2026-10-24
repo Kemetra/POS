@@ -24,6 +24,9 @@
  *   • no shift line (v2);
  *   • VAT block driven by `total_tax_minor`; the "14%" rate label is suppressed
  *     when tax is 0 (fiscal honesty — no misleading rate on a zero-tax doc).
+ *   • RT-856 (OD-28-11): a discount row under each discounted item and one
+ *     «إجمالي الخصم» row above the total; the totals print the Sale's net
+ *     `subtotal_minor`. A zero-total sale (no tender) has no payment section.
  *
  * ESC/POS note: this engine emits structurally-correct control codes + UTF-8
  * text. The Arabic codepage decision (CP864 vs Windows-1256 on the TM-T20III)
@@ -35,6 +38,7 @@ import { format as formatMoney, of as moneyOf } from '../../shared/money.js';
 import { BusinessDayError, businessDateTimeOf } from '../../shared/time/business-day.js';
 import type { ReceiptPayload, ReceiptLineItem } from '../../shared/receipts/types.js';
 import type { TenderLineSummary, SalesTenderType } from '../../shared/sales/types.js';
+import type { ReceiptLineDiscount } from '../../shared/sales/sale-line-discount.js';
 import { COLS, receiptLines } from './receipt-text.js';
 
 export interface ReceiptRenderOutput {
@@ -154,15 +158,10 @@ function compose(payload: ReceiptPayload): Band[] {
     composeItem(line, value, text);
   }
   rule('-');
+  composeDiscountTotal(payload.lines, text);
   text(`Subtotal: ${egp(payload.subtotal_minor)}`, 'ltr');
 
-  // Tender band.
-  rule('=');
-  text('طريقة الدفع', 'rtl');
-  rule('-');
-  for (const t of payload.tender_lines_summary) {
-    composeTender(t, text, value);
-  }
+  composeTenderBand(payload, rule, text, value);
 
   // VAT footer band.
   rule('=');
@@ -204,6 +203,53 @@ function composeItem(line: ReceiptLineItem, value: TextSink, text: TextSink): vo
   // v1 single-name composition: "{qty}× {name}" then the line subtotal.
   value(`${String(line.quantity)}× ${line.display_name}`, 'rtl');
   text(egp(line.line_subtotal_minor), 'ltr');
+  if (line.discount !== undefined) composeLineDiscount(line.discount, text);
+}
+
+/** RT-856 (OD-28-11): the discount row's indent under its item. */
+const DISCOUNT_INDENT = '   ';
+
+/**
+ * RT-856 (OD-28-11, doc 28 §5): one indented row under a discounted item, in
+ * the item's two-band shape — «خصم 10%» (a percent shows its value; an amount
+ * discount shows «خصم» alone), then the amount as a negative through
+ * `money.ts` ("-9.00 EGP": ASCII hyphen-minus, one glyph on every codepage).
+ */
+function composeLineDiscount(discount: ReceiptLineDiscount, text: TextSink): void {
+  const label = discount.kind === 'percent' ? `خصم ${String(discount.value)}%` : 'خصم';
+  text(`${DISCOUNT_INDENT}${label}`, 'rtl');
+  text(egp(-discount.amount_minor), 'ltr');
+}
+
+/** RT-856: one «إجمالي الخصم» row (Σ line discounts) above the total, when any line is discounted. */
+function composeDiscountTotal(lines: readonly ReceiptLineItem[], text: TextSink): void {
+  const discounted = lines.filter((line) => line.discount !== undefined);
+  if (discounted.length === 0) return;
+  const total = discounted.reduce((sum, line) => sum + (line.discount?.amount_minor ?? 0), 0);
+  text('إجمالي الخصم', 'rtl');
+  text(egp(-total), 'ltr');
+}
+
+/**
+ * The payment section. RT-856 (OZ-1 = Z-A): a zero-total sale settles with no
+ * tender, so it has no payment section at all. Only that case: a positive
+ * total with an empty summary (a tender-unknown sale) keeps its section, as
+ * before.
+ */
+function composeTenderBand(
+  payload: Pick<ReceiptPayload, 'tender_lines_summary' | 'subtotal_minor'>,
+  rule: (char: RuleBand['char']) => void,
+  text: TextSink,
+  value: TextSink,
+): void {
+  const tenders = payload.tender_lines_summary;
+  if (tenders.length === 0 && payload.subtotal_minor === 0) return;
+  rule('=');
+  text('طريقة الدفع', 'rtl');
+  rule('-');
+  for (const t of tenders) {
+    composeTender(t, text, value);
+  }
 }
 
 function composeTender(t: TenderLineSummary, text: TextSink, value: TextSink): void {

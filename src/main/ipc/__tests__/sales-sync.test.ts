@@ -50,6 +50,8 @@ const STATUS: SaleSyncStatusSnapshot = {
   payloadDivergence: 1,
   lastSuccessAt: '2026-06-07T10:00:00.000Z',
   paused: 'no_operator_credential',
+  // RT-856: the held subset of pending, with its closed-set reason.
+  held: { reason: 'discount_capture_unavailable', count: 1 },
 };
 
 /**
@@ -114,6 +116,7 @@ describe('T051 — sales:syncStatus IPC (read-only)', () => {
     expect(serialized).not.toContain('operator');
     expect(Object.keys(res).sort()).toEqual([
       'deadLetter',
+      'held',
       'heldPreviousPairing',
       'lastSuccessAt',
       'paused',

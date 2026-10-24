@@ -963,6 +963,13 @@ export interface SaleSyncStatusResponse {
    * Additive: the fields above keep their meaning.
    */
   paused: 'no_operator_credential' | null;
+  /**
+   * RT-856: the pending sales held from sync, with a closed-set reason; null when
+   * none is held. `discount_capture_unavailable` = a manually discounted sale,
+   * held (still pending, never dead-lettered) until the capture path can send it
+   * (RT-858). A subset of `pending`. Additive: the fields above keep their meaning.
+   */
+  held: { reason: 'discount_capture_unavailable'; count: number } | null;
 }
 
 /**

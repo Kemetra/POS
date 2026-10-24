@@ -15,6 +15,9 @@
  *   • single `display_name` per line (the durable snapshot has no name_ar/en
  *     split — bilingual is a v2 item pending catalogue integration);
  *   • no shift line (the sales row carries no shift link — v2 item).
+ *
+ * RT-856: a discounted line carries `discount` (kind, value, amount only), and
+ * `subtotal_minor` is the Sale's net.
  */
 
 import type { SaleRow } from '../sales/repositories/sales.repository.js';
@@ -26,6 +29,7 @@ import type {
   ReceiptTemplateVariant,
 } from '../../shared/receipts/types.js';
 import type { SaleId, SaleNumber, TenderLineSummary } from '../../shared/sales/types.js';
+import { readReceiptLineDiscount } from '../../shared/sales/sale-line-discount.js';
 
 export interface DeriveReceiptPayloadOptions {
   variant: ReceiptTemplateVariant;
@@ -62,19 +66,32 @@ function parseJsonArray<T>(raw: string, field: string): T[] {
   return parsed as T[];
 }
 
-export function deriveReceiptPayload(
-  row: SaleRow,
-  opts: DeriveReceiptPayloadOptions,
-): ReceiptPayload {
-  const snapshot = parseJsonArray<LineSnapshotJson>(row.lines_json, 'lines_json');
-  const lines: ReceiptLineItem[] = snapshot.map((l) => ({
+/**
+ * RT-856: one slip line from a frozen `lines_json` element. A discount the
+ * slip cannot read is a controlled failure: a slip printed without its
+ * discount row would not add up to its total.
+ */
+function toReceiptLine(l: LineSnapshotJson & { discount?: unknown }): ReceiptLineItem {
+  const item: ReceiptLineItem = {
     item_ref: l.item_ref,
     display_name: l.display_name,
     quantity: l.quantity,
     unit_price_minor: l.unit_price_minor,
     line_subtotal_minor: l.line_subtotal_minor,
     note: l.note,
-  }));
+  };
+  if (l.discount === undefined || l.discount === null) return item;
+  const discount = readReceiptLineDiscount(l.discount);
+  if (discount === null) throw new ReceiptPayloadDerivationError('lines_json');
+  return { ...item, discount };
+}
+
+export function deriveReceiptPayload(
+  row: SaleRow,
+  opts: DeriveReceiptPayloadOptions,
+): ReceiptPayload {
+  const snapshot = parseJsonArray<LineSnapshotJson>(row.lines_json, 'lines_json');
+  const lines: ReceiptLineItem[] = snapshot.map(toReceiptLine);
 
   const tender_lines_summary = parseJsonArray<TenderLineSummary>(
     row.tender_lines_summary_json,

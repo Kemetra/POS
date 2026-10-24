@@ -48,7 +48,7 @@ import type { SaleSyncOutboxRepository } from '../sync-outbox/sale-sync-outbox.r
 import type { SaleNumberAllocator } from './sale-number-allocator.js';
 import type { SaleAuditEmitter } from './audit-emitter.js';
 import type { SalesTenderType, SaleFinalizationRefusalReason } from '../../shared/sales/types.js';
-import type { LineSnapshot } from '../../shared/cart/handoff-envelope.js';
+import type { SaleLineSnapshot } from './freeze-line-discounts.js';
 import { findForbiddenKey } from '../audit/find-forbidden-key.js';
 import { redactTenderLine } from './redact-tender-line.js';
 import { bindSaleNumberDayRuleSwitch, saleNumberDayOf } from './sale-number-day-rule.js';
@@ -93,6 +93,12 @@ export interface FinalizeInput {
   selling_operator_id: string;
   selling_operator_display_name: string;
   selling_operator_session_id: string;
+  /**
+   * The amount charged before tax: the settled attempt's amount due. Since
+   * RT-854 it is the NET (Σ line gross − Σ manual line discount), matching the
+   * tender sum and the receipt total; the name keeps its 008 spelling (RT-856,
+   * doc 28 §3.3). With no discount, net = gross.
+   */
   subtotal_minor: number;
   total_tax_minor: number;
   total_change_due_minor: number;
@@ -105,9 +111,11 @@ export interface FinalizeInput {
    * Frozen snapshot of the cart's item lines from the source
    * `PaymentIntentEnvelope`. Persisted verbatim (JSON) onto the Sale row
    * for byte-stable reprints (FR-015 / FR-016). The projection module
-   * (T094b) derives this from `carts.handoff_envelope_json`.
+   * (T094b) derives this from `carts.handoff_envelope_json`. RT-856: a
+   * discounted line also carries its frozen `discount`; its
+   * `line_subtotal_minor` stays gross.
    */
-  lines: readonly LineSnapshot[];
+  lines: readonly SaleLineSnapshot[];
 }
 
 // ─── Result shapes ──────────────────────────────────────────────────────────

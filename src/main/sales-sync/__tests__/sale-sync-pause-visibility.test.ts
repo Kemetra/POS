@@ -393,6 +393,8 @@ describe('RT-224 — the status surface shows the pause', () => {
       payloadDivergence: 0,
       lastSuccessAt: null,
       paused: 'no_operator_credential',
+      // RT-856: nothing held (the sale is undiscounted).
+      held: null,
     });
     h.db.close();
   });
