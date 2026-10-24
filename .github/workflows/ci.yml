@@ -426,6 +426,13 @@ jobs:
       - name: Package (Windows --dir, unsigned)
         run: npm run package:dir
 
+      # RT-862: Electron 44 has no install-time download; node_modules/electron/dist is fetched
+      # lazily on first use. verify-packaged.ts reads the stock electron.exe from there. Do not
+      # rely on the non-blocking Playwright smoke step to have fetched it as a side effect, so
+      # fetch it explicitly (the same download electron-builder does for packaging).
+      - name: Fetch stock Electron binary (for the packaged-build checks)
+        run: node node_modules/electron/install.js
+
       # RT-830 (RT-748 I-7): the packaged exe's fuse wire must equal electronFuses in
       # electron-builder.yml (undeclared fuses keep the stock Electron value). Blocking.
       - name: Fuse readback (packaged exe vs electron-builder.yml)
