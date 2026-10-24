@@ -20,29 +20,32 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import type { Database as SqlJsDatabase } from 'sql.js';
 
 import {
-  aeadSafeStorage,
   freshGrantDb,
   handleFor,
   initGrantSql,
 } from '../../operator/__tests__/__helpers__/offline-grant-fixture.js';
-import { createManagerPinStore, type ManagerPinStore } from '../../operator/manager-pin-store.js';
-import {
-  createManagerApprovalService,
-  type ManagerApprovalService,
-} from '../../operator/manager-approval-service.js';
 import type { OperatorSessionRecord } from '../../operator/session-manager.js';
 import { AuditEmitter } from '../../audit/audit-emitter.js';
 import { bindAuditEventsStoreDb } from '../../audit/audit-events-store.js';
-import { CartBridgeHandlers, type ItemRefResolver } from '../cart-bridge.js';
-import { bindCartStore, type CartStore } from '../cart-store.js';
+import type { CartBridgeHandlers } from '../cart-bridge.js';
+import type { CartStore } from '../cart-store.js';
 import { manualDiscountApprovalResolver } from '../discount-approval.js';
 import { discountApprovalSubjectRef } from '../../../shared/cart/discount-approval.js';
 import type { AuditEvent } from '../../../shared/audit/event-shape.js';
 import type { ManagerApprovalRequest } from '../../../shared/operator/manager-approval.js';
+import {
+  bootDiscountHarness,
+  cartWithLines,
+  type DiscountHarness,
+} from './__helpers__/discount-harness.js';
 
 const TERMINAL = 'term-1';
 const SCOPE = { tenantId: 'tenant-1', branchId: 'branch-1', terminalId: TERMINAL };
-const MANAGER = { userId: '0190f5a2-3b4c-7d8e-9f01-00000000000a', pin: '246810' };
+const MANAGER = {
+  userId: '0190f5a2-3b4c-7d8e-9f01-00000000000a',
+  pin: '246810',
+  displayName: 'Mona Manager',
+};
 const CASHIER_USER = '0190f5a2-3b4c-7d8e-9f01-0000000000cc';
 const T0 = '2026-10-24T09:00:00.000Z';
 /** Every line: 2 × 45.00, gross 9000 minor units. */
@@ -67,12 +70,8 @@ function session(role: OperatorSessionRecord['role'], id: string): OperatorSessi
   };
 }
 
-const resolveItem: ItemRefResolver = () =>
-  Promise.resolve({ kind: 'ok', display_name: 'Panadol Extra', unit_price_minor: UNIT_PRICE });
-
 let raw: SqlJsDatabase;
-let pins: ManagerPinStore;
-let service: ManagerApprovalService;
+let h: DiscountHarness;
 let store: CartStore;
 let cart: CartBridgeHandlers;
 let current: OperatorSessionRecord | null;
@@ -92,82 +91,38 @@ beforeEach(async () => {
   current = session('cashier', 'sess-cashier');
   // The real emitter too: the RT-614 trust check reads `audit_events`.
   const durable = new AuditEmitter(bindAuditEventsStoreDb(db));
-  const emitter = {
-    emit: (e: AuditEvent) => {
-      durable.emit(e);
-      audit.push(e);
-    },
-  };
-  pins = createManagerPinStore({ db, safeStorage: aeadSafeStorage() });
-  await pins.enrol({
-    scope: SCOPE,
-    userId: MANAGER.userId,
-    displayName: 'Mona Manager',
-    sealed: await pins.seal(MANAGER.pin),
-    now: T0,
-    onlineAt: T0,
-    guard: () => undefined,
-  });
-  store = bindCartStore(db);
-  service = createManagerApprovalService({
+  h = await bootDiscountHarness({
     db,
+    terminalId: TERMINAL,
+    scope: SCOPE,
+    manager: MANAGER,
+    enrolledAt: T0,
+    unitPriceMinor: UNIT_PRICE,
     getSession: () => current,
-    isSessionLocked: () => false,
-    currentTerminalId: () => TERMINAL,
-    managerPins: pins,
-    resolvers: { 'cart.discount.manual': manualDiscountApprovalResolver(store) },
-    auditEmitter: emitter,
     now: () => T0,
+    audit: {
+      emit: (e) => {
+        durable.emit(e);
+        audit.push(e);
+      },
+    },
   });
-  cart = new CartBridgeHandlers({
-    getCurrentSession: () => current,
-    getTerminalId: () => TERMINAL,
-    cartStore: store,
-    resolveItemRef: resolveItem,
-    auditEmitter: emitter as never,
-    cartPaymentStatus: () => 'none',
-    approvals: service,
-    clock: () => new Date(T0),
-  });
-  const created = await cart.create({ idempotency_key: 'create-1' });
-  if (created.kind !== 'ok') throw new Error('create failed');
-  cartId = created.cart_id;
-  lineId = await addLine('SKU-A', 'line-add-1');
-  line2Id = await addLine('SKU-B', 'line-add-2');
+  ({ store, cart } = h);
+  const built = await cartWithLines(cart, ['SKU-A', 'SKU-B'], QTY);
+  cartId = built.cartId;
+  [lineId = '', line2Id = ''] = built.lineIds;
 });
 
 afterEach(() => {
   raw.close();
 });
 
-async function addLine(itemRef: string, key: string): Promise<string> {
-  const added = await cart.linesAdd({
-    cart_id: cartId,
-    item_ref: itemRef,
-    quantity: QTY,
-    idempotency_key: key,
-  });
-  if (added.kind !== 'ok') throw new Error(`linesAdd failed: ${added.reason}`);
-  return added.line_id;
-}
-
-function managerRef(): string {
-  return pins.list({ scope: SCOPE, now: T0 })[0]?.managerRef ?? '';
-}
-
 function subjectRef(kind = 'manual_pct_10', line = lineId): string {
   return discountApprovalSubjectRef({ cart_id: cartId, line_id: line, placeholder_kind: kind });
 }
 
 function ask(over: Partial<ManagerApprovalRequest> = {}) {
-  return service.request({
-    action_kind: 'cart.discount.manual',
-    subject_ref: subjectRef(),
-    reason_code: 'promotion',
-    approver_ref: managerRef(),
-    pin: MANAGER.pin,
-    ...over,
-  });
+  return h.ask({ subject_ref: subjectRef(), reason_code: 'promotion', ...over });
 }
 
 async function approved(over: Partial<ManagerApprovalRequest> = {}): Promise<string> {
@@ -176,15 +131,14 @@ async function approved(over: Partial<ManagerApprovalRequest> = {}): Promise<str
   return outcome.approvalId;
 }
 
-function add(over: Record<string, unknown> = {}) {
-  return cart.discountPlaceholdersAdd({
+const add = (over: Record<string, unknown> = {}) =>
+  cart.discountPlaceholdersAdd({
     cart_id: cartId,
     line_id: lineId,
     placeholder_kind: 'manual_pct_10',
     idempotency_key: 'dp-add-1',
     ...over,
   });
-}
 
 function asManager(role: 'manager' | 'admin' = 'manager'): void {
   raw.run(`UPDATE carts SET operator_session_id = 'sess-m' WHERE cart_id = ?`, [cartId]);

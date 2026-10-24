@@ -14,18 +14,9 @@
  * No guard refuses the no-tender settle: the stop condition of RT-854 did not
  * fire. The capture rule (one `cash` 0 tender) is RT-858's, not tested here.
  */
-import { beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import initSqlJs, { type Database as SqlJsDatabase, type SqlJsStatic } from 'sql.js';
-import { readdirSync, readFileSync } from 'node:fs';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { beforeEach, describe, expect, it } from 'vitest';
+import type { Database as SqlJsDatabase } from 'sql.js';
 
-import { bindPaymentActionOutboxRepository } from '../../../../src/main/payments/repositories/payment-action-outbox.repository.js';
-import { bindPaymentAttemptsRepository } from '../../../../src/main/payments/repositories/payment-attempts.repository.js';
-import { bindPaymentTenderLinesRepository } from '../../../../src/main/payments/repositories/payment-tender-lines.repository.js';
-import { createPaymentAttemptFsm } from '../../../../src/main/payments/fsm/payment-attempt-fsm.js';
-import { createTenderLineFsm } from '../../../../src/main/payments/fsm/tender-line-fsm.js';
-import { createIdempotencyHelper } from '../../../../src/main/payments/idempotency.js';
 import { createPaymentsStartHandler } from '../../../../src/main/payments/handlers/payments-start.js';
 import { createPaymentsConfirmHandler } from '../../../../src/main/payments/handlers/payments-confirm.js';
 import { createTenderApplyHandler } from '../../../../src/main/payments/handlers/tender-apply.js';
@@ -48,19 +39,7 @@ import { computeCashup } from '../../../../src/main/shift-cashup/shift-cashup-ca
 import { hasCashTender } from '../../../../src/main/drawer/drawer-kick.js';
 import { makeSqlJsHandle } from '../cart/__helpers__/sql-js-handle.js';
 import { makeSession } from './__fixtures__/bridge-handler-deps.js';
-
-const REPO_ROOT = path.resolve(
-  path.dirname(fileURLToPath(import.meta.url)),
-  '..',
-  '..',
-  '..',
-  '..',
-);
-const MIGRATION_DIR = path.join(REPO_ROOT, 'migrations');
-const MIGRATIONS = readdirSync(MIGRATION_DIR)
-  .filter((f) => f.endsWith('.sql'))
-  .sort()
-  .map((f) => readFileSync(path.join(MIGRATION_DIR, f), 'utf8'));
+import { bindRealPaymentsCore, freshMigratedDbPerTest } from './__fixtures__/real-payments-core.js';
 
 const TENANT = 'tenant-1';
 const BRANCH = 'branch-1';
@@ -69,16 +48,10 @@ const SETTLED_AT = '2026-10-24T10:00:00.000Z';
 const GROSS = 9000;
 const HANDOFF = 'handoff-cart-1';
 
-let SQL: SqlJsStatic;
-beforeAll(async () => {
-  SQL = await initSqlJs();
-});
-
+const currentDb = freshMigratedDbPerTest();
 let db: SqlJsDatabase;
 beforeEach(() => {
-  db = new SQL.Database();
-  db.exec('PRAGMA foreign_keys = ON;');
-  for (const sql of MIGRATIONS) db.exec(sql);
+  db = currentDb();
   db.run(
     `INSERT INTO terminal_assignment
        (id, tenant_id, branch_id, terminal_id, terminal_label, paired_at,
@@ -154,12 +127,8 @@ function seedFullyDiscountedCart(): void {
 }
 
 function boot() {
-  const handle = makeSqlJsHandle(db);
-  const attempts = bindPaymentAttemptsRepository(handle);
-  const lines = bindPaymentTenderLinesRepository(handle);
-  const outbox = bindPaymentActionOutboxRepository(handle);
-  const tenderLineFsm = createTenderLineFsm({ db: handle, attempts, lines, outbox });
-  const paymentAttemptFsm = createPaymentAttemptFsm({ db: handle, attempts, lines, outbox });
+  const { handle, attempts, lines, tenderLineFsm, paymentAttemptFsm, idempotency } =
+    bindRealPaymentsCore(db);
   const store = bindAuditEventsStoreDb(handle);
   let n = 0;
   const write = (evt: PaymentAuditEvent): void => {
@@ -182,7 +151,7 @@ function boot() {
   const shared = {
     getCurrentSession: () => makeSession(),
     attemptsRepo: attempts,
-    idempotency: createIdempotencyHelper({ outbox }),
+    idempotency,
     auditEmitter,
     clock: () => new Date(SETTLED_AT),
   };
