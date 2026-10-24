@@ -371,7 +371,9 @@ export function createSaleSyncStateRepo(db: DatabaseHandle): SaleSyncStateRepo {
     if (scope.terminalId === null) return 0;
     // The `pending` set of readSyncStatus, joined to the durable Sale. A line is
     // discounted when its `discount` is present and not JSON null, as in
-    // `saleHasLineDiscount`; a snapshot that is not a JSON array is counted.
+    // `saleHasLineDiscount`; a snapshot that is not a JSON array is counted. A
+    // scalar element is not a line, and a JSON path on it would raise
+    // `malformed JSON`, so only object elements are inspected.
     const stmt = db.prepare(
       `SELECT COUNT(*) AS n
        FROM sale_sync_outbox o
@@ -383,7 +385,11 @@ export function createSaleSyncStateRepo(db: DatabaseHandle): SaleSyncStateRepo {
                WHEN json_valid(sa.lines_json) AND json_type(sa.lines_json) = 'array'
                THEN EXISTS (
                  SELECT 1 FROM json_each(sa.lines_json) j
-                 WHERE COALESCE(json_type(j.value, '$.discount'), 'null') <> 'null'
+                 WHERE CASE
+                   WHEN j.type = 'object'
+                   THEN COALESCE(json_type(j.value, '$.discount'), 'null') <> 'null'
+                   ELSE 0
+                 END
                )
                ELSE 1
              END`,

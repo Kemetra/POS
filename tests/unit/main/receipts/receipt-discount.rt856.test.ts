@@ -162,6 +162,11 @@ describe('RT-856 — a zero total (OZ-1 = Z-A)', () => {
 });
 
 describe('RT-856 — an undiscounted receipt is unchanged', () => {
+  it('a positive total with an empty tender summary (tender-unknown) keeps its payment section', () => {
+    const all = texts(composeReceiptBands(payload([PANADOL], 9000, false)));
+    expect(all).toContain('rtl:طريقة الدفع');
+  });
+
   it('no discount rows, and the payment section stays', () => {
     const all = texts(composeReceiptBands(payload([PANADOL, VITAMIN], 11_500)));
     expect(all.some((t) => t.includes('خصم'))).toBe(false);

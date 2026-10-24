@@ -161,7 +161,7 @@ function compose(payload: ReceiptPayload): Band[] {
   composeDiscountTotal(payload.lines, text);
   text(`Subtotal: ${egp(payload.subtotal_minor)}`, 'ltr');
 
-  composeTenderBand(payload.tender_lines_summary, rule, text, value);
+  composeTenderBand(payload, rule, text, value);
 
   // VAT footer band.
   rule('=');
@@ -232,16 +232,18 @@ function composeDiscountTotal(lines: readonly ReceiptLineItem[], text: TextSink)
 
 /**
  * The payment section. RT-856 (OZ-1 = Z-A): a zero-total sale settles with no
- * tender, so it has no payment section at all. Every other sale has at least
- * one tender, so its slip is unchanged.
+ * tender, so it has no payment section at all. Only that case: a positive
+ * total with an empty summary (a tender-unknown sale) keeps its section, as
+ * before.
  */
 function composeTenderBand(
-  tenders: readonly TenderLineSummary[],
+  payload: Pick<ReceiptPayload, 'tender_lines_summary' | 'subtotal_minor'>,
   rule: (char: RuleBand['char']) => void,
   text: TextSink,
   value: TextSink,
 ): void {
-  if (tenders.length === 0) return;
+  const tenders = payload.tender_lines_summary;
+  if (tenders.length === 0 && payload.subtotal_minor === 0) return;
   rule('=');
   text('طريقة الدفع', 'rtl');
   rule('-');

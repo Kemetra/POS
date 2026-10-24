@@ -191,6 +191,15 @@ describe('RT-856 — countDiscountHeld', () => {
     h.db.close();
   });
 
+  it('a scalar line element is not a discount and never breaks the count', () => {
+    const h = harness();
+    seedSale(h.db, { sale_id: 'sale-scalar', lines_json: '["corrupt", 7, null]' });
+    seedOutbox(h.db, { sale_id: 'sale-scalar' });
+    expect(h.stateRepo.countDiscountHeld(SCOPE)).toBe(1);
+    expect(saleHasLineDiscount({ lines_json: '["corrupt", 7, null]' })).toBe(false);
+    h.db.close();
+  });
+
   it('no discounted sale → no hold in the status', async () => {
     const db = freshSalesSyncDb();
     const stateRepo = createSaleSyncStateRepo(handleFor(db));
