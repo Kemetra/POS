@@ -3,7 +3,11 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { buildIdentityStamp, writeBuildIdentityStamp } from '../stamp-build-identity.js';
+import {
+  buildIdentityStamp,
+  stampStillTrue,
+  writeBuildIdentityStamp,
+} from '../stamp-build-identity.js';
 
 /**
  * RT-719 — the build-time stamp that gives the running POS its commit and its
@@ -76,5 +80,26 @@ describe('writeBuildIdentityStamp', () => {
       writeBuildIdentityStamp(file, null);
     }).not.toThrow();
     expect(existsSync(file)).toBe(false);
+  });
+});
+
+describe('stampStillTrue (the check run before packaging)', () => {
+  const stamp = { commit: HEAD, contractPin: PIN_COMMIT };
+
+  it('keeps a stamp written for this very commit on a clean tree', () => {
+    expect(stampStillTrue(stamp, { head: HEAD, dirty: false })).toBe(true);
+  });
+
+  it('drops it when HEAD moved since the build: the packaged output is from another commit', () => {
+    expect(stampStillTrue(stamp, { head: 'e'.repeat(40), dirty: false })).toBe(false);
+  });
+
+  it('drops it when the tree is dirty, or git cannot say', () => {
+    expect(stampStillTrue(stamp, { head: HEAD, dirty: true })).toBe(false);
+    expect(stampStillTrue(stamp, { head: null, dirty: false })).toBe(false);
+  });
+
+  it('has nothing to keep without a stamp', () => {
+    expect(stampStillTrue(null, { head: HEAD, dirty: false })).toBe(false);
   });
 });

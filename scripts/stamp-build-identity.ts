@@ -3,7 +3,8 @@
  * running POS can report it to Backend-Core (`X-POS-Build-Commit`,
  * `X-POS-Contract-Pin`; `src/main/observability/build-identity.ts`).
  *
- *   tsx scripts/stamp-build-identity.ts
+ *   tsx scripts/stamp-build-identity.ts           write the stamp (build:main, dev-electron)
+ *   tsx scripts/stamp-build-identity.ts --check   before package:dir: drop a stale stamp, never add one
  *
  * Run at the end of `npm run build:main` and by `npm run dev` (the unpackaged
  * lab build), so the packaged exe (`dist/**` is in the asar) and `electron .`
@@ -57,6 +58,19 @@ export function buildIdentityStamp(inputs: StampInputs): BuildIdentityStamp | nu
   return pin === null ? { commit: head } : { commit: head, contractPin: pin };
 }
 
+/**
+ * Whether an existing stamp (written by the build that produced `dist/`) still names
+ * the tree being packaged: same commit, clean tree. `package:dir` packages the
+ * existing `dist/`, so it never makes a new claim; it only drops a stamp that has
+ * gone stale (HEAD moved, or the tree changed since the build).
+ */
+export function stampStillTrue(
+  existing: BuildIdentityStamp | null,
+  facts: { readonly head: string | null; readonly dirty: boolean },
+): boolean {
+  return existing !== null && !facts.dirty && facts.head === existing.commit;
+}
+
 /** Writes the stamp, or removes a stale one when there is none (null). */
 export function writeBuildIdentityStamp(file: string, stamp: BuildIdentityStamp | null): void {
   if (stamp === null) {
@@ -92,8 +106,12 @@ function readPin(root: string): string | null {
   }
 }
 
-function main(): number {
-  const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+interface TreeFacts {
+  readonly head: string | null;
+  readonly dirty: boolean;
+}
+
+function treeFacts(root: string): TreeFacts {
   const head = git(root, ['rev-parse', 'HEAD'])?.trim() ?? null;
   // `--untracked-files=no`: dist/ and other ignored output never make a build "dirty";
   // an unreadable status is treated as dirty (no stamp).
@@ -108,12 +126,37 @@ function main(): number {
     'migrations',
     'contracts',
   ]);
-  const stamp = buildIdentityStamp({
-    head,
-    dirty: hasChanges(status) || hasChanges(untracked),
-    pinText: readPin(root),
-  });
-  writeBuildIdentityStamp(path.join(root, 'dist', 'build-identity.json'), stamp);
+  return { head, dirty: hasChanges(status) || hasChanges(untracked) };
+}
+
+function readStamp(file: string): BuildIdentityStamp | null {
+  try {
+    const raw: unknown = JSON.parse(readFileSync(file, 'utf8'));
+    const commit = (raw as { commit?: unknown } | null)?.commit;
+    return typeof commit === 'string' ? { commit } : null;
+  } catch {
+    return null;
+  }
+}
+
+/** `--check`: before packaging, keep the build's stamp only if it still names this tree. */
+function check(root: string, file: string): number {
+  const kept = stampStillTrue(readStamp(file), treeFacts(root));
+  if (!kept) writeBuildIdentityStamp(file, null);
+  console.log(
+    kept
+      ? '[stamp-build-identity] stamp matches this tree: kept'
+      : '[stamp-build-identity] no stamp, or it no longer names this tree: none will be packaged',
+  );
+  return 0;
+}
+
+function main(): number {
+  const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+  const file = path.join(root, 'dist', 'build-identity.json');
+  if (process.argv.includes('--check')) return check(root, file);
+  const stamp = buildIdentityStamp({ ...treeFacts(root), pinText: readPin(root) });
+  writeBuildIdentityStamp(file, stamp);
   console.log(
     stamp === null
       ? '[stamp-build-identity] no honest build identity (dirty tree or no git): no stamp written'
