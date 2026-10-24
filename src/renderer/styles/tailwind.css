@@ -1,5 +1,12 @@
 @import 'tailwindcss';
 
+/* Tailwind v4 scans every file git does not ignore for class names, and
+   .gitignore keeps .claude/skills/impeccable/** tracked. Agent skill and
+   spec-kit docs are not UI: a word like `text-wrap` in their prose would add a
+   rule to the shipped CSS (RT-711). */
+@source not '../../../.claude';
+@source not '../../../.specify';
+
 :root {
   /* ── Colour tokens — aligned to POS Pulse 003 design spec ───────────── */
 
