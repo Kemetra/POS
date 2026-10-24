@@ -1,6 +1,6 @@
 """Generate the RT-853 (RT-699 slice D1) manual-discount references at 1024x768 and 1280x800.
 
-Visual DRAFT, pending owner sign-off. Same generator pattern as PK-3 and VD (gen_pk3.py,
+Visual APPROVED 2026-10-24 under owner delegation (RT-853 comment 13740). Same generator pattern as PK-3 and VD (gen_pk3.py,
 gen_vd.py): the frozen, owner-approved g6.css is imported unchanged through d1.css, and each
 state is written twice, once per width.
 
@@ -642,7 +642,7 @@ def page(key: str, title: str, body: str, w: int) -> str:
     return (
         '<!doctype html>\n<html lang="ar" dir="rtl">\n<head>\n<meta charset="utf-8">\n'
         '<meta name="viewport" content="width=device-width, initial-scale=1">\n'
-        f"<title>DRAFT · RT-853 D1 · {title} · {w}×{h}</title>\n{links}</head>\n<body>\n"
+        f"<title>RT-853 D1 · {title} · {w}×{h}</title>\n{links}</head>\n<body>\n"
         f'<div class="rt w{w}" data-ref="D1-{key}" data-w="{w}">\n{body}\n</div>\n</body>\n</html>\n'
     )
 

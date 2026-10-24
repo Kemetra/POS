@@ -1,6 +1,6 @@
 """Generate the RT-859 G-6 Diagnostics addendum: the catalogue check lists the matched items.
 
-Visual DRAFT, pending owner approval. Same frame and generator pattern as G-6 (gen_g6.py, RT-478):
+Visual APPROVED 2026-10-24 under owner delegation (RT-859 comment 13739). Same frame and generator pattern as G-6 (gen_g6.py, RT-478):
 the frozen g6.css is imported unchanged through g6c.css, and the three other diagnostics panels
 are drawn exactly as G6-Diagnostics draws them.
 
@@ -117,7 +117,7 @@ def page(title: str, width: int, body: str, label: str) -> str:
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>DRAFT · RT-859 G-6 · {title} · {width}×{height}</title>
+<title>RT-859 G-6 · {title} · {width}×{height}</title>
 <link rel="stylesheet" href="g6c.css">
 </head>
 <body>

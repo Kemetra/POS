@@ -1,5 +1,5 @@
 """Generate D1-Spec.html (RT-853, RT-699 slice D1): the states, the copy table, the refusal map,
-the open owner decisions and the checks. Visual DRAFT, awaiting owner sign-off.
+the owner decisions and the checks. Visual APPROVED 2026-10-24 under owner delegation (RT-853 comment 13740).
 
 Usage: python -I gen_d1_spec.py   (writes into this script's parent folder, D1-Discount/)
 """
@@ -14,7 +14,7 @@ sys.dont_write_bytecode = True
 
 SHIPPED = "مأخوذ (شُحن)"
 OWNER = "مأخوذ (قرار المالك)"
-NEW = "<b>جديد — للاعتماد</b>"
+NEW = "<b>جديد — معتمد</b>"
 
 
 def load_gen(tools: Path):
@@ -124,7 +124,7 @@ STYLE = """
 HEADER = """
   <header>
     <h1>الخصم اليدوي على الصنف (RT-699 D1): مراجع الشاشات</h1>
-    <p><span class="status">مسودة — بانتظار اعتماد المالك (OD-1…OD-9)</span> · Jira <span class="ltr">RT-853</span> · من <span class="ltr">RT-699</span> · تخدم <span class="ltr">RT-855</span></p>
+    <p><span class="status">معتمد 2026-10-24 بتفويض من المالك (RT-853، التعليق 13740): OD-1…OD-9 كما رُسمت، مع تصحيح واحد لـ RT-855: عزل النسبة لتُقرأ «خصم 100%» في كل مكان (ملخص الدفع بإجمالي صفر يظهر «خصم %100»)</span> · Jira <span class="ltr">RT-853</span> · من <span class="ltr">RT-699</span> · تخدم <span class="ltr">RT-855</span></p>
     <p><b>المرجع:</b> <a href="../../28-rt699-manual-discount-contract.md">الوثيقة 28</a> (§2، §4، §5، §7، §11) على <code>main@146673ba</code>، وقرارات المالك في RT-699 (التعليقان 12975 و13690، ومنها OZ-1 = Z-A). الشكل: سلة Direction B كما شُحنت، ونافذة الموافقة RT-114، وورقة G-6 مستوردة كما هي.</p>
     <p>مراجع تصميم فقط، بلا كود تشغيل. الأسماء والأسعار عيّنات.</p>
   </header>
@@ -181,15 +181,15 @@ def build(g) -> str:
         section(f"الحالات ({len(states)} حالة × 1024×768 و1280×800)", states_body),
         section("ما رُسم وما التزم به", f"<ul>{DRAWN}</ul>"),
         section("خريطة الرفض (الوثيقة 28 §7)", table(["الحالة في العقد", "الإطار"], [row(a, b) for a, b in REFUSALS])),
-        section("النصوص — كل نص «جديد» يحتاج اعتماد المالك", table(["المكان", "النص", "الأساس", "الحالة"], [row(*c) for c in copy_table(g)])),
-        section("قرارات مطلوبة من المالك", table(["#", "النقطة", "المقترح"], [row(a, b, c) for a, b, c in DECISIONS])),
+        section("النصوص — النصوص «الجديدة» معتمدة كما رُسمت (OD-2)", table(["المكان", "النص", "الأساس", "الحالة"], [row(*c) for c in copy_table(g)])),
+        section("قرارات المالك (معتمدة كما رُسمت، 2026-10-24، بتفويض)", table(["#", "النقطة", "المقترح"], [row(a, b, c) for a, b, c in DECISIONS])),
         section("التباين العالي", f"<ul>{FORCED_NOTES}</ul>"),
         section("الفحوص المنفّذة على الملفات", CHECKS),
     ]
     return (
         '<!doctype html>\n<html lang="ar" dir="rtl">\n<head>\n<meta charset="utf-8">\n'
         '<meta name="viewport" content="width=device-width, initial-scale=1">\n'
-        "<title>DRAFT · RT-853 D1 · الخصم اليدوي على الصنف</title>\n"
+        "<title>RT-853 D1 · الخصم اليدوي على الصنف</title>\n"
         f"<style>{STYLE}</style>\n</head>\n<body>\n<main>\n{HEADER}\n{''.join(sections)}</main>\n</body>\n</html>\n"
     )
 

@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>DRAFT · RT-859 catalogue check result list</title>
+<title>RT-859 catalogue check result list</title>
 <style>
 :root{--primary:#0f766e;--primary-soft:#e6f4f1;--bg:#f7f9fa;--surface:#fff;--text:#0f1d2e;--muted:#53647a;--border:#d8dfe7;--warn-soft:#fdf1e0;--warn:#7d4500;--mono:ui-monospace,'Cascadia Code',Consolas,monospace}
 body{margin:0;background:var(--bg);color:var(--text);font:15px/1.6 'Segoe UI',Tahoma,Arial,system-ui,sans-serif}
@@ -29,7 +29,7 @@ ul{margin:0 0 12px;padding-left:20px}li{margin-bottom:6px}
 <body><main>
 <h1>RT-859 · G-6 Diagnostics addendum: the catalogue check lists the matched items</h1>
 <p>The «فحص الكتالوج» search panel lists each match (name, pack, SKU, price) instead of only a count. Drawn at 1024×768 and 1280×800, in light and in forced colours. Gap G-10, owner decision D7 (RT-536), slice P-26-3 step 1. The implementation is RT-860.</p>
-<div class="status">DRAFT, pending owner sign-off on RT-859. No runtime code, bridge or contract changes. Every field drawn is one <code>catalogue.search</code> already returns on POS <code>main@be087a4f</code>.</div>
+<div class="status">Approved 2026-10-24 under owner delegation (RT-859 comment 13739): OD-1…OD-6 as drawn. No runtime code, bridge or contract changes. Every field drawn is one <code>catalogue.search</code> already returns on POS <code>main@be087a4f</code>.</div>
 
 <h2>1 · What <code>catalogue.search</code> returns on main (the fields this pack may draw)</h2>
 <p><code>results.items</code> is <code>ProductSnapshotDisplay[]</code>. It is ranked, holds at most 20 items, and comes with a <code>truncated</code> flag. The table shows what a <b>search</b> row carries on <code>main@be087a4f</code>.</p>
@@ -117,7 +117,7 @@ ul{margin:0 0 12px;padding-left:20px}li{margin-bottom:6px}
 </div>
 
 <h2>4 · Copy</h2>
-<p>There are no new strings. Every product string is copied verbatim from shipped code. Two of them come from the sale search, not from Diagnostics, so their reuse here is listed for approval (OD-6).</p>
+<p>There are no new strings. Every product string is copied verbatim from shipped code. Two of them come from the sale search, not from Diagnostics, so their reuse here was approved as drawn (OD-6).</p>
 <table>
 <thead><tr><th>String</th><th>Use</th><th>Source on main</th></tr></thead>
 <tbody>
@@ -130,7 +130,7 @@ ul{margin:0 0 12px;padding-left:20px}li{margin-bottom:6px}
 </tbody></table>
 <p class="ev">Product names, pack labels, SKUs and prices are sample data. The first row (بنادول إكسترا, <span class="num">PARA-500</span>, <span class="num">15.00 EGP</span>) and the barcode typed in C2 are the dev seed's values (<code>src/main/catalogue/dev-seed-catalogue.ts</code>). C2 assumes they arrived by read-down, as noted in section 1. The search field keeps the shipped direction (no <code>dir</code>), so typed digits sit as they do on main.</p>
 
-<h2>5 · Owner decisions to sign off</h2>
+<h2>5 · Owner decisions (approved as drawn, 2026-10-24, under owner delegation)</h2>
 <table>
 <thead><tr><th>#</th><th>Decision</th><th>Drawn</th><th>Alternative</th></tr></thead>
 <tbody>
