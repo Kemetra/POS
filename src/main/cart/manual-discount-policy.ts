@@ -25,7 +25,12 @@ import {
   type ManualDiscount,
   type ManualDiscountReasonCode,
 } from '../../shared/cart/manual-discount.js';
+import type { CartDiscountManagerAuthorizedPayload } from '../../shared/audit/payload-schemas.js';
 import type { CartLineRow, CartStore, DiscountPlaceholderRow, OutboxRow } from './cart-store.js';
+
+/** The audit payload as RT-854 writes it: the value fields are always present. */
+export type DiscountAuditPayload = CartDiscountManagerAuthorizedPayload &
+  Required<Pick<CartDiscountManagerAuthorizedPayload, 'kind' | 'value' | 'amount_minor'>>;
 
 /** The add as main will apply it: the parsed value and the amount on the line gross. */
 export interface ResolvedDiscountAdd {
@@ -121,7 +126,7 @@ export function isSameDiscountAddReplay(
 /** The add's outbox payload: ids, the token and the resolved reason. No amount, no approver. */
 export function discountOutboxPayload(
   req: CartDiscountPlaceholdersAddRequest,
-  reasonCode: string | undefined,
+  reasonCode: ManualDiscountReasonCode | undefined,
 ): Record<string, unknown> {
   return {
     cart_id: req.cart_id,
@@ -143,9 +148,9 @@ export function discountAuditPayload(input: {
   req: CartDiscountPlaceholdersAddRequest;
   resolved: ResolvedDiscountAdd;
   approvalId: string | undefined;
-  reasonCode: string | undefined;
+  reasonCode: ManualDiscountReasonCode | undefined;
   approverRole: 'manager' | 'admin' | undefined;
-}): Record<string, unknown> {
+}): DiscountAuditPayload {
   const { req, resolved, approvalId, reasonCode, approverRole } = input;
   return {
     cart_id: req.cart_id,

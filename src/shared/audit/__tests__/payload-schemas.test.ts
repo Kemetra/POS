@@ -54,20 +54,45 @@ describe('audit/payload-schemas (T049)', () => {
     }
   });
 
-  it('RT-608: CartDiscountManagerAuthorizedPayload carries ids and the reason code, never a credential', () => {
+  it('RT-608 / RT-854: CartDiscountManagerAuthorizedPayload carries ids, the closed reason and the value, never a credential', () => {
     const approved: AuditPayloadMap['cart.discount.manager_authorized'] = {
       cart_id: 'cart-1',
       cart_line_id: 'line-1',
       placeholder_id: 'ph-1',
       approval_id: 'appr-1',
-      reason_code: 'loyal_customer',
+      reason_code: 'loyal_or_contract_customer',
+      kind: 'percent',
+      value: 10,
+      amount_minor: 900,
     };
     const direct: AuditPayloadMap['cart.discount.manager_authorized'] = {
       cart_id: 'cart-1',
       cart_line_id: 'line-1',
       placeholder_id: 'ph-1',
+      reason_code: 'price_correction',
+      kind: 'amount',
+      value: 250,
+      amount_minor: 250,
+      approver_role: 'admin',
     };
-    for (const payload of [approved, direct]) {
+    // A row recorded before RT-854 (no value fields) still types.
+    const legacy: AuditPayloadMap['cart.discount.manager_authorized'] = {
+      cart_id: 'cart-1',
+      cart_line_id: 'line-1',
+      placeholder_id: 'ph-1',
+    };
+    const notOnTheList: AuditPayloadMap['cart.discount.manager_authorized'] = {
+      ...legacy,
+      // @ts-expect-error — the reason is the closed list (doc 28 §11.2)
+      reason_code: 'loyal_customer',
+    };
+    const notARole: AuditPayloadMap['cart.discount.manager_authorized'] = {
+      ...legacy,
+      // @ts-expect-error — the approver role is manager or admin only
+      approver_role: 'cashier',
+    };
+    expect([notOnTheList, notARole]).toHaveLength(2);
+    for (const payload of [approved, direct, legacy]) {
       for (const forbidden of ['pin', 'pin_hash', 'password', 'approver_ref', 'display_name']) {
         expect(payload).not.toHaveProperty(forbidden);
       }

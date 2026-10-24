@@ -57,6 +57,7 @@ import {
   isManualDiscountReasonCode,
   lineDiscountMinor,
   parseManualDiscountToken,
+  type ManualDiscountReasonCode,
 } from '../../shared/cart/manual-discount.js';
 import { discountApprovalSubjectRef } from '../../shared/cart/discount-approval.js';
 import { AuditEmitter } from '../audit/audit-emitter.js';
@@ -329,7 +330,7 @@ class ApprovalRefused extends Error {
 interface DiscountAuthority {
   approver: string;
   approvalId?: string;
-  reasonCode: string | undefined;
+  reasonCode: ManualDiscountReasonCode | undefined;
   approverRole?: 'manager' | 'admin';
 }
 
@@ -348,7 +349,10 @@ function resolveOnLiveLine(
  * RT-854 (doc 28 §4.1 step 5): the approval's reason is from the closed list,
  * and a reason the cashier's add restates is the same one.
  */
-function approvedReasonHolds(approved: string | undefined, restated: string | undefined): boolean {
+function approvedReasonHolds(
+  approved: string | undefined,
+  restated: string | undefined,
+): approved is ManualDiscountReasonCode {
   if (!isManualDiscountReasonCode(approved)) return false;
   return restated === undefined || restated === approved;
 }
@@ -1312,13 +1316,15 @@ export class CartBridgeHandlers {
           action_category: 'cart.discount.manager_authorized',
           created_at: now,
           approving_supervisor_id: authority.approver,
-          payload: discountAuditPayload({
-            req,
-            resolved,
-            approvalId: authority.approvalId,
-            reasonCode: authority.reasonCode,
-            approverRole: authority.approverRole,
-          }),
+          payload: {
+            ...discountAuditPayload({
+              req,
+              resolved,
+              approvalId: authority.approvalId,
+              reasonCode: authority.reasonCode,
+              approverRole: authority.approverRole,
+            }),
+          },
         });
       },
     };
@@ -1374,10 +1380,11 @@ export class CartBridgeHandlers {
       session,
     });
     if (consumed.kind === 'refused') throw new ApprovalRefused(consumed.reason);
-    if (!approvedReasonHolds(consumed.reasonCode, resolved.reasonCode)) {
+    const { reasonCode } = consumed;
+    if (!approvedReasonHolds(reasonCode, resolved.reasonCode)) {
       throw new ApprovalRefused('approval_invalid');
     }
-    return { approver: consumed.approverUserId, approvalId, reasonCode: consumed.reasonCode };
+    return { approver: consumed.approverUserId, approvalId, reasonCode };
   }
 
   // eslint-disable-next-line @typescript-eslint/require-await
