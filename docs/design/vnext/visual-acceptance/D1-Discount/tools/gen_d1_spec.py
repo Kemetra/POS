@@ -124,7 +124,7 @@ STYLE = """
 HEADER = """
   <header>
     <h1>الخصم اليدوي على الصنف (RT-699 D1): مراجع الشاشات</h1>
-    <p><span class="status">مسودة — بانتظار اعتماد المالك (OD-1…OD-9)</span> · Jira <span class="ltr">RT-853</span> · من <span class="ltr">RT-699</span> · تخدم <span class="ltr">RT-855</span></p>
+    <p><span class="status">معتمد 2026-10-24 بتفويض من المالك (RT-853، التعليق 13740): OD-1…OD-9 كما رُسمت، مع تصحيح واحد لـ RT-855: عزل النسبة لتُقرأ «خصم 100%» في كل مكان (ملخص الدفع بإجمالي صفر يظهر «خصم %100»)</span> · Jira <span class="ltr">RT-853</span> · من <span class="ltr">RT-699</span> · تخدم <span class="ltr">RT-855</span></p>
     <p><b>المرجع:</b> <a href="../../28-rt699-manual-discount-contract.md">الوثيقة 28</a> (§2، §4، §5، §7، §11) على <code>main@146673ba</code>، وقرارات المالك في RT-699 (التعليقان 12975 و13690، ومنها OZ-1 = Z-A). الشكل: سلة Direction B كما شُحنت، ونافذة الموافقة RT-114، وورقة G-6 مستوردة كما هي.</p>
     <p>مراجع تصميم فقط، بلا كود تشغيل. الأسماء والأسعار عيّنات.</p>
   </header>
@@ -189,7 +189,7 @@ def build(g) -> str:
     return (
         '<!doctype html>\n<html lang="ar" dir="rtl">\n<head>\n<meta charset="utf-8">\n'
         '<meta name="viewport" content="width=device-width, initial-scale=1">\n'
-        "<title>DRAFT · RT-853 D1 · الخصم اليدوي على الصنف</title>\n"
+        "<title>RT-853 D1 · الخصم اليدوي على الصنف</title>\n"
         f"<style>{STYLE}</style>\n</head>\n<body>\n<main>\n{HEADER}\n{''.join(sections)}</main>\n</body>\n</html>\n"
     )
 
