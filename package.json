@@ -27,7 +27,7 @@
     "format": "prettier --write .",
     "test": "vitest run --passWithNoTests",
     "test:watch": "vitest",
-    "package:dir": "electron-builder --win --dir",
+    "package:dir": "tsx scripts/stamp-build-identity.ts && electron-builder --win --dir",
     "postinstall": "electron-rebuild -f -w better-sqlite3"
   },
   "dependencies": {
