@@ -64,7 +64,7 @@
     "axe-core": "^4.11.4",
     "concurrently": "^9.2.5",
     "cross-env": "^7.0.3",
-    "electron": "^44.5.1",
+    "electron": "^44.9.1",
     "electron-builder": "^26.15.3",
     "eslint": "^9.39.4",
     "eslint-plugin-react": "^7.37.5",
