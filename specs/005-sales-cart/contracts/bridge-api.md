@@ -306,8 +306,11 @@ no cashier-only path.
 {
   cart_id: UUID v4,
   line_id: UUID v4,
-  placeholder_kind: string,                 // opaque token (FR-024)
+  placeholder_kind: string,                 // RT-854: manual_pct_<P> (1–100) | manual_amt_<M> (minor units ≤ line gross)
   approval_id?: opaque string,              // RT-114: required on a cashier session
+  reason_code?: string,                     // RT-854: promotion | loyal_or_contract_customer |
+                                            //   near_expiry_or_damaged | price_correction;
+                                            //   required on a manager / admin session
   idempotency_key: UUID v4,
 }
 ```
@@ -333,11 +336,15 @@ discount, and an approval for one line or kind cannot be spent on another.
 How that intent maps onto MA-2's `subject_ref` / subject version / amount is
 fixed by the RT-28 Implementation issue under a §A4 bridge-security review,
 by adding a `cart.discount.manual` subject resolver. RT-114 §3 also lists the
-discount amount as bound, but the cart layer computes no discount amount
-(FR-022). **Owner decision O1 (2026-10-17, RT-28 comment 12278):** the
-approval binds the intent only, with `amount_minor = null` until discount
-math exists. No amount is invented; when discount math lands, the amount
-joins the binding.
+discount amount as bound. **RT-854 (2026-10-24):** the cart layer now computes
+it (FR-022 RT-699 amendment). The approval binds the amount the canonical token
+gives on the line gross (`amount_minor`, also carried in the subject version),
+and the add may carry a `reason_code` from the closed list (see the RT-854
+amendment at the top). At handoff the applied amount must still equal the
+approved one. *Superseded for audit history:* ~~the cart layer computes no
+discount amount (FR-022). **Owner decision O1 (2026-10-17, RT-28 comment
+12278):** the approval binds the intent only, with `amount_minor = null` until
+discount math exists.~~
 
 `cart.discountPlaceholders.add` consumes the approval inside the add's own
 SQLite transaction (C7 step 4): the consume, the placeholder row, the outbox

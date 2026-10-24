@@ -458,6 +458,28 @@ describe('a quantity change on a discounted line is refused (OD-28-7)', () => {
     ).resolves.toEqual({ kind: 'refused', reason: 'line_discounted' });
   });
 
+  it('undoing a scan merge made before the discount is not available (the discount is the newest action)', async () => {
+    await cart.discountPlaceholdersRemove({
+      cart_id: cartId,
+      placeholder_id: 'dp-add-1',
+      idempotency_key: 'dp-rm-1',
+    });
+    const merged = await cart.linesAdd({
+      cart_id: cartId,
+      item_ref: 'SKU-A',
+      quantity: 1,
+      idempotency_key: 'merge-1',
+    });
+    expect(merged).toMatchObject({ kind: 'ok', merged: true });
+    await add({ idempotency_key: 'dp-add-2', reason_code: 'promotion' });
+    await expect(
+      cart.undoLast({ cart_id: cartId, target_action_id: 'merge-1', idempotency_key: 'undo-1' }),
+    ).resolves.toEqual({ kind: 'refused', reason: 'undo_not_available' });
+    expect(rows('SELECT quantity FROM cart_lines WHERE line_id = ?', [lineId])).toEqual([
+      { quantity: QTY + 1 },
+    ]);
+  });
+
   it('a quantity set to 0 removes the line (a removal, not a quantity change)', async () => {
     await expect(update({ op: 'set', absolute: 0 }, 'qty-zero')).resolves.toMatchObject({
       kind: 'ok',
