@@ -49,7 +49,7 @@
  *     composition root, which audits them. Ids only, never a PIN or a hash.
  *
  * RT-861 (migration 0056): the record keeps its manager's role (`manager` |
- * `admin`), set by the enrolling session and refreshed by `touchOnline` at
+ * `admin`), set by the enrolling session and refreshed by `refreshRole` at
  * each online manager / admin sign-in. `verify` answers it with the user id;
  * a record without one (enrolled before 0056) answers no role, never a guess.
  *
@@ -203,16 +203,13 @@ export interface ManagerPinStore {
   }): EnrolledManager[];
   /** RT-438: revoke a record in scope; a record already revoked or disabled is `not_found`. */
   revoke(input: RevokeManagerPinInput): Promise<RevokeManagerPinOutcome>;
+  /** An online manager / admin sign-in on this terminal at `at`. */
+  touchOnline(input: { scope: ManagerPinScope; userId: string; at: string }): void;
   /**
-   * An online manager / admin sign-in on this terminal at `at`. RT-861: with
-   * its role, which replaces the record's; without one, the role is kept.
+   * RT-861: an online manager / admin sign-in's role replaces the record's
+   * (no record, no change). Nothing else on the record moves.
    */
-  touchOnline(input: {
-    scope: ManagerPinScope;
-    userId: string;
-    at: string;
-    role?: ManagerRole;
-  }): void;
+  refreshRole(input: { scope: ManagerPinScope; userId: string; role: ManagerRole }): void;
 }
 
 export interface ManagerPinStoreDeps {
@@ -293,7 +290,10 @@ const REVOKE = `UPDATE manager_pin_records SET revoked_at = ?, revoke_reason = ?
                  WHERE ${IN_SCOPE} AND manager_ref = ?
                    AND revoked_at IS NULL AND disabled_at IS NULL`;
 
-const TOUCH_ONLINE = `UPDATE manager_pin_records SET last_online_at = ?, role = COALESCE(?, role)
+const TOUCH_ONLINE = `UPDATE manager_pin_records SET last_online_at = ?
+                       WHERE ${IN_SCOPE} AND user_id = ?`;
+
+const REFRESH_ROLE = `UPDATE manager_pin_records SET role = ?
                        WHERE ${IN_SCOPE} AND user_id = ?`;
 
 const CURRENT_PIN_REFUSAL = {
@@ -569,7 +569,14 @@ export function createManagerPinStore(deps: ManagerPinStoreDeps): ManagerPinStor
     touchOnline(input) {
       (db.prepare(TOUCH_ONLINE) as Run).run(
         input.at,
-        input.role ?? null,
+        ...scopeParams(input.scope),
+        input.userId.toLowerCase(),
+      );
+    },
+
+    refreshRole(input) {
+      (db.prepare(REFRESH_ROLE) as Run).run(
+        input.role,
         ...scopeParams(input.scope),
         input.userId.toLowerCase(),
       );

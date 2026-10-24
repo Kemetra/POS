@@ -312,7 +312,6 @@ export interface ManagerOnlineRefreshDeps {
  * Round 1 P2-1 — a session-start listener: an online manager / admin sign-in
  * (a session with a captured `users.id`) refreshes that manager's record on
  * the current terminal. Other sessions, or an unpaired terminal, touch nothing.
- * RT-861: the refresh carries the session's role, so the record follows it.
  */
 export function createManagerOnlineRefresh(
   deps: ManagerOnlineRefreshDeps,
@@ -326,7 +325,51 @@ export function createManagerOnlineRefresh(
       scope: { tenantId: record.tenant_id, branchId: record.branch_id, terminalId },
       userId,
       at,
-      ...roleOf(record.role),
     });
   };
+}
+
+export interface ManagerRoleRefreshDeps {
+  store: Pick<ManagerPinStore, 'refreshRole'>;
+  /** The current pairing's terminal; null while unpaired. */
+  currentTerminalId: () => string | null;
+}
+
+/**
+ * RT-861 — a session-start listener: an online manager / admin sign-in (a
+ * session with a captured `users.id`) writes its role onto that manager's
+ * record on the current terminal, so a record enrolled before 0056 gains it
+ * and a promotion or demotion follows. Other sessions, or an unpaired
+ * terminal, touch nothing. Unlike the `last_online_at` refresh it does not
+ * extend the record's validity.
+ */
+export function createManagerRoleRefresh(
+  deps: ManagerRoleRefreshDeps,
+): (record: OperatorSessionRecord) => void {
+  return (record) => {
+    const { role } = roleOf(record.role);
+    if (role === undefined) return;
+    const userId = record.manager_user_id;
+    if (userId === undefined) return;
+    const terminalId = deps.currentTerminalId();
+    if (terminalId === null) return;
+    deps.store.refreshRole({
+      scope: { tenantId: record.tenant_id, branchId: record.branch_id, terminalId },
+      userId,
+      role,
+    });
+  };
+}
+
+/**
+ * RT-861 (Codex P1 on PR #826) — registered by the composition root next to
+ * the manager PIN store and the approval service, which exist whatever
+ * `POS_PULSE_FEATURE_SHIFT_CASHUP` says; the shift cash-up IPC is not.
+ */
+export function registerManagerRoleRefresh(
+  deps: ManagerRoleRefreshDeps & {
+    onSessionStarted: (listener: (record: OperatorSessionRecord) => void) => void;
+  },
+): void {
+  deps.onSessionStarted(createManagerRoleRefresh(deps));
 }

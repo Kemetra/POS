@@ -164,7 +164,7 @@ describe('RT-861 — the cashier path records the approver’s role', () => {
   it('the role is the one at grant: a later refresh does not change it', async () => {
     await boot('manager');
     const id = await approved();
-    h.pins.touchOnline({ scope: SCOPE, userId: MANAGER_USER, at: T0, role: 'admin' });
+    h.pins.refreshRole({ scope: SCOPE, userId: MANAGER_USER, role: 'admin' });
     await add(id);
     expect(approverRoleOf(id)).toBe('manager');
     expect(discountPayload()).toMatchObject({ approver_role: 'manager' });

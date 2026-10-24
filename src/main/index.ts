@@ -276,7 +276,10 @@ import {
 } from './app/device-revocation-flow.js';
 import { createRevocationRecheck } from './app/revocation-recheck.js';
 import { purgeOtherTerminalPinRecords } from './operator/pin-records-purge.js';
-import { managerIdentityOf } from './operator/manager-pin-enrollment.js';
+import {
+  managerIdentityOf,
+  registerManagerRoleRefresh,
+} from './operator/manager-pin-enrollment.js';
 import { PAIRING_PUSH_CHANNELS, type PairingRecheckResult } from '../shared/pairing-types.js';
 import { createJwtHolder } from './operator/jwt-holder.js';
 import { ProtoSessionStore, TakeoverHandler } from './operator/takeover-handler.js';
@@ -1147,6 +1150,16 @@ singleInstanceReady
         auditEmitter,
         logger: mainLogger,
       }),
+    });
+    // RT-861 — each online manager / admin sign-in writes its role onto that
+    // manager's PIN record (the cashier discount's `approver_role`), whatever
+    // the shift cash-up flag says.
+    registerManagerRoleRefresh({
+      onSessionStarted: (listener) => {
+        operatorSessionManager.onStarted(listener);
+      },
+      store: managerPins,
+      currentTerminalId: () => pairingStore.getCurrentTerminalId(),
     });
     const recoveryRef: { current: ManagerRecovery | null } = { current: null };
     // RT-554 (b) — "drain the shift outbox now", set once the shift sync engine

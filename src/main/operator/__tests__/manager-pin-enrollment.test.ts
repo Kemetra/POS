@@ -502,7 +502,6 @@ describe('createManagerOnlineRefresh — an online manager sign-in refreshes the
       scope: SCOPE,
       userId: MANAGER_USER,
       at: record.manager_signed_in_at,
-      role: 'manager',
     });
   });
 
