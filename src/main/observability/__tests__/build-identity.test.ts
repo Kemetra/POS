@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import {
   BUILD_IDENTITY_HEADERS,
+  TOKEN_READ_TIMEOUT_MS,
   isReportingRequest,
   parseBuildIdentity,
   withBuildIdentity,
@@ -222,6 +223,21 @@ describe('withBuildIdentity — a header never fails or changes a request', () =
     expect(res.status).toBe(200);
     expect(h.inner).toHaveBeenCalledTimes(1);
     expect(h.headersOf().has('x-pos-build-commit')).toBe(false);
+  });
+
+  it('does not wait on a device token read that never answers', async () => {
+    vi.useFakeTimers();
+    try {
+      const h = harness({ readDeviceToken: () => new Promise<string | null>(() => undefined) });
+      const sent = h.fetchImpl(...deviceCall('POST', '/api/pos/v1/shifts'));
+      await vi.advanceTimersByTimeAsync(TOKEN_READ_TIMEOUT_MS);
+      const res = await sent;
+      expect(res.status).toBe(200);
+      expect(h.inner).toHaveBeenCalledTimes(1);
+      expect(h.headersOf().has('x-pos-build-commit')).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('sends the request unchanged when the identity getter throws', async () => {

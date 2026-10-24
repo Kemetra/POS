@@ -10,8 +10,12 @@
  * carry the same file. `dist/` is git-ignored: the stamp is never committed.
  *
  * Honesty rule: the stamp is written only when it is true. A tracked file that
- * differs from HEAD, or no readable git HEAD, writes no file and removes a stale
- * one, so the POS reports "unknown" instead of a commit it is not built from.
+ * differs from HEAD, an untracked file under src/, migrations/ or contracts/, or no
+ * readable git HEAD, writes no file and removes a stale one, so the POS reports
+ * "unknown" instead of a commit it is not built from. Consequences: a lab build with
+ * local edits reports unknown, and a build from a CI pull-request checkout stamps the
+ * synthetic merge commit, which no branch holds; fleet baselines come from builds of a
+ * real branch commit.
  * The pin comes from `contracts/backend-core/PIN` (its `commit:` line); without a
  * valid one the stamp carries the commit alone. Nothing is defaulted or guessed.
  */
@@ -82,9 +86,19 @@ function main(): number {
   // `--untracked-files=no`: dist/ and other ignored output never make a build "dirty";
   // an unreadable status is treated as dirty (no stamp).
   const status = git(root, ['status', '--porcelain', '--untracked-files=no']);
+  // A new source file compiled into dist/ is untracked, so look for those in the built trees.
+  const untracked = git(root, [
+    'ls-files',
+    '--others',
+    '--exclude-standard',
+    '--',
+    'src',
+    'migrations',
+    'contracts',
+  ]);
   const stamp = buildIdentityStamp({
     head,
-    dirty: status === null || status.trim() !== '',
+    dirty: status === null || status.trim() !== '' || untracked === null || untracked.trim() !== '',
     pinText: readPin(root),
   });
   writeBuildIdentityStamp(path.join(root, 'dist', 'build-identity.json'), stamp);

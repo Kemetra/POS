@@ -148,6 +148,24 @@ function routeUnder(base: URL, url: string): string | null {
   return target.pathname.slice(prefix.length);
 }
 
+/** How long a request waits for the device token read before it goes out without the headers. */
+export const TOKEN_READ_TIMEOUT_MS = 250;
+
+/** The token read, or null when it fails or takes longer than the bound: a header never delays a request. */
+async function boundedTokenRead(read: () => Promise<string | null>): Promise<string | null> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<null>((resolve) => {
+    timer = setTimeout(() => {
+      resolve(null);
+    }, TOKEN_READ_TIMEOUT_MS);
+  });
+  try {
+    return await Promise.race([read(), timeout]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 async function reportingHeaders(
   base: URL,
   opts: WithBuildIdentityOptions,
@@ -159,7 +177,7 @@ async function reportingHeaders(
   const identity = opts.identity();
   if (identity === null) return null;
   const headers = sourceHeaders(input, init);
-  const token = await opts.readDeviceToken();
+  const token = await boundedTokenRead(opts.readDeviceToken);
   if (token === null || token === '' || headers.get('authorization') !== `Bearer ${token}`) {
     return null;
   }
