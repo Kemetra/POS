@@ -1,4 +1,4 @@
-import type { components } from '../../shared/api-types.js';
+import type { PosTerminalPairing } from '../../shared/api-types.js';
 
 /**
  * 002-terminal-pairing T021 + T039 + T053 — `network.pair()`.
@@ -70,8 +70,8 @@ const RETRY_AFTER_MIN_S = 1;
 const RETRY_AFTER_MAX_S = 300;
 const RETRY_AFTER_DEFAULT_S = 30;
 
-type PairRequestBody = components['schemas']['TerminalPairRequest'];
-export type PairSuccessBody = components['schemas']['TerminalPairResponse'];
+type PairRequestBody = PosTerminalPairing.components['schemas']['TerminalPairRequest'];
+export type PairSuccessBody = PosTerminalPairing.components['schemas']['TerminalPairResponse'];
 
 /**
  * Failure body shape. Backend-Core returns pairing failures in the canonical

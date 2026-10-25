@@ -2,7 +2,7 @@
  * 006 T213 — `vouchers.reverse` client (RED).
  *
  * Asserts (per contracts/bridge-api.md §`vouchers.reverse` +
- * `scripts/openapi-snapshot.json` `/api/pos/v1/vouchers/reverse` + R-13
+ * `contracts/backend-core/openapi/pos-payments/vouchers.yaml` `/api/pos/v1/vouchers/reverse` + R-13
  * deferred-reversal posture):
  *
  *   1. Success: POSTs `/api/pos/v1/vouchers/reverse` with the

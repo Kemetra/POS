@@ -255,8 +255,12 @@ export const RT_306_PAIRING_TOKEN_BINDING_EXEMPT_PREFIXES = [
  * Authority: owner decision (option A, "narrow exemption"), 2026-10-18, for
  * Kemetra/POS#755, citing RT-676 and RT-591.
  *
- * Exemption is narrow, and deliberately not a prefix exemption: exactly ONE
- * file, on exactly ONE branch (exact name, no `startsWith`). No other
+ * RT-869: `src/shared/api-types.ts` is generated only from the vendored contract
+ * set, so a repin regenerates it and the bot commits it with the contracts. CI's
+ * `codegen:verify` proves the committed file is exactly the codegen output.
+ *
+ * Exemption is narrow, and deliberately not a prefix exemption: exactly TWO
+ * files, on exactly ONE branch (exact name, no `startsWith`). No other
  * `src/main/pairing/` path, and every forbidden prefix stays blocked for every
  * other file and branch. Narrowness is asserted by
  * `source-scope-guard-rt676.test.ts`.
@@ -264,6 +268,7 @@ export const RT_306_PAIRING_TOKEN_BINDING_EXEMPT_PREFIXES = [
 export const RT_676_REPIN_BRANCH = 'bot/backend-core-repin' as const;
 export const RT_676_REPIN_EXEMPT_FILES = [
   'src/main/pairing/__tests__/failure-mapping.test.ts',
+  'src/shared/api-types.ts',
 ] as const satisfies readonly string[];
 
 /**
@@ -300,7 +305,7 @@ export function isRt591ExemptFile(branch: string, file: string): boolean {
   );
 }
 
-/** True when `file` is the one file the RT-676 exemption allows on `branch`. */
+/** True when `file` is one of the files the RT-676 exemption allows on `branch`. */
 export function isRt676ExemptFile(branch: string, file: string): boolean {
   return (
     branch === RT_676_REPIN_BRANCH &&
@@ -334,5 +339,38 @@ export function isRt307ExemptFile(branch: string, file: string): boolean {
   return (
     branch === RT_307_SNAPSHOT_REGEN_BRANCH &&
     (RT_307_SNAPSHOT_REGEN_EXEMPT_FILES as readonly string[]).includes(file)
+  );
+}
+
+/**
+ * `chore/rt-869-monorepo-readiness` implements Jira RT-869 (monorepo readiness,
+ * MR-2 / MR-6): `npm run codegen:api` now generates `api-types.ts` only from the
+ * vendored Backend-Core contract set, the legacy snapshot is deleted, and the one
+ * pairing call site that imported a legacy schema moves to the generated
+ * `PosTerminalPairing` namespace (a type-only import change, no wire change).
+ * All four files are forbidden paths, so the change cannot land without an
+ * exemption.
+ *
+ * Authority: Jira RT-869 scope (owner-authored), following the RT-591 / RT-307
+ * file-list pattern.
+ *
+ * Exemption is narrow, and deliberately not a prefix exemption: exactly FOUR
+ * files, on exactly ONE branch (exact name, no `startsWith`). Every forbidden
+ * prefix stays blocked for every other file and branch. Narrowness is asserted
+ * by `source-scope-guard-rt869.test.ts`.
+ */
+export const RT_869_MONOREPO_READINESS_BRANCH = 'chore/rt-869-monorepo-readiness' as const;
+export const RT_869_MONOREPO_READINESS_EXEMPT_FILES = [
+  'scripts/codegen-api.ts',
+  'scripts/openapi-snapshot.json',
+  'src/main/pairing/network.ts',
+  'src/shared/api-types.ts',
+] as const satisfies readonly string[];
+
+/** True when `file` is one of the files the RT-869 exemption allows on `branch`. */
+export function isRt869ExemptFile(branch: string, file: string): boolean {
+  return (
+    branch === RT_869_MONOREPO_READINESS_BRANCH &&
+    (RT_869_MONOREPO_READINESS_EXEMPT_FILES as readonly string[]).includes(file)
   );
 }

@@ -14,13 +14,16 @@
  * Uses the local, already-authenticated `gh` CLI. It never runs in `ci.yml` (that
  * stays offline and reads only the committed snapshot); `contracts-repin.yml` (RT-676)
  * runs it on a schedule with the public-read `github.token` and opens a bot PR.
- * After a re-pin, run `npx vitest run tests/contract/backend-core` and commit
- * `contracts/backend-core/` together with any registry change.
+ * A re-pin also regenerates `src/shared/api-types.ts` (RT-869: codegen reads only
+ * this contract set), so `codegen:verify` stays green. After a re-pin, run
+ * `npx vitest run tests/contract/backend-core` and commit `contracts/backend-core/`
+ * and `src/shared/api-types.ts` together with any registry change.
  */
 import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { DEFAULT_CONTRACTS_DIR, DEFAULT_OUT_PATH, generateApiTypes } from './codegen-api.js';
 import {
   BACKEND_CORE_OPENAPI_ROOT,
   BACKEND_CORE_REPO,
@@ -76,7 +79,7 @@ function listVendored(dir: string, prefix = ''): string[] {
   );
 }
 
-function main(): void {
+async function main(): Promise<void> {
   const args = parseRepinArgs(process.argv.slice(2));
   const current = existsSync(PIN_PATH)
     ? parsePin(readFileSync(PIN_PATH, 'utf-8')).files.map((f) => f.path)
@@ -105,6 +108,7 @@ function main(): void {
       files: fetched.map((f) => f.file),
     }),
   );
+  await generateApiTypes({ contractsDir: DEFAULT_CONTRACTS_DIR, outPath: DEFAULT_OUT_PATH });
   process.stdout.write(
     `Pinned ${String(fetched.length)} Backend-Core contract(s) at ${commit}:\n` +
       fetched.map((f) => `  ${f.file.path} ${f.file.blobSha}\n`).join('') +
@@ -113,7 +117,7 @@ function main(): void {
 }
 
 try {
-  main();
+  await main();
 } catch (err) {
   process.stderr.write(
     `contracts:repin failed: ${err instanceof Error ? err.message : String(err)}\n`,

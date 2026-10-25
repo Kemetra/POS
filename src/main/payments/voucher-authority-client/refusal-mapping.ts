@@ -5,7 +5,7 @@
  * the three Data-Pulse-2 voucher endpoints
  * (`/api/pos/v1/vouchers/{validate,redeem,reverse}`). The literal-union
  * is hand-maintained against
- * `scripts/openapi-snapshot.json` and MUST be kept in sync whenever
+ * `contracts/backend-core/openapi/pos-payments/vouchers.yaml` and MUST be kept in sync whenever
  * Data-Pulse-2 publishes a new closed-set entry.
  *
  * **F-A4B-001 guard:** at runtime, every `error.code` string returned
@@ -35,7 +35,7 @@ export interface VoucherAuthorityLogger {
 /**
  * Closed set of refusal codes returned by ANY of the three voucher
  * endpoints. Union of all three endpoint-specific closed sets
- * documented in `scripts/openapi-snapshot.json`:
+ * documented in `contracts/backend-core/openapi/pos-payments/vouchers.yaml`:
  *
  *   - validate: voucher_not_found, voucher_expired, voucher_cancelled,
  *     voucher_already_redeemed, voucher_tenant_mismatch,

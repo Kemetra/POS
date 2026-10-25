@@ -77,7 +77,7 @@ Every call below goes to Backend-Core under `/api/pos/v1/*`. The device token id
 | Shift cash-up | `shifts` | `shift-cashup/` |
 | Internal vouchers (flag-gated, outside the pilot) | `vouchers/validate` · `vouchers/redeem` · `vouchers/reverse` | `payments/voucher-authority-client/` |
 
-The OpenAPI contracts are owned by Backend-Core. This repo vendors a pinned subset in [`contracts/backend-core`](contracts/backend-core) (7 contract files, see its [`PIN`](contracts/backend-core/PIN)), and a conformance suite under [`tests/contract/backend-core`](tests/contract/backend-core) runs in CI. The generated client types in `src/shared/api-types.ts` come from [`scripts/openapi-snapshot.json`](scripts/openapi-snapshot.json).
+The OpenAPI contracts are owned by Backend-Core. This repo vendors a pinned subset in [`contracts/backend-core`](contracts/backend-core) (7 contract files, see its [`PIN`](contracts/backend-core/PIN)), and a conformance suite under [`tests/contract/backend-core`](tests/contract/backend-core) runs in CI. The generated client types in `src/shared/api-types.ts` come only from that vendored set (`npm run codegen:api`, one namespace per contract file).
 
 ---
 
@@ -146,7 +146,7 @@ All feature flags are fail-closed: each is read from its `POS_PULSE_FEATURE_*` e
 | Logs and audit events avoid PII, cards, secrets and unsafe payloads | [constitution](.specify/memory/constitution.md) |
 | Terminal pairing establishes device identity and branch scope; cashier, manager and admin access is enforced through local session and role surfaces | [`002`](specs/002-terminal-pairing) · [`004`](specs/004-operator-session) |
 | Hardware scope is intentionally narrow: Windows x64, keyboard-wedge scanners, receipt printers and optional cash drawers (drawer kick is not wired, see the status table) | [hardware matrix](docs/hardware-matrix.md) |
-| Backend/API source of truth is external | [API snapshot](scripts/openapi-snapshot.json) · [constitution](.specify/memory/constitution.md) |
+| Backend/API source of truth is external | [Pinned Backend-Core contracts](contracts/backend-core/PIN) · [constitution](.specify/memory/constitution.md) |
 | POS calls match Backend-Core contracts | [vendored contracts](contracts/backend-core/PIN) · [conformance suite](tests/contract/backend-core) |
 | POS never talks to ERPNext | [current architecture](docs/architecture/current.md) · [synchronization](docs/architecture/synchronization.md) |
 | Work is issue-governed; `main` is the technical truth | [`CLAUDE.md`](CLAUDE.md) · [constitution](.specify/memory/constitution.md) |
@@ -299,7 +299,7 @@ This project is tested with BrowserStack.
 | **Engineering** | [Current architecture](docs/architecture/current.md) · [Spec status index](specs/README.md) · [Foundation quickstart](specs/001-foundation/quickstart.md) · [Pairing quickstart](specs/002-terminal-pairing/quickstart.md) · [Operator session plan](specs/004-operator-session/plan.md) · [Live terminal map](docs/architecture/pos-pulse-live-map.html) |
 | **Design** | [Design system](docs/DESIGN.md) · [Visual system spec](specs/007-pos-visual-system/spec.md) |
 | **Security** | [Constitution](.specify/memory/constitution.md) · [Operator security review](specs/004-operator-session/security-review/s1-review.md) |
-| **Integration** | [Pairing HTTP contract](specs/002-terminal-pairing/contracts/pairing-http.md) · [Operator bridge contract](specs/004-operator-session/contracts/bridge-api.md) · [Synchronization](docs/architecture/synchronization.md) · [Pinned Backend-Core contracts](contracts/backend-core/PIN) · [API snapshot](scripts/openapi-snapshot.json) |
+| **Integration** | [Pairing HTTP contract](specs/002-terminal-pairing/contracts/pairing-http.md) · [Operator bridge contract](specs/004-operator-session/contracts/bridge-api.md) · [Synchronization](docs/architecture/synchronization.md) · [Pinned Backend-Core contracts](contracts/backend-core/PIN) |
 
 Full navigation lives in [docs/README.md](docs/README.md). Operational playbooks live in [docs/runbook](docs/runbook) (payments, sale finalization, catalogue read-down, product search, sales cart, pilot terminal provisioning, security review).
 
