@@ -8,9 +8,9 @@
  */
 import { vi } from 'vitest';
 
-import type { components } from '../../../../../src/shared/api-types.js';
+import type { PosPaymentsVouchers } from '../../../../../src/shared/api-types.js';
 
-type ErrorBody = components['schemas']['Error'];
+type ErrorBody = PosPaymentsVouchers.components['schemas']['Error'];
 
 export interface CapturedRequest {
   url: string;

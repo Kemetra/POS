@@ -2,7 +2,7 @@
  * 006 T210 — `vouchers.validate` client (RED).
  *
  * Asserts (per `specs/006-payments-tender/contracts/bridge-api.md`
- * §`vouchers.*` namespace + `scripts/openapi-snapshot.json`
+ * §`vouchers.*` namespace + `contracts/backend-core/openapi/pos-payments/vouchers.yaml`
  * `/api/pos/v1/vouchers/validate`):
  *
  *   1. Success path: POST to `/api/pos/v1/vouchers/validate` with

@@ -25,14 +25,16 @@ import {
   isRt676ExemptFile,
   isRt591ExemptFile,
   isRt307ExemptFile,
+  isRt869ExemptFile,
 } from './source-scope-guard.const';
+import { gitChangedFiles } from './source-scope-guard.git';
 
 /**
  * T006 — Static no-touch source-scope guard.
  *
- * Shells out to `git diff --name-only origin/main...HEAD` (triple-dot,
- * squash-merge-safe) and asserts the diff does not touch any path in the
- * forbidden allowlist (T005).  Covers additions, modifications, AND
+ * Shells out to `git diff --name-only --relative origin/main...HEAD`
+ * (triple-dot, squash-merge-safe; POS-relative paths, RT-869) and asserts
+ * the diff does not touch any path in the forbidden allowlist (T005).  Covers additions, modifications, AND
  * deletions (git diff lists all three).
  *
  * Fallback: if `origin/main` is unreachable, the test skips with an
@@ -45,20 +47,15 @@ import {
  */
 describe('source-scope guard (T006)', () => {
   it('diff must not touch forbidden paths', () => {
-    let diffOutput: string;
+    let changedFiles: string[];
 
-    const runDiff = (tripleDoc: boolean): string =>
-      execSync(
-        tripleDoc
-          ? 'git diff --name-only origin/main...HEAD'
-          : 'git diff --name-only origin/main HEAD',
-        { encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'] },
-      );
+    const runDiff = (tripleDoc: boolean): string[] =>
+      gitChangedFiles(tripleDoc ? 'origin/main...HEAD' : 'origin/main HEAD');
 
     try {
       // Triple-dot: diff from the merge-base of origin/main and HEAD,
       // squash-merge-safe (works even when main has been squash-merged).
-      diffOutput = runDiff(true);
+      changedFiles = runDiff(true);
     } catch {
       // CI shallow clones (fetch-depth=1) don't include origin/main.
       // Fetch just the tip so rev-parse and diff both work.
@@ -77,10 +74,10 @@ describe('source-scope guard (T006)', () => {
         // Triple-dot needs a merge-base, which may not exist after a
         // shallow fetch. Fall back to double-dot (tip-to-tip) which works
         // with any depth and is equivalent for a linear PR branch.
-        diffOutput = runDiff(true);
+        changedFiles = runDiff(true);
       } catch {
         try {
-          diffOutput = runDiff(false);
+          changedFiles = runDiff(false);
         } catch {
           const reachable = (() => {
             try {
@@ -95,7 +92,7 @@ describe('source-scope guard (T006)', () => {
             console.warn(
               '[source-scope-guard] SKIP: origin/main unreachable. ' +
                 (fetchErr ? `fetch error: ${fetchErr}. ` : '') +
-                'Manual gate required: run `git diff --name-only origin/main...HEAD` ' +
+                'Manual gate required: run `git diff --name-only --relative origin/main...HEAD` ' +
                 'and verify zero intersection with the forbidden allowlist (T005).',
             );
             throw new Error(
@@ -107,11 +104,6 @@ describe('source-scope guard (T006)', () => {
         }
       }
     }
-
-    const changedFiles = diffOutput
-      .split('\n')
-      .map((l) => l.trim())
-      .filter(Boolean);
 
     // Branch-specific exemptions narrow the forbidden list:
     //   - ci/ branches may modify .github/workflows/ (their sole purpose).
@@ -191,7 +183,8 @@ describe('source-scope guard (T006)', () => {
         effectiveForbidden.some((prefix) => file === prefix || file.startsWith(prefix)) &&
         !isRt676ExemptFile(currentBranch, file) &&
         !isRt591ExemptFile(currentBranch, file) &&
-        !isRt307ExemptFile(currentBranch, file),
+        !isRt307ExemptFile(currentBranch, file) &&
+        !isRt869ExemptFile(currentBranch, file),
     );
 
     expect(violations, `Forbidden paths modified by this branch: ${violations.join(', ')}`).toEqual(

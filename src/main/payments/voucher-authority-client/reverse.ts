@@ -16,7 +16,7 @@
  * which is allow-listed by FR-017. The raw response body is still
  * never logged.
  */
-import type { components } from '../../../shared/api-types.js';
+import type { PosPaymentsVouchers } from '../../../shared/api-types.js';
 
 import { extractErrorCode } from './error-body.js';
 import {
@@ -29,8 +29,10 @@ function isReversedResponse(raw: unknown): raw is ReverseVoucherOk {
   return typeof raw === 'object' && raw !== null && (raw as { kind?: unknown }).kind === 'reversed';
 }
 
-export type ReverseVoucherInput = components['schemas']['PosReverseVoucherRequest'];
-export type ReverseVoucherOk = components['schemas']['PosReverseVoucherResponse'];
+export type ReverseVoucherInput =
+  PosPaymentsVouchers.components['schemas']['PosReverseVoucherRequest'];
+export type ReverseVoucherOk =
+  PosPaymentsVouchers.components['schemas']['PosReverseVoucherResponse'];
 
 export type ReverseVoucherOutcome =
   | ReverseVoucherOk

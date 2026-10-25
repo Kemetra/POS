@@ -15,7 +15,7 @@
  * arguments. Only the structured `error.code` is propagated on
  * refusal.
  */
-import type { components } from '../../../shared/api-types.js';
+import type { PosPaymentsVouchers } from '../../../shared/api-types.js';
 
 import { extractErrorCode } from './error-body.js';
 import {
@@ -28,8 +28,9 @@ function isRedeemedResponse(raw: unknown): raw is RedeemVoucherOk {
   return typeof raw === 'object' && raw !== null && (raw as { kind?: unknown }).kind === 'redeemed';
 }
 
-export type RedeemVoucherInput = components['schemas']['PosRedeemVoucherRequest'];
-export type RedeemVoucherOk = components['schemas']['PosRedeemVoucherResponse'];
+export type RedeemVoucherInput =
+  PosPaymentsVouchers.components['schemas']['PosRedeemVoucherRequest'];
+export type RedeemVoucherOk = PosPaymentsVouchers.components['schemas']['PosRedeemVoucherResponse'];
 
 export type RedeemVoucherOutcome =
   | RedeemVoucherOk

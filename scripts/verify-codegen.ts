@@ -10,21 +10,14 @@
  *
  * Used in CI (US8 will wire it into the workflow) and as a local
  * pre-commit safeguard. Pure tooling — no Electron, no DB, no network
- * (the snapshot is local; --source=live opt-in is only for codegen-api.ts
- * itself, not for verify).
+ * (the source is the vendored contract set under contracts/backend-core).
  */
 
 import { mkdtempSync, readFileSync, rmSync, existsSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { generateApiTypes } from './codegen-api.js';
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const REPO_ROOT = path.resolve(__dirname, '..');
-
-const DEFAULT_SNAPSHOT_PATH = path.join(REPO_ROOT, 'scripts', 'openapi-snapshot.json');
-const DEFAULT_COMMITTED_PATH = path.join(REPO_ROOT, 'src', 'shared', 'api-types.ts');
+import { DEFAULT_CONTRACTS_DIR, DEFAULT_OUT_PATH, generateApiTypes } from './codegen-api.js';
 
 export type VerifyStatus = 'match' | 'drifted' | 'missing';
 
@@ -35,7 +28,7 @@ export interface VerifyResult {
 }
 
 export interface VerifyCodegenOptions {
-  snapshotPath: string;
+  contractsDir: string;
   committedPath: string;
 }
 
@@ -61,11 +54,7 @@ export async function verifyCodegen(options: VerifyCodegenOptions): Promise<Veri
     }
 
     const tmpOut = path.join(tmpDir, 'api-types.ts');
-    await generateApiTypes({
-      source: 'local',
-      snapshotPath: options.snapshotPath,
-      outPath: tmpOut,
-    });
+    await generateApiTypes({ contractsDir: options.contractsDir, outPath: tmpOut });
 
     const fresh = readFileSync(tmpOut);
     const committed = readFileSync(options.committedPath);
@@ -132,8 +121,8 @@ function truncate(s: string, n: number): string {
 
 async function main(): Promise<void> {
   const result = await verifyCodegen({
-    snapshotPath: DEFAULT_SNAPSHOT_PATH,
-    committedPath: DEFAULT_COMMITTED_PATH,
+    contractsDir: DEFAULT_CONTRACTS_DIR,
+    committedPath: DEFAULT_OUT_PATH,
   });
 
   if (result.status === 'match') {

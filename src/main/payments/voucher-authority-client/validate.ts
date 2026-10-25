@@ -26,7 +26,7 @@
  *   - The raw 4xx response body is NEVER stringified into a log
  *     argument (only the validated `error.code` is propagated).
  */
-import type { components } from '../../../shared/api-types.js';
+import type { PosPaymentsVouchers } from '../../../shared/api-types.js';
 
 import { extractErrorCode } from './error-body.js';
 import {
@@ -45,10 +45,12 @@ function isValidatedResponse(raw: unknown): raw is ValidateVoucherOk {
  * Operation-derived request shape — F-A4B-002 compliant
  * (no import from the admin `Voucher*` schemas).
  */
-export type ValidateVoucherInput = components['schemas']['PosValidateVoucherRequest'];
+export type ValidateVoucherInput =
+  PosPaymentsVouchers.components['schemas']['PosValidateVoucherRequest'];
 
 /** Operation-derived success-response shape (kind = 'validated'). */
-export type ValidateVoucherOk = components['schemas']['PosValidateVoucherResponse'];
+export type ValidateVoucherOk =
+  PosPaymentsVouchers.components['schemas']['PosValidateVoucherResponse'];
 
 /** Discriminated union returned by `validateVoucher`. */
 export type ValidateVoucherOutcome =
