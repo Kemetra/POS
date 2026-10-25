@@ -255,8 +255,12 @@ export const RT_306_PAIRING_TOKEN_BINDING_EXEMPT_PREFIXES = [
  * Authority: owner decision (option A, "narrow exemption"), 2026-10-18, for
  * Kemetra/POS#755, citing RT-676 and RT-591.
  *
- * Exemption is narrow, and deliberately not a prefix exemption: exactly ONE
- * file, on exactly ONE branch (exact name, no `startsWith`). No other
+ * RT-869: `src/shared/api-types.ts` is generated only from the vendored contract
+ * set, so a repin regenerates it and the bot commits it with the contracts. CI's
+ * `codegen:verify` proves the committed file is exactly the codegen output.
+ *
+ * Exemption is narrow, and deliberately not a prefix exemption: exactly TWO
+ * files, on exactly ONE branch (exact name, no `startsWith`). No other
  * `src/main/pairing/` path, and every forbidden prefix stays blocked for every
  * other file and branch. Narrowness is asserted by
  * `source-scope-guard-rt676.test.ts`.
@@ -264,6 +268,7 @@ export const RT_306_PAIRING_TOKEN_BINDING_EXEMPT_PREFIXES = [
 export const RT_676_REPIN_BRANCH = 'bot/backend-core-repin' as const;
 export const RT_676_REPIN_EXEMPT_FILES = [
   'src/main/pairing/__tests__/failure-mapping.test.ts',
+  'src/shared/api-types.ts',
 ] as const satisfies readonly string[];
 
 /**
@@ -300,7 +305,7 @@ export function isRt591ExemptFile(branch: string, file: string): boolean {
   );
 }
 
-/** True when `file` is the one file the RT-676 exemption allows on `branch`. */
+/** True when `file` is one of the files the RT-676 exemption allows on `branch`. */
 export function isRt676ExemptFile(branch: string, file: string): boolean {
   return (
     branch === RT_676_REPIN_BRANCH &&
